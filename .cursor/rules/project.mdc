@@ -1,0 +1,72 @@
+---
+description: The Pilot Channel project context, architecture, and conventions
+alwaysApply: true
+---
+
+# The Pilot Channel
+
+A hangar TV display on a Raspberry Pi 4 (Debian/Raspberry Pi OS, aarch64) over HDMI.
+It auto-cycles views showing live ADS-B traffic, METAR weather, wind barbs, clocks, and
+an optional NOAA GOES satellite loop. GitHub: juchong/ThePilotChannel.
+
+## Architecture
+
+- App stack runs in Docker (`docker compose`). One multi-stage image: Vite builds the
+  frontend to static files, FastAPI serves the API and those files on port 8000.
+- The kiosk is NOT dockerized. It runs natively via autologin on tty1 launching
+  `deploy/kiosk-launch.sh` (cage + Chromium), because it needs direct GPU and HDMI access.
+- `data/config.yaml` is the single source of truth. It is bind-mounted as a directory
+  (`./data:/data`, not a single file, so atomic writes work). Pydantic models in
+  `backend/app/config.py`. The admin page PUTs config, which writes the file and emits an
+  SSE `config_changed` that makes the kiosk reload.
+
+## Key files
+
+- `backend/app/main.py` routes, SSE, static serving. `manager.py` sources, caching, rate
+  limit, background refresh. `views.py` builds the view list. `weather.py` METAR.
+  `satellite.py` NOAA GOES frames. `sources/` traffic adapters.
+- `frontend/src/main.js` display app and cycle. `lib/map.js` MapLibre + markers.
+  `lib/aircraft.js` store/sort/filter. `lib/shapes.js` icons + type classification.
+  `lib/windbarb.js`. `admin.js` config UI.
+
+## Hard-won conventions (do not regress these)
+
+- Frontend is plain JavaScript + Vite. No framework. No build step beyond Vite.
+- Aircraft are rendered as HTML `maplibregl.Marker`s, NOT a GeoJSON symbol layer. Rapid
+  `setData` on a GeoJSON source wedges it so it stops rendering. Motion is a CSS
+  `transform` transition on the marker, updated once per poll (1 Hz). Do not reintroduce
+  per-frame `setData`.
+- `/api/traffic` is non-blocking: it returns cached data and refreshes upstream in a
+  background task. Never block the request on the source fetch.
+- Aircraft type and GA-vs-airliner are classified by ICAO type designator and ADS-B
+  emitter category in `shapes.js`, NOT by callsign (a GA plane can use an airline-style
+  callsign; a US airliner has an N-number registration).
+- Two color systems that must not mix: aircraft colored by altitude band; wind barbs and
+  METAR colored by flight category (VFR green, MVFR blue, IFR red, LIFR magenta, white
+  when unknown).
+- Aircraft reporting negative altitude are dropped (treated as ground/invalid).
+- Local views include on-ground aircraft. The regional view is weather-only (no aircraft)
+  and shows barbs for every station in the map's visible bounds via `/api/weather/bbox`.
+
+## Data sources
+
+- Traffic (`data_source.mode` = local | aggregator | auto): local tar1090/readsb
+  `aircraft.json`, or a free aggregator (adsb.fi, adsb.lol, airplanes.live), about 1
+  request/second, shared cache and rate limiter.
+- Weather: aviationweather.gov, no key. Trust `fltCat`, else derive per FAA AIM 7-1-7.
+- Satellite: NOAA STAR CDN. Backend parses the directory listing for recent frame URLs.
+- Map needs internet: OSM raster tiles (default) and openmaptiles glyphs for labels.
+
+## Build, run, verify
+
+- After ANY frontend or backend change you must rebuild: `docker compose up -d --build`.
+  Editing source does not hot-reload the container (the frontend is built into the image).
+- Reload the on-screen kiosk without rebooting: `pkill -x cage` (autologin respawns it).
+- Verify in a browser at `http://<pi-ip>:8000` and `/admin`.
+- Screenshots: use `grim` against the live kiosk for display views (the map needs the
+  GPU; headless Chromium has no WebGL). Headless Chromium is fine for the admin page.
+
+## Misc
+
+- Brand name is "The Pilot Channel". Avoid em dashes in docs and prose.
+- Commit only when asked. Git identity is already configured on the Pi.
