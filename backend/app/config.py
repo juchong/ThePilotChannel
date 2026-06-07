@@ -59,6 +59,17 @@ class Weather(BaseModel):
     stale_after_s: int = 4500
 
 
+class Satellite(BaseModel):
+    enabled: bool = True
+    sat: str = "G18"            # G16 (East), G18 (West), G19
+    sector: str = "pnw"         # NOAA STAR sector code
+    band: str = "GEOCOLOR"
+    frames: int = 24            # number of frames in the loop
+    size: str = "1200x1200"     # 300x300 | 600x600 | 1200x1200 | 2400x2400
+    dwell_s: int = 25
+    label: str = "GOES-West PNW GeoColor"
+
+
 class Config(BaseModel):
     airports: List[Airport] = Field(default_factory=list)
     regions: List[Region] = Field(default_factory=list)
@@ -66,6 +77,7 @@ class Config(BaseModel):
     data_source: DataSource = Field(default_factory=DataSource)
     display: Display = Field(default_factory=Display)
     weather: Weather = Field(default_factory=Weather)
+    satellite: Satellite = Field(default_factory=Satellite)
 
 
 def load_config(path: str | None = None) -> Config:

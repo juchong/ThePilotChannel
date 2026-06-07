@@ -24,6 +24,7 @@ const state = {
   weather: {},
   trafficTimer: null,
   dwellTimer: null,
+  satTimer: null,
   map: null,
 };
 
@@ -86,13 +87,18 @@ function nextView(idx) {
   state.view = state.views[state.idx];
   state.store.clear();
   state.map.clearAircraft();
+  if (state.trafficTimer) clearInterval(state.trafficTimer);
+  if (state.satTimer) clearTimeout(state.satTimer);
 
   el("view-label").textContent = state.view.label;
-  state.map.frameView(state.view);
-  if (state.trafficTimer) clearInterval(state.trafficTimer);
 
-  if (state.view.type === "local") {
-    // Aircraft + the airport's METAR/wind barb.
+  if (state.view.type === "satellite") {
+    showStage("sat");
+    setSatelliteView(state.view);
+  } else if (state.view.type === "local") {
+    showStage("map");
+    state.map.resize();
+    state.map.frameView(state.view);
     state.map.showLabels(true);
     el("panel-title").textContent = "AIRCRAFT IN VIEW";
     renderLegend("alt");
@@ -102,6 +108,9 @@ function nextView(idx) {
     state.trafficTimer = setInterval(pollTraffic, 1000);
   } else {
     // Regional = weather only: wind barbs for ALL stations in radius, no aircraft.
+    showStage("map");
+    state.map.resize();
+    state.map.frameView(state.view);
     el("side-header").innerHTML = "";
     el("panel-title").textContent = "WEATHER STATIONS";
     renderLegend("cat");
@@ -111,6 +120,80 @@ function nextView(idx) {
   animateCountdown(state.view.dwell_s);
   if (state.dwellTimer) clearTimeout(state.dwellTimer);
   state.dwellTimer = setTimeout(() => nextView(state.idx + 1), state.view.dwell_s * 1000);
+}
+
+// Toggle the stage between the map+panel layout and the fullscreen satellite loop.
+function showStage(mode) {
+  const sat = el("sat");
+  if (mode === "sat") {
+    sat.classList.add("active");
+    el("map").style.display = "none";
+    el("side").style.display = "none";
+  } else {
+    sat.classList.remove("active");
+    el("map").style.display = "";
+    el("side").style.display = "flex";
+  }
+}
+
+async function setSatelliteView(view) {
+  const img = el("sat-img");
+  const cap = el("sat-caption");
+  img.removeAttribute("src");
+  cap.textContent = view.label + " — loading…";
+  try {
+    const data = await api.getSatellite(view);
+    if (state.view !== view) return;
+    const frames = data.frames || [];
+    if (!frames.length) {
+      cap.textContent = view.label + " — imagery unavailable";
+      updateFooter({ source: "noaa goes", healthy: false }, 0, "frames");
+      return;
+    }
+    // Show the newest frame right away, then animate once all frames are cached.
+    const latest = frames[frames.length - 1];
+    img.src = latest.url;
+    cap.innerHTML = `${view.label}<span class="frame-time">${latest.time}</span>`;
+    updateFooter({ source: "noaa goes", healthy: true }, frames.length, "frames");
+    preloadImages(frames.map((f) => f.url)).then(() => {
+      if (state.view === view) animateSatellite(view, frames);
+    });
+  } catch (e) {
+    cap.textContent = view.label + " — imagery unavailable";
+    updateFooter({ healthy: false }, 0, "frames");
+  }
+}
+
+function preloadImages(urls) {
+  return Promise.all(
+    urls.map(
+      (u) =>
+        new Promise((res) => {
+          const im = new Image();
+          im.onload = res;
+          im.onerror = res;
+          im.src = u;
+        })
+    )
+  );
+}
+
+function animateSatellite(view, frames) {
+  let i = 0;
+  const img = el("sat-img");
+  const cap = el("sat-caption");
+  const FRAME_MS = 140;
+  const HOLD_MS = 1600; // pause on the newest frame each loop
+  const step = () => {
+    if (state.view !== view) return;
+    const f = frames[i];
+    img.src = f.url;
+    cap.innerHTML = `${view.label}<span class="frame-time">${f.time}</span>`;
+    const last = i === frames.length - 1;
+    i = (i + 1) % frames.length;
+    state.satTimer = setTimeout(step, last ? HOLD_MS : FRAME_MS);
+  };
+  step();
 }
 
 async function showRegionalWeather(view) {

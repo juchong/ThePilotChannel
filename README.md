@@ -17,6 +17,10 @@ Regional weather view (wind barbs for every reporting airport in view):
 
 ![Regional weather view](docs/display-regional.png)
 
+Satellite loop view (animated NOAA GOES imagery):
+
+![Satellite loop view](docs/display-satellite.png)
+
 Admin page (remote configuration):
 
 ![Admin page](docs/admin.png)
@@ -45,6 +49,16 @@ Regional view (weather overview):
   by the map's visible bounds, so this is not limited to the airports in the config file.
 - Side panel lists the stations sorted worst conditions first (LIFR, IFR, MVFR, VFR), each
   with its flight category and wind.
+
+Satellite loop view (optional):
+
+- A fullscreen animated NOAA GOES satellite loop (for example GOES-West, Pacific
+  Northwest sector, GeoColor band).
+- Frames come from the NOAA STAR image CDN. The backend reads the CDN listing and returns
+  the most recent frames; the frontend preloads them and plays the loop, holding briefly on
+  the newest frame.
+- Enable, disable, and configure it (satellite, sector, band, size, frame count, dwell)
+  from the admin page.
 
 ## Features
 
@@ -168,6 +182,16 @@ display:
 weather:
   refresh_s: 300          # METAR refresh interval
   stale_after_s: 4500     # mark a report stale after this age
+
+satellite:
+  enabled: true           # add the satellite loop to the cycle
+  sat: G18                # G16 (East), G18 (West), G19
+  sector: pnw             # NOAA STAR sector code
+  band: GEOCOLOR
+  frames: 24              # number of frames in the loop
+  size: 1200x1200         # 300x300 | 600x600 | 1200x1200 | 2400x2400
+  dwell_s: 25
+  label: GOES-West PNW GeoColor
 ```
 
 ## Data sources
@@ -194,6 +218,7 @@ regional view uses a bounding-box query to find every reporting station on scree
 - `GET /api/weather?ids=<csv>` normalized METARs for specific airports.
 - `GET /api/weather/bbox?min_lat=&min_lon=&max_lat=&max_lon=` METARs in a box.
 - `GET /api/weather/area?lat=&lon=&radius_nm=` METARs within a radius.
+- `GET /api/satellite?sat=&sector=&band=&size=&frames=` recent GOES frame URLs.
 - `GET /api/status` current source and health.
 - `POST /api/test-source` check connectivity for a candidate source.
 - `GET /api/stream` server-sent events: `config_changed`, `weather_updated`.
@@ -208,6 +233,7 @@ backend/
     manager.py     sources, cache, rate limit, weather, background refresh
     views.py       build the ordered view list from config
     weather.py     METAR fetch, decode, flight category
+    satellite.py   NOAA GOES frame-list fetcher
     geo.py         distance and bounding-box helpers
     sources/
       base.py      source interface and aircraft normalizer

@@ -172,6 +172,11 @@ export class HangarMap {
     this._ac.clear();
   }
 
+  // Re-measure the canvas after the container was hidden (satellite view) and shown.
+  resize() {
+    this.map.resize();
+  }
+
   destroy() {
     this.map.remove();
   }

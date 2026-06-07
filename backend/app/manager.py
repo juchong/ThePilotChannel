@@ -11,6 +11,7 @@ from typing import Dict, List, Optional
 import httpx
 
 from .config import Config, load_config, save_config
+from .satellite import SatelliteSource
 from .sources.aggregator import AggregatorSource
 from .sources.local import LocalReadsbSource
 from .views import build_views
@@ -27,6 +28,8 @@ class DataManager:
         self.cfg: Config = load_config()
         self.client = httpx.AsyncClient(follow_redirects=True)
         self.metar = MetarSource(self.client)
+        self.satellite = SatelliteSource(self.client)
+        self._sat_cache: Dict[str, Dict] = {}
 
         self._traffic_cache: Dict[str, Dict] = {}
         self._refreshing: set = set()
@@ -203,6 +206,20 @@ class DataManager:
         ]
         self._area_cache[key] = {"ts": now, "data": out}
         return out
+
+    async def get_satellite(self, sat: str, sector: str, band: str, size: str, frames: int) -> Dict:
+        key = f"{sat}:{sector}:{band}:{size}:{frames}"
+        cached = self._sat_cache.get(key)
+        now = time.monotonic()
+        if cached and (now - cached["ts"]) < 240:
+            return cached["data"]
+        try:
+            data = await self.satellite.frames(sat, sector, band, size, frames)
+        except Exception as exc:  # noqa: BLE001
+            log.error("satellite fetch failed: %s", exc)
+            return cached["data"] if cached else {"frames": [], "count": 0, "error": str(exc)}
+        self._sat_cache[key] = {"ts": now, "data": data}
+        return data
 
     async def get_bbox_weather(self, min_lat, min_lon, max_lat, max_lon) -> List[Dict]:
         """All METAR stations within an explicit bounding box (the map's visible

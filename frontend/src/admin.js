@@ -19,6 +19,7 @@ function renderAll() {
   renderCycle();
   renderDataSource();
   renderDisplay();
+  renderSatellite();
 }
 
 function renderAirports() {
@@ -99,6 +100,21 @@ function renderDisplay() {
       <div style="grid-column:span 2"><label>Tile URL (vector style / raster override)</label><input data-f="display.tile_url" value="${d.tile_url || ""}"></div>
       <div><label>Weather refresh (s)</label><input data-f="weather.refresh_s" value="${w.refresh_s ?? 300}"></div>
       <div><label>Stale after (s)</label><input data-f="weather.stale_after_s" value="${w.stale_after_s ?? 4500}"></div>
+    </div>`;
+}
+
+function renderSatellite() {
+  const s = cfg.satellite || {};
+  el("satellite").innerHTML = `
+    <div class="fields">
+      <div><label>Enabled</label><input type="checkbox" data-f="satellite.enabled" ${s.enabled ? "checked" : ""}></div>
+      <div><label>Label</label><input data-f="satellite.label" value="${s.label || ""}"></div>
+      <div><label>Satellite</label><select data-f="satellite.sat">${opt(["G16", "G18", "G19"], s.sat)}</select></div>
+      <div><label>Sector code</label><input data-f="satellite.sector" value="${s.sector || ""}"></div>
+      <div><label>Band</label><input data-f="satellite.band" value="${s.band || ""}"></div>
+      <div><label>Size</label><select data-f="satellite.size">${opt(["300x300", "600x600", "1200x1200", "2400x2400"], s.size)}</select></div>
+      <div><label>Frames</label><input data-f="satellite.frames" value="${s.frames ?? 24}"></div>
+      <div><label>Dwell (s)</label><input data-f="satellite.dwell_s" value="${s.dwell_s ?? 25}"></div>
     </div>`;
 }
 

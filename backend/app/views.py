@@ -54,6 +54,21 @@ def build_views(cfg: Config) -> List[Dict]:
         )
 
     views = _order(cfg, local_views, regional_views)
+
+    if cfg.satellite.enabled:
+        views.append(
+            {
+                "id": "satellite",
+                "type": "satellite",
+                "label": cfg.satellite.label,
+                "dwell_s": cfg.satellite.dwell_s,
+                "sat": cfg.satellite.sat,
+                "sector": cfg.satellite.sector,
+                "band": cfg.satellite.band,
+                "size": cfg.satellite.size,
+                "frames": cfg.satellite.frames,
+            }
+        )
     return views
 
 

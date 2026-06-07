@@ -20,6 +20,8 @@ export const api = {
     j(`/api/weather/area?lat=${lat}&lon=${lon}&radius_nm=${radiusNm}`),
   getBboxWeather: ({ minLat, minLon, maxLat, maxLon }) =>
     j(`/api/weather/bbox?min_lat=${minLat}&min_lon=${minLon}&max_lat=${maxLat}&max_lon=${maxLon}`),
+  getSatellite: (v) =>
+    j(`/api/satellite?sat=${encodeURIComponent(v.sat)}&sector=${encodeURIComponent(v.sector)}&band=${encodeURIComponent(v.band)}&size=${encodeURIComponent(v.size)}&frames=${v.frames}`),
   getStatus: () => j("/api/status"),
   testSource: (payload) =>
     j("/api/test-source", {

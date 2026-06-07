@@ -92,6 +92,17 @@ async def get_weather_bbox(
     return {"stations": stations}
 
 
+@app.get("/api/satellite")
+async def get_satellite(
+    sat: str = Query("G18"),
+    sector: str = Query("pnw"),
+    band: str = Query("GEOCOLOR"),
+    size: str = Query("1200x1200"),
+    frames: int = Query(24),
+):
+    return await manager.get_satellite(sat, sector, band, size, frames)
+
+
 @app.get("/api/status")
 async def get_status():
     return manager.status()
