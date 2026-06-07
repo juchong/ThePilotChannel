@@ -66,6 +66,14 @@ an optional NOAA GOES satellite loop. GitHub: juchong/ThePilotChannel.
 - Screenshots: use `grim` against the live kiosk for display views (the map needs the
   GPU; headless Chromium has no WebGL). Headless Chromium is fine for the admin page.
 
+## Display scaling
+
+- The UI targets a 1920-wide design. On high-resolution panels it scales up via a
+  `@media (min-width: 2560px)` block in `styles.css` plus a `UI` factor in `map.js` for
+  the JS-rendered aircraft icons and wind barbs. The kiosk runs at the panel's NATIVE
+  resolution so the map stays crisp. Do NOT use Chromium `--force-device-scale-factor`:
+  cage does not honor the buffer scale and renders into a quarter of the screen.
+
 ## Misc
 
 - Brand name is "The Pilot Channel". Avoid em dashes in docs and prose.

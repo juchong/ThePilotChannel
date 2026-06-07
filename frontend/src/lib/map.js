@@ -20,6 +20,12 @@ export const ALT_STOPS = [
 const GROUND_COLOR = "#9ca3af";
 const UNKNOWN_COLOR = "#cbd5e1";
 
+// Scale map glyphs up on high-resolution panels (e.g. 4K) so they are the same
+// physical size as on a 1080p screen. CSS handles the rest of the UI.
+const UI = typeof window !== "undefined" && window.innerWidth >= 2560 ? 2 : 1;
+const AC_ICON_PX = 26 * UI;
+const BARB_PX = 70 * UI;
+
 export function altColorFor(altFt, onGround) {
   if (onGround) return GROUND_COLOR;
   if (altFt == null || altFt < 0) return UNKNOWN_COLOR;
@@ -105,7 +111,7 @@ export class HangarMap {
       }
       rec.marker.setLngLat([lon, lat]);
       if (rec.name !== p.icon || rec.color !== color) {
-        rec.iconEl.innerHTML = shapeSvg(p.icon, color, 26);
+        rec.iconEl.innerHTML = shapeSvg(p.icon, color, AC_ICON_PX);
         rec.name = p.icon;
         rec.color = color;
       }
@@ -145,9 +151,9 @@ export class HangarMap {
             calm: ap.metar.wind.calm,
             color: ap.metar.category_color,
             fallback: "#ffffff",
-            size: 70,
+            size: BARB_PX,
           })
-        : windBarbSVG({ speedKt: null, color: "#ffffff", size: 70 });
+        : windBarbSVG({ speedKt: null, color: "#ffffff", size: BARB_PX });
       el.innerHTML = `${barb}<div class="map-airport-label">${ap.icao}</div>`;
       const marker = new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([ap.lon, ap.lat]).addTo(this.map);
       this._apMarkers.push(marker);
