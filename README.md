@@ -1,4 +1,4 @@
-# Hangar Display System
+# The Pilot Channel
 
 A wall-mounted information display for an airplane hangar. It runs on a Raspberry Pi 4
 and drives an HDMI TV. The screen cycles through a set of views on a timer, showing live
@@ -6,6 +6,20 @@ ADS-B air traffic, METAR weather, flight-category wind barbs, and local and UTC 
 
 The app stack runs in Docker. The on-screen browser (the kiosk) runs natively on the Pi
 because it needs direct access to the GPU and HDMI output.
+
+## Screenshots
+
+Local airport view (live traffic, METAR, and wind barb):
+
+![Local airport view](docs/display-local.png)
+
+Regional weather view (wind barbs for every reporting airport in view):
+
+![Regional weather view](docs/display-regional.png)
+
+Admin page (remote configuration):
+
+![Admin page](docs/admin.png)
 
 ## Views
 

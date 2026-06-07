@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
     await manager.stop()
 
 
-app = FastAPI(title="Hangar Display", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="The Pilot Channel", version="0.1.0", lifespan=lifespan)
 
 
 @app.get("/healthz")

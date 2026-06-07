@@ -113,6 +113,9 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
   background: var(--panel); border-top: 1px solid #000; font-size: 13px; color: var(--muted); }
 .health { color: var(--good); font-size: 16px; }
 .health.bad { color: var(--bad); }
+#brand { margin-left: auto; font-weight: 800; letter-spacing: 2px; font-size: 13px;
+  background: linear-gradient(90deg, var(--accent), #818cf8); -webkit-background-clip: text;
+  background-clip: text; color: transparent; }
 
 /* Overlay */
 .overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
