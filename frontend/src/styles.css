@@ -14,6 +14,9 @@
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
   font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
 
+/* Kiosk display has no pointer device; hide the cursor. Admin keeps its cursor. */
+.display, .display * { cursor: none !important; }
+
 .display #app {
   display: grid;
   grid-template-rows: 8px 64px 1fr 36px;
