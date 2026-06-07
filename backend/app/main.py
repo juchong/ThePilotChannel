@@ -8,7 +8,7 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import Config
@@ -34,6 +34,14 @@ app = FastAPI(title="Hangar Display", version="0.1.0", lifespan=lifespan)
 @app.get("/healthz")
 async def healthz():
     return {"ok": True, "status": manager.status()}
+
+
+@app.get("/admin")
+async def admin_page():
+    path = os.path.join(STATIC_DIR, "admin.html")
+    if os.path.isfile(path):
+        return FileResponse(path)
+    raise HTTPException(status_code=404, detail="admin page not built")
 
 
 @app.get("/api/config")
