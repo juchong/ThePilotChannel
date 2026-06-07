@@ -133,7 +133,8 @@ sudo reboot
 
 After reboot the Pi logs in on tty1 and launches the kiosk, which waits for the backend to
 be healthy and then opens the display full screen. The kiosk log is at
-`/tmp/hangar-kiosk.log`.
+`/dev/shm/hangar-kiosk/hangar-kiosk.log`. The kiosk keeps its Chromium profile, disk cache,
+and log on a RAM disk (`/dev/shm`) to minimize SD card wear.
 
 ## Configuration
 
@@ -291,7 +292,7 @@ The dev server serves the display at `/` and the admin page at `/admin.html`.
 - Update the app after code changes: `docker compose up -d --build`.
 - Reload the kiosk without rebooting: stop the cage process and let autologin restart it,
   for example `pkill -x cage`.
-- Kiosk log: `/tmp/hangar-kiosk.log`. Backend logs: `docker compose logs -f`.
+- Kiosk log: `/dev/shm/hangar-kiosk/hangar-kiosk.log`. Backend logs: `docker compose logs -f`.
 
 ## Notes
 

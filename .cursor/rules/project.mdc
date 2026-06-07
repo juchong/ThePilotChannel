@@ -15,6 +15,9 @@ an optional NOAA GOES satellite loop. GitHub: juchong/ThePilotChannel.
   frontend to static files, FastAPI serves the API and those files on port 8000.
 - The kiosk is NOT dockerized. It runs natively via autologin on tty1 launching
   `deploy/kiosk-launch.sh` (cage + Chromium), because it needs direct GPU and HDMI access.
+  The OS runs from an SD card, so the kiosk keeps Chromium's profile, disk cache, and log
+  on a RAM disk under `/dev/shm/hangar-kiosk` to minimize SD wear (disposable on reboot).
+  Kiosk log: `/dev/shm/hangar-kiosk/hangar-kiosk.log`.
 - `data/config.yaml` is the single source of truth. It is bind-mounted as a directory
   (`./data:/data`, not a single file, so atomic writes work). Pydantic models in
   `backend/app/config.py`. The admin page PUTs config, which writes the file and emits an
@@ -56,6 +59,8 @@ an optional NOAA GOES satellite loop. GitHub: juchong/ThePilotChannel.
 - Weather: aviationweather.gov, no key. Trust `fltCat`, else derive per FAA AIM 7-1-7.
 - Satellite: NOAA STAR CDN. Backend parses the directory listing for recent frame URLs.
 - Map needs internet: OSM raster tiles (default) and openmaptiles glyphs for labels.
+  The map keeps a large in-memory tile cache (`maxTileCacheSize`) with `refreshExpiredTiles`
+  off, so revisiting the fixed set of cycle views reuses tiles and switches near-instantly.
 
 ## Build, run, verify
 

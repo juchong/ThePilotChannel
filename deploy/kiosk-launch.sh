@@ -3,7 +3,15 @@
 # Invoked from the autologin session on tty1 (which owns seat0 / DRM master).
 set -u
 
-LOG=/tmp/hangar-kiosk.log
+# The OS runs from an SD card, so keep all of Chromium's churning writes (profile,
+# disk cache, GPU/shader cache) and the kiosk log on a RAM disk (/dev/shm, tmpfs)
+# to minimize SD wear. These are all disposable across reboots.
+RAMDIR=/dev/shm/hangar-kiosk
+PROFILE_DIR="$RAMDIR/profile"
+CACHE_DIR="$RAMDIR/cache"
+mkdir -p "$PROFILE_DIR" "$CACHE_DIR"
+
+LOG="$RAMDIR/hangar-kiosk.log"
 exec >>"$LOG" 2>&1
 echo "=== kiosk launch $(date) ==="
 
@@ -20,6 +28,8 @@ CHROME_BIN="$(command -v chromium || command -v chromium-browser)"
 exec cage -- "$CHROME_BIN" \
   --kiosk \
   --ozone-platform=wayland \
+  --user-data-dir="$PROFILE_DIR" \
+  --disk-cache-dir="$CACHE_DIR" \
   --noerrdialogs \
   --disable-infobars \
   --no-first-run \

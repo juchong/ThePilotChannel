@@ -56,4 +56,4 @@ sudo systemctl daemon-reload
 echo
 echo "Done. Reboot to start the kiosk:  sudo reboot"
 echo "Or start it now without reboot:   sudo systemctl restart getty@tty1"
-echo "Admin UI: http://<pi-ip>:8000/admin   |   kiosk log: /tmp/hangar-kiosk.log"
+echo "Admin UI: http://<pi-ip>:8000/admin   |   kiosk log: /dev/shm/hangar-kiosk/hangar-kiosk.log"

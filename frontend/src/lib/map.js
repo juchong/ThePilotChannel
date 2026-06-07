@@ -23,8 +23,8 @@ const UNKNOWN_COLOR = "#cbd5e1";
 // Scale map glyphs up on high-resolution panels (e.g. 4K) so they are the same
 // physical size as on a 1080p screen. CSS handles the rest of the UI.
 const UI = typeof window !== "undefined" && window.innerWidth >= 2560 ? 2 : 1;
-const AC_ICON_PX = 26 * UI;
-const BARB_PX = 70 * UI;
+const AC_ICON_PX = 32 * UI;
+const BARB_PX = 78 * UI;
 
 export function altColorFor(altFt, onGround) {
   if (onGround) return GROUND_COLOR;
@@ -62,6 +62,12 @@ export class HangarMap {
       zoom: 9,
       attributionControl: false,
       interactive: false,
+      // The cycle revisits a small fixed set of views, so keep a large tile
+      // cache in memory and do not re-fetch expired tiles. OSM raster tiles
+      // change rarely, so reusing them makes view switches near-instant.
+      maxTileCacheSize: 1000,
+      refreshExpiredTiles: false,
+      fadeDuration: 0,
     });
     this._apMarkers = [];
     this._ac = new Map(); // hex -> { marker, iconEl, labelEl, name, color, track }
