@@ -1,0 +1,123 @@
+:root {
+  --bg: #0b0f14;
+  --panel: #131a22;
+  --panel-2: #1b242e;
+  --text: #e6edf3;
+  --muted: #8b98a5;
+  --accent: #38bdf8;
+  --good: #22c55e;
+  --bad: #ef4444;
+  --warn: #f59e0b;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+  font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+
+.display #app {
+  display: grid;
+  grid-template-rows: 8px 64px 1fr 36px;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* Countdown bar */
+#countdown { background: #0a0e13; width: 100%; height: 8px; }
+#countdown-fill { height: 100%; width: 100%; background: linear-gradient(90deg, var(--accent), #818cf8);
+  transform-origin: left; will-change: transform; }
+
+/* Header */
+#header { display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px; background: var(--panel); border-bottom: 1px solid #000; }
+#view-label { font-size: 28px; font-weight: 700; letter-spacing: 0.5px; }
+#clocks { display: flex; align-items: baseline; gap: 22px; }
+#clock-local .time { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; }
+#clock-utc .time { font-size: 20px; color: var(--muted); font-variant-numeric: tabular-nums; }
+#clocks .tz { font-size: 11px; color: var(--muted); margin-left: 6px; letter-spacing: 1px; }
+#date { font-size: 14px; color: var(--muted); }
+
+/* Stage */
+#stage { display: grid; grid-template-columns: 1fr 380px; min-height: 0; }
+#map { width: 100%; height: 100%; background: #0d1117; }
+#side { background: var(--panel); border-left: 1px solid #000; padding: 12px;
+  overflow: hidden; display: flex; flex-direction: column; gap: 10px; }
+#side-header { flex: none; max-height: 46%; overflow: hidden; }
+#aircraft-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+#aircraft-panel h3 { margin: 0 0 6px; font-size: 12px; color: var(--muted); letter-spacing: 1px; }
+#aircraft-panel h3 span { color: var(--accent); font-weight: 700; }
+#aircraft-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; }
+.ac-row { display: grid; grid-template-columns: 12px 1fr auto auto; gap: 8px; align-items: center;
+  padding: 5px 8px; background: var(--panel-2); border-radius: 5px; font-size: 13px; }
+.ac-row .dot { width: 10px; height: 10px; border-radius: 50%; }
+.ac-row .cs { font-weight: 700; font-variant-numeric: tabular-nums; }
+.ac-row .ty { color: var(--muted); font-size: 11px; }
+.ac-row .alt { font-variant-numeric: tabular-nums; text-align: right; }
+.ac-row .gs { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; min-width: 48px; }
+.st-row { display: grid; grid-template-columns: 44px auto auto 1fr; gap: 8px; align-items: center;
+  padding: 5px 8px; background: var(--panel-2); border-radius: 6px; }
+.st-row svg { width: 40px; height: 40px; }
+.st-row .icao { font-weight: 700; font-size: 15px; }
+.st-row .cat { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 4px; color: #0b0f14;
+  justify-self: start; }
+.st-row .wind { font-size: 12px; color: var(--muted); text-align: right; }
+.ac-row.ga { background: #1f2b1f; }
+.ac-row .ga-tag { font-size: 9px; font-weight: 700; background: var(--good); color: #06121b;
+  padding: 0 4px; border-radius: 3px; margin-right: 4px; vertical-align: middle; }
+
+/* On-map aircraft markers */
+.ac-marker { position: relative; width: 0; height: 0; pointer-events: none; }
+.ac-icon { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%);
+  filter: drop-shadow(0 0 1.5px #000) drop-shadow(0 0 1.5px #000); }
+.ac-icon svg { display: block; }
+.ac-label { position: absolute; left: 0; top: 15px; transform: translateX(-50%); white-space: nowrap;
+  font-size: 11px; font-weight: 600; color: #e6edf3; text-shadow: 0 0 3px #000, 0 0 3px #000; }
+.hide-ac-labels .ac-label { display: none; }
+
+/* On-map airport wind barb markers */
+.map-airport { display: flex; flex-direction: column; align-items: center; pointer-events: none; }
+.map-airport-label { font-size: 12px; font-weight: 700; color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000;
+  margin-top: -8px; }
+
+#legend { flex: none; border-top: 1px solid #000; padding-top: 8px;
+  font-size: 11px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px; }
+#legend .sw { display: inline-flex; align-items: center; gap: 4px; }
+#legend .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+/* METAR / wind barb (local) */
+.metar-block { display: flex; flex-direction: column; gap: 12px; height: 100%; }
+.barb-wrap { display: flex; align-items: center; gap: 14px; }
+.barb-wrap svg { width: 120px; height: 120px; flex: none; }
+.wind-text { font-size: 15px; }
+.wind-text .big { font-size: 26px; font-weight: 700; }
+.cat-chip { display: inline-block; padding: 3px 10px; border-radius: 6px; font-weight: 700;
+  color: #0b0f14; font-size: 14px; }
+.metar-grid { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 14px; }
+.metar-grid .k { color: var(--muted); }
+.raw { font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted);
+  background: var(--panel-2); padding: 8px; border-radius: 6px; word-break: break-word; }
+.stale-badge { background: var(--warn); color: #0b0f14; padding: 2px 8px; border-radius: 5px;
+  font-size: 11px; font-weight: 700; }
+
+/* Regional airport list */
+.ap-list { display: flex; flex-direction: column; gap: 6px; height: 100%; overflow: hidden; }
+.ap-list h3 { margin: 0 0 4px; font-size: 13px; color: var(--muted); letter-spacing: 1px; }
+.ap-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px;
+  background: var(--panel-2); border-radius: 6px; }
+.ap-row svg { width: 38px; height: 38px; flex: none; }
+.ap-row .icao { font-weight: 700; font-size: 16px; min-width: 56px; }
+.ap-row .cat { font-size: 12px; font-weight: 700; padding: 1px 7px; border-radius: 4px; color: #0b0f14; }
+.ap-row .wind { font-size: 12px; color: var(--muted); }
+
+/* Footer */
+#footer { display: flex; align-items: center; gap: 22px; padding: 0 18px;
+  background: var(--panel); border-top: 1px solid #000; font-size: 13px; color: var(--muted); }
+.health { color: var(--good); font-size: 16px; }
+.health.bad { color: var(--bad); }
+
+/* Overlay */
+.overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(8, 11, 15, 0.85); font-size: 22px; color: var(--muted); }
+.overlay.hidden { display: none; }
+
+/* Aircraft labels via maplibre are styled in JS; map controls hidden for kiosk */
+.maplibregl-ctrl-attrib, .maplibregl-ctrl-logo { opacity: 0.35; }

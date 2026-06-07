@@ -1,0 +1,41 @@
+airports:
+- icao: KS50
+  name: Auburn Muni (Dick Scobee Field)
+  lat: 47.327625
+  lon: -122.226655
+  local_radius_mi: 5.0
+  enabled: true
+- icao: KBFI
+  name: Boeing Field / King County Intl
+  lat: 47.5455
+  lon: -122.3148
+  local_radius_mi: 5.0
+  enabled: true
+regions:
+- name: Puget Sound
+  center_lat: 47.44
+  center_lon: -122.27
+  radius_mi: 30.0
+  enabled: true
+cycle:
+  local_dwell_s: 20
+  regional_dwell_s: 25
+  order: []
+  max_local_views: 0
+  interleave_regional: true
+data_source:
+  mode: auto
+  local_url: http://localhost/tar1090/data/aircraft.json
+  aggregator: adsbfi
+  api_key: ''
+  drop_timeout_s: 15
+display:
+  units: imperial
+  timezone: America/Los_Angeles
+  resolution: 1920x1080
+  basemap: raster_osm
+  tile_url: ''
+  tile_api_key: ''
+weather:
+  refresh_s: 300
+  stale_after_s: 4500

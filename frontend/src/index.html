@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hangar Display</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body class="display">
+    <div id="app">
+      <div id="countdown"><div id="countdown-fill"></div></div>
+
+      <header id="header">
+        <div id="view-label">Starting…</div>
+        <div id="clocks">
+          <div id="clock-local"><span class="time">--:--:--</span><span class="tz">LOCAL</span></div>
+          <div id="clock-utc"><span class="time">--:--</span><span class="tz">UTC</span></div>
+          <div id="date">--</div>
+        </div>
+      </header>
+
+      <main id="stage">
+        <div id="map"></div>
+        <aside id="side">
+          <div id="side-header"></div>
+          <div id="aircraft-panel">
+            <h3><span id="panel-title">AIRCRAFT IN VIEW</span> <span id="ac-count">0</span></h3>
+            <div id="aircraft-list"></div>
+          </div>
+          <div id="legend"></div>
+        </aside>
+      </main>
+
+      <footer id="footer">
+        <span id="f-source">source: —</span>
+        <span id="f-updated">updated —</span>
+        <span id="f-count">— aircraft</span>
+        <span id="f-health" class="health">●</span>
+      </footer>
+
+      <div id="overlay" class="overlay hidden"><div id="overlay-text"></div></div>
+    </div>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

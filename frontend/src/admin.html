@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hangar Display - Admin</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./admin.css" />
+  </head>
+  <body class="admin">
+    <div class="admin-wrap">
+      <header class="admin-header">
+        <h1>Hangar Display Admin</h1>
+        <div class="actions">
+          <span id="status" class="status">—</span>
+          <a href="/" target="_blank" class="btn ghost">Open display ↗</a>
+          <button id="save" class="btn primary">Save &amp; reload kiosk</button>
+        </div>
+      </header>
+
+      <section class="card">
+        <h2>Airports <button class="btn sm" data-add="airport">+ add</button></h2>
+        <div id="airports"></div>
+      </section>
+
+      <section class="card">
+        <h2>Regions <button class="btn sm" data-add="region">+ add</button></h2>
+        <div id="regions"></div>
+      </section>
+
+      <div class="grid2">
+        <section class="card">
+          <h2>Cycle &amp; timing</h2>
+          <div id="cycle"></div>
+        </section>
+        <section class="card">
+          <h2>Data source</h2>
+          <div id="datasource"></div>
+          <button id="test-source" class="btn sm">Test connection</button>
+          <span id="test-result" class="status"></span>
+        </section>
+      </div>
+
+      <section class="card">
+        <h2>Display &amp; weather</h2>
+        <div id="display"></div>
+      </section>
+
+      <p class="hint">Saving writes <code>config.yaml</code> and pushes a reload to the kiosk.</p>
+    </div>
+    <script type="module" src="./admin.js"></script>
+  </body>
+</html>
