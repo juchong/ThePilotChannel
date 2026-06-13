@@ -10,9 +10,9 @@ USER_NAME="${SUDO_USER:-$USER}"
 UID_NUM="$(id -u "$USER_NAME")"
 HOME_DIR="$(getent passwd "$USER_NAME" | cut -d: -f6)"
 
-echo "==> Installing kiosk packages (cage, chromium, curl, seatd)"
+echo "==> Installing kiosk packages (cage, chromium, curl, seatd, wlrctl)"
 sudo apt-get update
-sudo apt-get install -y cage chromium curl seatd
+sudo apt-get install -y cage chromium curl seatd wlrctl
 if ! command -v chromium >/dev/null 2>&1 && command -v chromium-browser >/dev/null 2>&1; then
   sudo ln -sf "$(command -v chromium-browser)" /usr/local/bin/chromium
 fi
@@ -49,8 +49,24 @@ fi
 echo "==> Disabling the legacy graphical-target unit if present"
 sudo systemctl disable hangar-kiosk.service 2>/dev/null || true
 
+echo "==> Ensuring Docker Engine and the compose plugin are installed"
+if ! command -v docker >/dev/null 2>&1; then
+  # Official convenience script; supports Raspberry Pi OS / Debian on arm64.
+  curl -fsSL https://get.docker.com | sudo sh
+fi
+if ! docker compose version >/dev/null 2>&1; then
+  sudo apt-get install -y docker-compose-plugin
+fi
+# Start Docker now and on every boot so the stack survives reboots.
+sudo systemctl enable --now docker
+# Let the kiosk user run docker without sudo (takes effect after next login).
+if ! id -nG "$USER_NAME" | grep -qw docker; then
+  sudo usermod -aG docker "$USER_NAME"
+  echo "    Added $USER_NAME to the 'docker' group (effective after re-login)."
+fi
+
 echo "==> Bringing up the dockerized app stack"
-( cd "$REPO_DIR" && docker compose up -d --build )
+( cd "$REPO_DIR" && sudo docker compose up -d --build )
 
 sudo systemctl daemon-reload
 echo
