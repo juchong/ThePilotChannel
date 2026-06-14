@@ -40,8 +40,26 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 #date { font-size: 14px; color: var(--muted); }
 
 /* Stage */
-#stage { display: grid; grid-template-columns: 1fr 380px; min-height: 0; }
+#stage { display: grid; grid-template-columns: 1fr 380px; min-height: 0; position: relative; }
 #map { width: 100%; height: 100%; background: #0d1117; }
+
+/* Radar (NEXRAD) overlays on the regional view: a frame-time caption and a
+   reflectivity legend. Positioned over the map area (left of the side panel),
+   shown only while the radar overlay is active. */
+.map-overlay { position: absolute; z-index: 5; display: none; }
+#radar-caption { left: 16px; bottom: 12px; font-size: 14px; font-weight: 600; color: #e6edf3;
+  background: rgba(8, 11, 15, 0.6); padding: 4px 10px; border-radius: 6px; }
+#radar-caption .frame-time { color: var(--accent); margin-left: 8px; font-variant-numeric: tabular-nums; }
+#radar-legend { left: 16px; top: 12px; background: rgba(8, 11, 15, 0.6); padding: 6px 10px;
+  border-radius: 6px; }
+#radar-legend h4 { margin: 0 0 4px; font-size: 11px; color: var(--muted); letter-spacing: 1px; font-weight: 600; }
+#radar-legend .scale { display: flex; }
+#radar-legend .scale i { width: 22px; height: 12px; display: block; }
+#radar-legend .scale i:first-child { border-radius: 3px 0 0 3px; }
+#radar-legend .scale i:last-child { border-radius: 0 3px 3px 0; }
+#radar-legend .labels { display: flex; font-size: 10px; color: var(--muted); margin-top: 2px;
+  font-variant-numeric: tabular-nums; }
+#radar-legend .labels span { width: 22px; text-align: center; }
 
 /* Satellite loop view (spans the whole stage when active) */
 #sat { display: none; grid-column: 1 / -1; position: relative; background: #000;
@@ -89,6 +107,8 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 
 /* On-map airport wind barb markers */
 .map-airport { display: flex; flex-direction: column; align-items: center; pointer-events: none; }
+.map-airport-dot { width: 9px; height: 9px; border-radius: 50%; background: #fff;
+  border: 2px solid #000; box-shadow: 0 0 3px #000; }
 .map-airport-label { font-size: 15px; font-weight: 800; color: #fff;
   text-shadow: -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000,
     0 0 4px #000, 0 0 4px #000;
@@ -189,6 +209,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
   .health { font-size: 30px; }
   #brand { font-size: 24px; letter-spacing: 3px; }
 
+  .map-airport-dot { width: 16px; height: 16px; border-width: 3px; }
   .map-airport-label { font-size: 32px; font-weight: 800; margin-top: -18px;
     text-shadow: -3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 3px 3px 0 #000,
       0 0 6px #000, 0 0 6px #000; }
@@ -196,5 +217,11 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
     text-shadow: -2.5px -2.5px 0 #000, 2.5px -2.5px 0 #000, -2.5px 2.5px 0 #000, 2.5px 2.5px 0 #000,
       0 0 4px #000, 0 0 4px #000; }
   #sat-caption { font-size: 26px; padding: 8px 18px; }
+  #radar-caption { font-size: 26px; padding: 8px 18px; }
+  #radar-legend { padding: 12px 18px; }
+  #radar-legend h4 { font-size: 20px; }
+  #radar-legend .scale i { width: 40px; height: 22px; }
+  #radar-legend .labels { font-size: 18px; }
+  #radar-legend .labels span { width: 40px; }
   .overlay { font-size: 40px; }
 }

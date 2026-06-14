@@ -16,7 +16,7 @@ export function windBarbSVG(opts) {
   if (calm || speedKt === 0) {
     return wrap(
       size,
-      `<circle cx="${CX}" cy="${CY}" r="11" fill="none" stroke="${halo}" stroke-width="6"/>
+      `<circle cx="${CX}" cy="${CY}" r="11" fill="none" stroke="${halo}" stroke-width="9"/>
        <circle cx="${CX}" cy="${CY}" r="11" fill="none" stroke="${stroke}" stroke-width="3"/>`
     );
   }
@@ -27,13 +27,14 @@ export function windBarbSVG(opts) {
   const prims = barbPrimitives(speedKt);
   const rotate = variable ? 0 : dirDeg ?? 0;
 
-  // Render halo (wide, dark) then colored, so it pops on any background.
-  const haloLayer = prims.map((p) => renderPrim(p, halo, 6)).join("");
+  // Render halo (wide, dark) then colored, so it pops on any background. A thick
+  // halo keeps overlapping barbs distinct, especially over the radar overlay.
+  const haloLayer = prims.map((p) => renderPrim(p, halo, 9)).join("");
   const colorLayer = prims.map((p) => renderPrim(p, stroke, 3)).join("");
   const group = `<g transform="rotate(${rotate} ${CX} ${CY})">${haloLayer}${colorLayer}</g>`;
 
   // Station dot at the base (airport / observation point) - rotation independent.
-  const station = `<circle cx="${CX}" cy="${CY}" r="4.5" fill="${stroke}" stroke="${halo}" stroke-width="1.5"/>`;
+  const station = `<circle cx="${CX}" cy="${CY}" r="4.5" fill="${stroke}" stroke="${halo}" stroke-width="2.5"/>`;
   const vrb = variable
     ? `<text x="${CX}" y="${CY + 20}" text-anchor="middle" fill="${stroke}" stroke="${halo}" stroke-width="0.6" font-size="14" font-weight="700">VRB</text>`
     : "";

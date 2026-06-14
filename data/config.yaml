@@ -11,6 +11,12 @@ airports:
   lon: -122.3148
   local_radius_mi: 5.0
   enabled: true
+- icao: KSEA
+  name: Seattle-Tacoma Intl
+  lat: 47.4502
+  lon: -122.3088
+  local_radius_mi: 5.0
+  enabled: true
 regions:
 - name: Puget Sound
   center_lat: 47.44
@@ -19,7 +25,7 @@ regions:
   enabled: true
 cycle:
   local_dwell_s: 20
-  regional_dwell_s: 25
+  regional_dwell_s: 15
   order: []
   max_local_views: 0
   interleave_regional: true
@@ -39,7 +45,6 @@ display:
 weather:
   refresh_s: 300
   stale_after_s: 4500
-
 satellite:
   enabled: true
   sat: G18
@@ -49,3 +54,10 @@ satellite:
   size: 1200x1200
   dwell_s: 25
   label: GOES-West PNW GeoColor
+radar:
+  enabled: true
+  label: NEXRAD Base Reflectivity
+  frames: 10
+  interval_min: 5
+  opacity: 0.75
+  product: n0q

@@ -44,6 +44,7 @@ async function boot() {
 
   await loadWeather();
   await loadViews();
+  await state.map.warmViews(state.views);
   hideOverlay();
   nextView(0);
 }
@@ -87,6 +88,8 @@ function nextView(idx) {
   state.view = state.views[state.idx];
   state.store.clear();
   state.map.clearAircraft();
+  state.map.hideRadar();
+  showRadarOverlays(false);
   if (state.trafficTimer) clearInterval(state.trafficTimer);
   if (state.satTimer) clearTimeout(state.satTimer);
 
@@ -107,13 +110,15 @@ function nextView(idx) {
     pollTraffic();
     state.trafficTimer = setInterval(pollTraffic, 1000);
   } else {
-    // Regional = weather only: wind barbs for ALL stations in radius, no aircraft.
+    // Regional = weather: wind barbs for ALL stations in view, drawn on top of an
+    // animated NEXRAD precipitation overlay. No aircraft.
     showStage("map");
     state.map.resize();
     state.map.frameView(state.view);
     el("side-header").innerHTML = "";
     el("panel-title").textContent = "WEATHER STATIONS";
     renderLegend("cat");
+    startRadarOverlay(state.view); // precipitation underneath; barbs (DOM markers) draw above
     showRegionalWeather(state.view);
   }
 
@@ -122,18 +127,17 @@ function nextView(idx) {
   state.dwellTimer = setTimeout(() => nextView(state.idx + 1), state.view.dwell_s * 1000);
 }
 
-// Toggle the stage between the map+panel layout and the fullscreen satellite loop.
+// Toggle the stage between layouts: "map" (map + side panel) and "sat"
+// (fullscreen satellite loop).
 function showStage(mode) {
-  const sat = el("sat");
-  if (mode === "sat") {
-    sat.classList.add("active");
-    el("map").style.display = "none";
-    el("side").style.display = "none";
-  } else {
-    sat.classList.remove("active");
-    el("map").style.display = "";
-    el("side").style.display = "flex";
-  }
+  el("sat").classList.toggle("active", mode === "sat");
+  el("map").style.display = mode === "sat" ? "none" : "";
+  el("side").style.display = mode === "map" ? "flex" : "none";
+}
+
+function showRadarOverlays(on) {
+  el("radar-caption").style.display = on ? "block" : "none";
+  el("radar-legend").style.display = on ? "block" : "none";
 }
 
 async function setSatelliteView(view) {
@@ -194,6 +198,51 @@ function animateSatellite(view, frames) {
     state.satTimer = setTimeout(step, last ? HOLD_MS : FRAME_MS);
   };
   step();
+}
+
+// ---- NEXRAD radar loop --------------------------------------------------
+// Standard NWS reflectivity color scale (dBZ -> color) for the legend.
+const RADAR_DBZ = [
+  [5, "#04e9e7"], [15, "#0300f4"], [25, "#02fd02"], [35, "#fdf802"],
+  [45, "#fd9500"], [55, "#fd0000"], [65, "#f800fd"], [75, "#fdfdfd"],
+];
+
+// NEXRAD precipitation overlay for the regional view. The radar raster sits below
+// the wind-barb markers (DOM markers always render above map layers), so barbs
+// stay legible on top of the precipitation.
+function startRadarOverlay(view) {
+  const radar = view.radar;
+  if (!radar || !(radar.frames || []).length) return;
+  state.map.ensureRadar(radar.frames, { tileBase: radar.tile_base, opacity: radar.opacity });
+  renderRadarLegend();
+  showRadarOverlays(true);
+  animateRadar(view, radar.frames, radar.label);
+}
+
+function animateRadar(view, frames, label) {
+  let i = 0;
+  const FRAME_MS = 550; // dwell per frame; ~matches the cross-fade so steps dissolve smoothly
+  const HOLD_MS = 1800; // pause on the newest frame each loop
+  const step = () => {
+    if (state.view !== view) return;
+    state.map.showRadarFrame(i);
+    const f = frames[i];
+    const t = new Date(Date.now() - (f.age_min || 0) * 60000);
+    const hhmm = t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const age = f.age_min ? `-${f.age_min} min` : "now";
+    el("radar-caption").innerHTML = `${label}<span class="frame-time">${hhmm} (${age})</span>`;
+    const last = i === frames.length - 1;
+    i = (i + 1) % frames.length;
+    state.satTimer = setTimeout(step, last ? HOLD_MS : FRAME_MS);
+  };
+  step();
+}
+
+function renderRadarLegend() {
+  const swatches = RADAR_DBZ.map(([, c]) => `<i style="background:${c}"></i>`).join("");
+  const labels = RADAR_DBZ.map(([d]) => `<span>${d}</span>`).join("");
+  el("radar-legend").innerHTML =
+    `<h4>REFLECTIVITY (dBZ)</h4><div class="scale">${swatches}</div><div class="labels">${labels}</div>`;
 }
 
 async function showRegionalWeather(view) {

@@ -70,6 +70,22 @@ class Satellite(BaseModel):
     label: str = "GOES-West PNW GeoColor"
 
 
+class Radar(BaseModel):
+    """NEXRAD base reflectivity precipitation overlay (IEM RIDGE II, N0Q).
+
+    Drawn beneath the wind barbs on the regional weather view. Tiles come from
+    the Iowa Environmental Mesonet composite; the current frame plus 5-minute
+    time-lagged frames (-m05m .. -m45m) form an animated loop. The overlay is
+    framed by the regional view, so no center/radius is needed here.
+    """
+    enabled: bool = True
+    label: str = "NEXRAD Base Reflectivity"
+    frames: int = 10            # number of time steps in the loop (max age = (frames-1)*interval)
+    interval_min: int = 5       # spacing between frames; IEM lag layers step every 5 min
+    opacity: float = 0.75       # radar overlay opacity over the basemap
+    product: str = "n0q"        # IEM product code (n0q = base reflectivity)
+
+
 class Config(BaseModel):
     airports: List[Airport] = Field(default_factory=list)
     regions: List[Region] = Field(default_factory=list)
@@ -78,6 +94,7 @@ class Config(BaseModel):
     display: Display = Field(default_factory=Display)
     weather: Weather = Field(default_factory=Weather)
     satellite: Satellite = Field(default_factory=Satellite)
+    radar: Radar = Field(default_factory=Radar)
 
 
 def load_config(path: str | None = None) -> Config:

@@ -45,6 +45,7 @@ exec cage -- "$CHROME_BIN" \
   --ozone-platform=wayland \
   --user-data-dir="$PROFILE_DIR" \
   --disk-cache-dir="$CACHE_DIR" \
+  --disk-cache-size=104857600 \
   --noerrdialogs \
   --disable-infobars \
   --no-first-run \

@@ -20,6 +20,7 @@ function renderAll() {
   renderDataSource();
   renderDisplay();
   renderSatellite();
+  renderRadar();
 }
 
 function renderAirports() {
@@ -115,6 +116,19 @@ function renderSatellite() {
       <div><label>Size</label><select data-f="satellite.size">${opt(["300x300", "600x600", "1200x1200", "2400x2400"], s.size)}</select></div>
       <div><label>Frames</label><input data-f="satellite.frames" value="${s.frames ?? 24}"></div>
       <div><label>Dwell (s)</label><input data-f="satellite.dwell_s" value="${s.dwell_s ?? 25}"></div>
+    </div>`;
+}
+
+function renderRadar() {
+  const r = cfg.radar || {};
+  el("radar").innerHTML = `
+    <div class="fields">
+      <div><label>Enabled</label><input type="checkbox" data-f="radar.enabled" ${r.enabled ? "checked" : ""}></div>
+      <div style="grid-column:span 2"><label>Label</label><input data-f="radar.label" value="${r.label || ""}"></div>
+      <div><label>Product</label><input data-f="radar.product" value="${r.product || "n0q"}"></div>
+      <div><label>Frames</label><input data-f="radar.frames" value="${r.frames ?? 10}"></div>
+      <div><label>Interval (min)</label><input data-f="radar.interval_min" value="${r.interval_min ?? 5}"></div>
+      <div><label>Opacity (0-1)</label><input data-f="radar.opacity" value="${r.opacity ?? 0.75}"></div>
     </div>`;
 }
 

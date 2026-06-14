@@ -2,7 +2,8 @@
 
 A wall-mounted information display for an airplane hangar. It runs on a Raspberry Pi 4
 and drives an HDMI TV. The screen cycles through a set of views on a timer, showing live
-ADS-B air traffic, METAR weather, flight-category wind barbs, and local and UTC clocks.
+ADS-B air traffic, METAR weather, flight-category wind barbs, NEXRAD precipitation radar,
+and local and UTC clocks.
 
 The app stack runs in Docker. The on-screen browser (the kiosk) runs natively on the Pi
 because it needs direct access to the GPU and HDMI output.
@@ -13,9 +14,10 @@ Local airport view (live traffic, METAR, and wind barb):
 
 ![Local airport view](docs/display-local.png)
 
-Regional weather view (wind barbs for every reporting airport in view):
+Regional weather view (wind barbs for every reporting airport in view, over an animated
+NEXRAD precipitation radar loop):
 
-![Regional weather view](docs/display-regional.png)
+![Regional weather view](docs/display-radar.png)
 
 Satellite loop view (animated NOAA GOES imagery):
 
@@ -47,6 +49,8 @@ Regional view (weather overview):
 - Focused on weather, with no aircraft.
 - Wind barbs for every reporting airport that is visible on the map. Stations are queried
   by the map's visible bounds, so this is not limited to the airports in the config file.
+- An animated NEXRAD base-reflectivity radar loop is drawn beneath the barbs, so
+  precipitation shows behind the wind data. The wind barbs always render on top.
 - Side panel lists the stations sorted worst conditions first (LIFR, IFR, MVFR, VFR), each
   with its flight category and wind.
 
@@ -70,6 +74,10 @@ Satellite loop view (optional):
   category is unknown.
 - Wind barbs use standard notation (5 kt half barb, 10 kt full barb, 50 kt pennant) with a
   station dot at the base, a calm ring for no wind, and a VRB marker for variable wind.
+- NEXRAD precipitation radar (base reflectivity) from the Iowa Environmental Mesonet
+  composite, overlaid on the regional view as an animated loop with a dBZ color legend. No
+  API key. Frames cross-fade for smooth motion, and the radar layers are built once and
+  reused so the long-running kiosk stays within a bounded memory footprint.
 - Aircraft type classification is driven by ICAO type designator and ADS-B emitter
   category, not callsign. A flight-school aircraft flying with an airline-style callsign is
   still classed as general aviation, and a privately registered airliner is still an
@@ -235,7 +243,7 @@ regions:
 
 cycle:
   local_dwell_s: 20       # seconds on each local view
-  regional_dwell_s: 25    # seconds on each regional view
+  regional_dwell_s: 15    # seconds on each regional view
   order: []               # optional explicit view order by id
   max_local_views: 0      # 0 means no cap
   interleave_regional: true  # show a regional view between local views
@@ -268,6 +276,14 @@ satellite:
   size: 1200x1200         # 300x300 | 600x600 | 1200x1200 | 2400x2400
   dwell_s: 25
   label: GOES-West PNW GeoColor
+
+radar:
+  enabled: true           # overlay the NEXRAD radar loop on the regional view
+  label: NEXRAD Base Reflectivity
+  frames: 10              # number of frames in the loop (5 min apart)
+  interval_min: 5         # IEM lag layers are available every 5 minutes
+  opacity: 0.75           # radar opacity over the basemap
+  product: n0q            # IEM product code (n0q = base reflectivity)
 ```
 
 ## Data sources
@@ -284,6 +300,10 @@ clients, so the rate limit is respected no matter how many displays connect.
 
 Weather: the aviationweather.gov Data API. Per-airport METARs use the `ids` query, and the
 regional view uses a bounding-box query to find every reporting station on screen.
+
+Radar: the Iowa Environmental Mesonet RIDGE II NEXRAD composite (base reflectivity, N0Q),
+served as Web Mercator raster tiles. The current frame plus 5-minute time-lagged frames are
+fetched directly by the display and animated as a loop. No API key.
 
 ## HTTP API
 

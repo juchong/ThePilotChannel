@@ -50,6 +50,8 @@ def build_views(cfg: Config) -> List[Dict]:
                 "radius_nm": round(miles_to_nm(rg.radius_mi), 2),
                 "dwell_s": cfg.cycle.regional_dwell_s,
                 "airports": airports_in,
+                # NEXRAD precipitation overlay, drawn beneath the wind barbs.
+                "radar": _radar_payload(cfg) if cfg.radar.enabled else None,
             }
         )
 
@@ -70,6 +72,28 @@ def build_views(cfg: Config) -> List[Dict]:
             }
         )
     return views
+
+
+def _radar_payload(cfg: Config) -> Dict:
+    """NEXRAD radar overlay data for the regional view: an ordered frame list
+    (oldest -> newest) of IEM time-lagged tile-layer suffixes, plus the tile
+    template. Framing comes from the regional view it is attached to."""
+    r = cfg.radar
+    n = max(1, r.frames)
+    step = max(1, r.interval_min)
+    frames: List[Dict] = []
+    for k in range(n - 1, -1, -1):  # oldest first so the loop animates forward in time
+        age = k * step
+        suffix = "" if age == 0 else f"-m{age:02d}m"
+        frames.append({"suffix": suffix, "age_min": age})
+    return {
+        "label": r.label,
+        "opacity": r.opacity,
+        "product": r.product,
+        # Iowa Environmental Mesonet RIDGE II composite, Web Mercator (EPSG:3857).
+        "tile_base": f"https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-{r.product}-900913",
+        "frames": frames,
+    }
 
 
 def _order(cfg: Config, local_views: List[Dict], regional_views: List[Dict]) -> List[Dict]:
