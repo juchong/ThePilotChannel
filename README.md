@@ -1,21 +1,16 @@
 # The Pilot Channel
 
-A wall-mounted information display for an airplane hangar. It runs on a Raspberry Pi 4
-and drives an HDMI TV. The screen cycles through a set of views on a timer, showing live
-ADS-B air traffic, METAR weather, flight-category wind barbs, NEXRAD precipitation radar,
-and local and UTC clocks.
-
-The app stack runs in Docker. The on-screen browser (the kiosk) runs natively on the Pi
-because it needs direct access to the GPU and HDMI output.
-
-## Screenshots
+A wall-mounted information display for an airplane hangar. A Raspberry Pi 4 drives an
+HDMI TV that cycles through live ADS-B air traffic around your airports, METAR weather with
+flight-category wind barbs, an animated NEXRAD precipitation radar loop, a NOAA GOES
+satellite loop, and local and UTC clocks. Everything is configured from a phone or laptop
+on the hangar Wi-Fi.
 
 Local airport view (live traffic, METAR, and wind barb):
 
 ![Local airport view](docs/display-local.png)
 
-Regional weather view (wind barbs for every reporting airport in view, over an animated
-NEXRAD precipitation radar loop):
+Regional weather view (wind barbs for every reporting airport in view, over the radar loop):
 
 ![Regional weather view](docs/display-radar.png)
 
@@ -27,397 +22,317 @@ Admin page (remote configuration):
 
 ![Admin page](docs/admin.png)
 
-## Views
+## What it shows
 
-The display cycles through views automatically. A bar at the top of the screen drains
-left to right to show the time remaining on the current view.
+The display cycles through views automatically. A bar across the top drains to show the
+time left on the current view.
 
-Local view (one per airport):
+- **Local view, one per airport.** Centered on the airport with a radius you choose (5
+  miles is typical). Live aircraft are drawn as type-based silhouettes (airliner, light
+  single, helicopter, turboprop, business jet, glider, balloon, military), colored by
+  altitude and rotated to their track, each labeled with its callsign or registration.
+  Aircraft on the ground are included. The side panel shows the airport's METAR, decoded
+  and raw, with a large wind barb, and a list of every aircraft in view with general
+  aviation first.
+- **Regional view.** Weather only: a wind barb for every airport reporting a METAR inside
+  the map, colored by flight category (VFR green, MVFR blue, IFR red, LIFR magenta), over
+  an animated NEXRAD base-reflectivity radar loop. The side panel lists the stations, worst
+  conditions first.
+- **Satellite loop (optional).** A full-screen NOAA GOES animation for your part of the
+  country, for example GOES-West, Pacific Northwest sector, GeoColor.
 
-- Centered on an airport with a configurable radius (for example 5 miles).
-- Live aircraft drawn as type-based silhouettes (airliner, light single, helicopter,
-  turboprop, business jet, glider, balloon, military), colored by altitude band and
-  rotated to track. Each aircraft is labeled with its callsign or registration.
-- On-ground aircraft are included.
-- Side panel shows the airport METAR (decoded plus the raw line) with a large wind barb,
-  and a live list of every aircraft in view.
-- The aircraft list is ordered by importance: general aviation first, then lowest
-  altitude first. Parked aircraft sort to the bottom of each group.
+No API keys are needed. Weather comes from the US National Weather Service Aviation Weather
+Center, radar from the Iowa Environmental Mesonet, satellite imagery from NOAA STAR, and map
+tiles from OpenStreetMap. Traffic comes from your own ADS-B receiver if you have one, or
+from a free public aggregator (adsb.fi, adsb.lol, or airplanes.live).
 
-Regional view (weather overview):
+## What you need
 
-- Focused on weather, with no aircraft.
-- Wind barbs for every reporting airport that is visible on the map. Stations are queried
-  by the map's visible bounds, so this is not limited to the airports in the config file.
-- An animated NEXRAD base-reflectivity radar loop is drawn beneath the barbs, so
-  precipitation shows behind the wind data. The wind barbs always render on top.
-- Side panel lists the stations sorted worst conditions first (LIFR, IFR, MVFR, VFR), each
-  with its flight category and wind.
+- A Raspberry Pi 4 (the 4 GB model is what this was built on) with a microSD card of 8 GB
+  or more, a power supply, and an HDMI cable to the TV (use the HDMI0 port).
+- Raspberry Pi OS Lite, 64-bit (the current Debian 13 based release).
+- Network access, wired or Wi-Fi. The Pi needs the internet for map tiles, weather, radar,
+  and satellite imagery, and for traffic unless you run your own receiver.
+- Optional: a tar1090, readsb, or dump1090 receiver on your network for local traffic with
+  no rate limits.
+- A phone or laptop on the same network to configure it.
 
-Satellite loop view (optional):
+## Install on the Raspberry Pi
 
-- A fullscreen animated NOAA GOES satellite loop (for example GOES-West, Pacific
-  Northwest sector, GeoColor band).
-- Frames come from the NOAA STAR image CDN. The backend reads the CDN listing and returns
-  the most recent frames; the frontend preloads them and plays the loop, holding briefly on
-  the newest frame.
-- Enable, disable, and configure it (satellite, sector, band, size, frame count, dwell)
-  from the admin page.
+This sets up the Pi to boot straight into the full-screen display with no desktop.
 
-## Features
+1. **Flash the OS.** Use Raspberry Pi Imager to write Raspberry Pi OS Lite (64-bit). In the
+   Imager settings (gear icon) set a hostname, enable SSH, create your user, and enter your
+   Wi-Fi details if you are not using Ethernet.
 
-- Pluggable ADS-B traffic source: a local receiver, a free public aggregator, or
-  automatic local-first with aggregator fallback.
-- METAR weather from the US National Weather Service Aviation Weather Center. No API key.
-- Flight category uses the API value when present and otherwise derives it from FAA AIM
-  7-1-7 thresholds. Colors: VFR green, MVFR blue, IFR red, LIFR magenta. White when the
-  category is unknown.
-- Wind barbs use standard notation (5 kt half barb, 10 kt full barb, 50 kt pennant) with a
-  station dot at the base, a calm ring for no wind, and a VRB marker for variable wind.
-- NEXRAD precipitation radar (base reflectivity) from the Iowa Environmental Mesonet
-  composite, overlaid on the regional view as an animated loop with a dBZ color legend. No
-  API key. Frames cross-fade for smooth motion, and the radar layers are built once and
-  reused so the long-running kiosk stays within a bounded memory footprint.
-- Aircraft type classification is driven by ICAO type designator and ADS-B emitter
-  category, not callsign. A flight-school aircraft flying with an airline-style callsign is
-  still classed as general aviation, and a privately registered airliner is still an
-  airliner.
-- Aircraft reporting a negative altitude are treated as invalid and dropped.
-- Remote configuration from a phone or laptop at `/admin`. Saving applies immediately and
-  reloads the display.
+2. **Boot the Pi and connect over SSH** (or plug in a keyboard), then update it:
 
-## Hardware and operating system
+   ```bash
+   sudo apt-get update && sudo apt-get full-upgrade -y
+   ```
 
-- Raspberry Pi 4 (tested on the 4 GB model).
-- microSD card, 8 GB or larger.
-- Raspberry Pi OS or Debian 13 (Trixie), 64-bit.
-- Display connected to HDMI0.
-- Network access. The Pi needs the internet for map tiles, weather, and the public
-  aggregator. A local receiver can be on the LAN instead of the public aggregator.
+3. **Get the code:**
 
-## Architecture
+   ```bash
+   sudo apt-get install -y git
+   git clone https://github.com/juchong/ThePilotChannel.git
+   cd ThePilotChannel
+   ```
 
-```
-+----------------------- Raspberry Pi 4 ------------------------+
-|  Docker (docker compose)                                      |
-|    app container                                              |
-|      FastAPI backend: REST + SSE                              |
-|        source adapters, cache, rate limit, weather poller     |
-|      built frontend (Vite) served as static files             |
-|    data/config.yaml  (bind mounted at /data)                  |
-|                                                               |
-|  Native host (systemd autologin on tty1)                      |
-|    cage + Chromium in kiosk mode  ->  http://localhost:8000   |
-+---------------------------------------------------------------+
+4. **Optional but recommended: set an admin password.** Without one, anyone on your network
+   can change the display. Create a file named `.env` next to `docker-compose.yml`:
 
-   phone or laptop  ->  http://<pi-ip>:8000/admin
-```
+   ```bash
+   echo 'HANGAR_ADMIN_PASSWORD=choose-a-password' > .env
+   ```
 
-The backend keeps one cached snapshot per active view and refreshes it in the background,
-so the browser poll never blocks on a slow upstream call. Aircraft positions update once
-per second and the browser tweens between positions with a CSS transform transition, which
-keeps motion smooth without overshooting.
+5. **Run the installer.** It installs the kiosk browser (cage and Chromium), installs Docker
+   if it is missing, enables the GPU, sets up automatic login on the TV console, and starts
+   the app:
 
-## Setup
+   ```bash
+   sudo bash deploy/install.sh
+   ```
 
-There are two ways to run The Pilot Channel:
+6. **Reboot:**
 
-- Quick start: run just the app stack in Docker on any machine to try it in a browser.
-- Full kiosk: provision a Raspberry Pi so it boots straight into the full-screen display
-  on a connected TV. This is the intended deployment.
+   ```bash
+   sudo reboot
+   ```
 
-### Prerequisites
+The TV shows a "The Pilot Channel" holding screen while the app starts, then the display.
+The first start pulls map tiles and imagery, so give it a minute.
 
-- A Raspberry Pi 4 and an HDMI display for the full kiosk. The quick start runs on any
-  64-bit Linux machine with Docker.
-- Git, to clone this repository.
-- Internet access. The display fetches map tiles, weather, satellite imagery, and (unless
-  you run a local receiver) public ADS-B traffic.
+**Check that it worked:** `docker compose ps` on the Pi shows the `hangar-display` service
+as healthy, and `http://<pi-ip>:8000/admin` opens from your phone or laptop.
 
-The kiosk installer (`deploy/install.sh`) installs Docker for you. For the quick start you
-install Docker yourself, as shown below.
+## Try it without a Pi
 
-### Quick start (Docker only)
-
-Use this to evaluate the app on a laptop or any Linux box, or to run the backend on a Pi
-without the on-screen kiosk.
-
-1. Install Docker Engine and the compose plugin. On Debian or Raspberry Pi OS:
+You can run the app on any 64-bit Linux machine with Docker and look at it in a browser.
+This is handy for setting up airports before the Pi is ready.
 
 ```bash
 curl -fsSL https://get.docker.com | sudo sh
-sudo usermod -aG docker "$USER"   # then log out and back in so the group applies
-```
-
-2. Clone the repo and bring up the stack:
-
-```bash
+sudo usermod -aG docker "$USER"   # log out and back in afterwards
 git clone https://github.com/juchong/ThePilotChannel.git
 cd ThePilotChannel
 docker compose up -d --build
 ```
 
-3. Open the display at `http://<host-ip>:8000` and the admin page at
-   `http://<host-ip>:8000/admin`.
+Then open `http://<host-ip>:8000` for the display and `http://<host-ip>:8000/admin` for the
+settings.
 
-The container is set to `restart: unless-stopped`, so once the Docker service is enabled on
-boot the stack comes back automatically after a reboot.
+## Set up your hangar
 
-### Full kiosk on a Raspberry Pi
+Open `http://<pi-ip>:8000/admin` (it asks for the password if you set one). Every field is
+checked when you save, mistakes are highlighted, and the TV reloads with the new settings.
 
-This is the intended deployment: the Pi boots into a full-screen browser on the TV with no
-desktop. The app stack runs in Docker; the on-screen browser (cage + Chromium) runs
-natively because it needs direct GPU and HDMI access.
+**Airports.** One row per airport you want a local view for: the ICAO identifier (for
+example `KSEA`; for US fields without one use the FAA identifier such as `S50`), a name, the
+latitude and longitude of the field, and the radius in miles. Use the arrows to set the
+order they appear in. Airports without a weather station show "no weather" on their local
+view but still show traffic.
 
-1. Flash the OS. Use Raspberry Pi Imager to write Raspberry Pi OS Lite (64-bit) to the SD
-   card. In the Imager settings (the gear icon), set the hostname, enable SSH, create the
-   user, and configure Wi-Fi if you are not on Ethernet. The default user `pi` is fine.
+**Regions.** A wider view for the weather overview: a center point and a radius. Wind
+barbs appear for every airport reporting weather inside the map, not just the ones you
+listed. One region is usually enough; with more, they are interleaved between the local
+views.
 
-2. Boot the Pi, connect over SSH (or attach a keyboard), and update the system:
+**Cycle and timing.** How many seconds each local and regional view stays on screen.
 
-```bash
-sudo apt-get update && sudo apt-get full-upgrade -y
-```
+**Data source.** Where aircraft positions come from:
 
-3. Install Git and clone the repository:
+- `aggregator`: a free public feed. Pick adsb.fi, adsb.lol, or airplanes.live. Coverage
+  depends on volunteers' receivers near your airport, and updates arrive about once a
+  second.
+- `local`: your own tar1090, readsb, or dump1090 receiver. Enter the URL of its
+  `aircraft.json`, for example `http://192.168.1.20:8080/data/aircraft.json`. Use the
+  receiver's LAN address even if it runs on the Pi itself, because the app runs inside a
+  container where `localhost` means the container.
+- `auto`: use the local receiver and fall back to the aggregator when it is unreachable.
 
-```bash
-sudo apt-get install -y git
-git clone https://github.com/juchong/ThePilotChannel.git
-cd ThePilotChannel
-```
+Press **Test connection** to check the source before saving; it reports how many aircraft
+each source sees near your first airport.
 
-4. Run the installer. It installs the kiosk packages (cage, Chromium, wlrctl, seatd),
-   installs Docker if it is missing, enables the GPU overlay, configures autologin on tty1,
-   installs the kiosk launcher, and brings up the Docker stack:
+**Display.** Your IANA timezone (for example `America/Denver`) for the clock. The map
+uses OpenStreetMap tiles by default; if you have your own tile server or a vector style
+URL from a map provider, enter it here.
 
-```bash
-sudo bash deploy/install.sh
-```
+**Weather.** How often METARs refresh and when to flag a report as stale.
 
-5. Reboot:
+**Satellite loop.** Choose the satellite (G16 is GOES-East, G18 is GOES-West), the sector,
+and the band. Find your sector code on the NOAA STAR GOES image viewer: open your region's
+page and use the short code from its address, for example `pnw` (Pacific Northwest),
+`psw` (Pacific Southwest), `nr` (Northern Rockies), `sr` (Southern Rockies), `sp`
+(Southern Plains), `umv` (Upper Mississippi Valley), `cgl` (Central Great Lakes), `ne`
+(Northeast), `se` (Southeast). `GEOCOLOR` is the natural-color band most people want.
+`1200x1200` frames suit a 1080p TV.
 
-```bash
-sudo reboot
-```
+**Radar overlay.** Shown on the regional view. Ten frames five minutes apart give a
+45-minute loop; the loop can reach back at most 55 minutes.
 
-After the reboot the Pi logs in automatically on tty1 and launches the kiosk, which waits
-for the backend to become healthy and then opens the display full screen. To start the
-kiosk without rebooting, run `sudo systemctl restart getty@tty1`.
+**Screen.** Buttons to black out and restore the picture, the same thing an automation
+can do (see below).
 
-The kiosk keeps its Chromium profile, disk cache, and log on a RAM disk (`/dev/shm`) to
-minimize SD card wear; these are recreated on every boot. The kiosk log is at
-`/dev/shm/hangar-kiosk/hangar-kiosk.log`.
+### Editing the file directly
 
-### Verify the install
-
-- Backend health: `curl http://localhost:8000/healthz` returns JSON with `"ok": true`.
-- Containers: `docker compose ps` shows the `hangar-display` service as healthy.
-- On the Pi, the TV shows the display cycling through views. The mouse pointer is parked in
-  a screen corner so it stays out of view.
-
-Then configure airports, regions, and data sources from `http://<pi-ip>:8000/admin` or by
-editing `data/config.yaml` (see Configuration below).
-
-## Configuration
-
-All settings live in `data/config.yaml`. Edit it by hand or from `/admin`. Saving from the
-admin page writes the file and pushes a reload to the display. Airports and regions are
-lists of any length.
+Everything the admin page sets lives in `data/config.yaml` on the Pi. You can edit it by
+hand and run `docker compose restart` to apply. The previous three versions are kept as
+`config.yaml.bak.1` to `.3` every time it is saved, and if the file is ever unreadable the
+display still starts, using the newest good backup, and the admin page shows a banner
+explaining what is wrong.
 
 ```yaml
 airports:
-  - icao: KS50            # ICAO or FAA identifier
-    name: Auburn Muni
-    lat: 47.327625
-    lon: -122.226655
-    local_radius_mi: 5.0  # local view radius in miles
+  - icao: KSEA
+    name: Seattle-Tacoma Intl
+    lat: 47.4502
+    lon: -122.3088
+    local_radius_mi: 5.0
     enabled: true
 
 regions:
   - name: Puget Sound
     center_lat: 47.44
     center_lon: -122.27
-    radius_mi: 30.0       # used to frame the map; barbs cover what is visible
+    radius_mi: 30.0
     enabled: true
 
 cycle:
-  local_dwell_s: 20       # seconds on each local view
-  regional_dwell_s: 15    # seconds on each regional view
-  order: []               # optional explicit view order by id
-  max_local_views: 0      # 0 means no cap
-  interleave_regional: true  # show a regional view between local views
+  local_dwell_s: 20          # seconds on each local view
+  regional_dwell_s: 15       # seconds on each regional view
+  order: []                  # optional explicit order of view ids
+  max_local_views: 0         # 0 means show every enabled airport
+  interleave_regional: true  # put a regional view between local views
 
 data_source:
-  mode: auto              # local | aggregator | auto
-  local_url: "http://localhost/tar1090/data/aircraft.json"
-  aggregator: adsbfi      # adsbfi | adsblol | airplaneslive
-  api_key: ""             # optional, used by airplanes.live Pro
-  drop_timeout_s: 15      # remove an aircraft after this many seconds unseen
+  mode: auto                 # local | aggregator | auto
+  local_url: http://192.168.1.20:8080/data/aircraft.json
+  aggregator: adsbfi         # adsbfi | adsblol | airplaneslive
+  api_key: ""                # airplanes.live Pro only; never shown again once saved
+  drop_timeout_s: 15         # remove an aircraft whose position is older than this
 
 display:
-  units: imperial         # imperial | metric
   timezone: America/Los_Angeles
-  resolution: "1920x1080"
-  basemap: raster_osm     # raster_osm | vector
-  tile_url: ""            # vector style URL or raster tile template override
-  tile_api_key: ""
+  basemap: raster_osm        # raster_osm | vector
+  tile_url: ""               # vector style URL, or a raster tile template override
 
 weather:
-  refresh_s: 300          # METAR refresh interval
-  stale_after_s: 4500     # mark a report stale after this age
+  refresh_s: 300
+  stale_after_s: 4500
 
 satellite:
-  enabled: true           # add the satellite loop to the cycle
-  sat: G18                # G16 (East), G18 (West), G19
-  sector: pnw             # NOAA STAR sector code
+  enabled: true
+  sat: G18                   # G16 (East), G18 (West), G19
+  sector: pnw
   band: GEOCOLOR
-  frames: 24              # number of frames in the loop
-  size: 1200x1200         # 300x300 | 600x600 | 1200x1200 | 2400x2400
+  frames: 24
+  size: 1200x1200            # 300x300 | 600x600 | 1200x1200 | 2400x2400
   dwell_s: 25
   label: GOES-West PNW GeoColor
 
 radar:
-  enabled: true           # overlay the NEXRAD radar loop on the regional view
+  enabled: true
   label: NEXRAD Base Reflectivity
-  frames: 10              # number of frames in the loop (5 min apart)
-  interval_min: 5         # IEM lag layers are available every 5 minutes
-  opacity: 0.75           # radar opacity over the basemap
-  product: n0q            # IEM product code (n0q = base reflectivity)
+  frames: 10
+  interval_min: 5            # multiple of 5; (frames - 1) x interval must be 55 or less
+  opacity: 0.75
+  product: n0q               # n0q (base reflectivity) | n0r
 ```
 
-## Data sources
+## Black out the screen from an automation
 
-Traffic, set by `data_source.mode`:
-
-- `local`: a tar1090, readsb, or dump1090 `aircraft.json` reachable from the Pi.
-- `aggregator`: a free public API. Options are adsb.fi, adsb.lol, and airplanes.live. These
-  are rate limited to about 1 request per second.
-- `auto`: try the local receiver first and fall back to the aggregator.
-
-The backend makes one upstream request per active view and shares the result across all
-clients, so the rate limit is respected no matter how many displays connect.
-
-Weather: the aviationweather.gov Data API. Per-airport METARs use the `ids` query, and the
-regional view uses a bounding-box query to find every reporting station on screen.
-
-Radar: the Iowa Environmental Mesonet RIDGE II NEXRAD composite (base reflectivity, N0Q),
-served as Web Mercator raster tiles. The current frame plus 5-minute time-lagged frames are
-fetched directly by the display and animated as a loop. No API key.
-
-## HTTP API
-
-- `GET /healthz` liveness and source status.
-- `GET /api/config` and `PUT /api/config` read and write the full config.
-- `GET /api/views` resolved, ordered list of views.
-- `GET /api/traffic?view=<id>` normalized aircraft snapshot for a view.
-- `GET /api/weather?ids=<csv>` normalized METARs for specific airports.
-- `GET /api/weather/bbox?min_lat=&min_lon=&max_lat=&max_lon=` METARs in a box.
-- `GET /api/weather/area?lat=&lon=&radius_nm=` METARs within a radius.
-- `GET /api/satellite?sat=&sector=&band=&size=&frames=` recent GOES frame URLs.
-- `GET /api/status` current source and health.
-- `POST /api/test-source` check connectivity for a candidate source.
-- `GET /api/stream` server-sent events: `config_changed`, `weather_updated`.
-
-## Project layout
-
-```
-backend/
-  app/
-    main.py        FastAPI app, routes, SSE, static file serving
-    config.py      config model, load and save
-    manager.py     sources, cache, rate limit, weather, background refresh
-    views.py       build the ordered view list from config
-    weather.py     METAR fetch, decode, flight category
-    satellite.py   NOAA GOES frame-list fetcher
-    geo.py         distance and bounding-box helpers
-    sources/
-      base.py      source interface and aircraft normalizer
-      local.py     local receiver source
-      aggregator.py  adsb.fi, adsb.lol, airplanes.live
-  requirements.txt
-frontend/
-  src/
-    index.html, main.js      the display
-    admin.html, admin.js     the admin page
-    styles.css, admin.css
-    lib/
-      api.js        REST client and SSE
-      map.js        MapLibre map, aircraft and barb markers
-      aircraft.js   aircraft store, sorting, filtering
-      windbarb.js   wind barb SVG
-      shapes.js     silhouettes and type classification
-      geo.js        client geo helpers
-  package.json, vite.config.js
-data/config.yaml
-deploy/
-  install.sh           provision the kiosk and bring up Docker
-  kiosk-launch.sh      launch cage and Chromium
-  getty-autologin.conf tty1 autologin drop-in
-Dockerfile
-docker-compose.yml
-```
-
-## Development
-
-Backend:
+Home Assistant or any other system can black out the TV picture for a while and bring it
+back, for example while a movie plays or when a doorbell rings. The display keeps running
+underneath, so the picture returns instantly.
 
 ```bash
-cd backend
-python3 -m venv .venv && . .venv/bin/activate
-pip install -r requirements.txt
-HANGAR_CONFIG=../data/config.yaml HANGAR_STATIC=../frontend/dist \
-  uvicorn app.main:app --reload --port 8000
+# black out for 30 seconds
+curl -X POST -H 'content-type: application/json' \
+  -d '{"seconds": 30, "reason": "doorbell"}' http://<pi-ip>:8000/api/display/blackout
 ```
-
-Frontend (Vite dev server with an API proxy to the backend):
 
 ```bash
-cd frontend
-npm install
-npm run dev
+# black out until told otherwise, then restore
+curl -X POST http://<pi-ip>:8000/api/display/blackout
+curl -X POST http://<pi-ip>:8000/api/display/restore
 ```
 
-The dev server serves the display at `/` and the admin page at `/admin.html`.
+Add `-u any:<password>` to those calls if you set an admin password.
 
-## Operations
+Home Assistant, in `configuration.yaml` (drop the `username` and `password` lines if there
+is no admin password):
 
-- Apply a config change: edit in `/admin` and save, or edit `data/config.yaml` and run
-  `docker compose restart`.
-- Update the app after code changes: `docker compose up -d --build`.
-- Reload the kiosk without rebooting: stop the cage process and let autologin restart it,
-  for example `pkill -x cage`.
-- Kiosk log: `/dev/shm/hangar-kiosk/hangar-kiosk.log`. Backend logs: `docker compose logs -f`.
+```yaml
+rest_command:
+  hangar_display_blackout:
+    url: "http://<pi-ip>:8000/api/display/blackout"
+    method: post
+    content_type: "application/json"
+    username: hass
+    password: !secret hangar_admin_password
+    payload: '{"seconds": {{ seconds | default(30) }}, "reason": "{{ reason | default("home assistant") }}"}'
+  hangar_display_restore:
+    url: "http://<pi-ip>:8000/api/display/restore"
+    method: post
+    username: hass
+    password: !secret hangar_admin_password
+```
+
+Then in an automation:
+
+```yaml
+actions:
+  - action: rest_command.hangar_display_blackout
+    data:
+      seconds: 20
+      reason: doorbell
+```
+
+## Day to day
+
+- **Change settings:** use the admin page. The TV reloads itself when you save.
+- **Update to a new version:**
+
+  ```bash
+  cd ThePilotChannel && git pull && docker compose up -d --build
+  ```
+
+  The display notices the new version and reloads on its own.
+- **Restart the display browser:** `pkill -x cage`. It comes straight back.
+- **Reboot the Pi:** everything starts again automatically, including after a power cut.
+- **Logs:** the app's log is `docker compose logs -f` (capped so it cannot fill the SD
+  card); the kiosk browser's log is `/dev/shm/hangar-kiosk/hangar-kiosk.log`.
+- **Undo a bad config change:** copy `data/config.yaml.bak.1` over `data/config.yaml` and
+  run `docker compose restart`.
 
 ## Troubleshooting
 
-- The TV stays blank or the kiosk never appears. Check the kiosk log at
-  `/dev/shm/hangar-kiosk/hangar-kiosk.log`. Make sure the GPU overlay is enabled
-  (`dtoverlay=vc4-kms-v3d` in `/boot/firmware/config.txt`) and that you rebooted after
-  running the installer. The launcher waits for the backend to be healthy before opening
-  the browser, so confirm the stack is up with `docker compose ps`.
-- The kiosk log shows `Unable to create the wlroots backend`. cage must run on the physical
-  console (tty1) and must not see a `WAYLAND_DISPLAY` in its environment, otherwise it tries
-  to run nested as a Wayland client. Do not export `WAYLAND_DISPLAY` in the login shell, and
-  launch the kiosk only from tty1.
-- `docker: permission denied` when running compose. Your user is not yet in the `docker`
-  group. Log out and back in after the installer adds you, or prefix the command with
-  `sudo`.
-- The map is blank or tiles do not load. The display needs internet for map tiles. Verify
-  connectivity, or host tiles locally and set `display.tile_url` (see Notes).
-- No aircraft appear. Check `http://<pi-ip>:8000/api/status` for the active source and any
-  error. In `local` or `auto` mode confirm `data_source.local_url` is reachable from the Pi;
-  in `aggregator` mode remember the public APIs are rate limited to about 1 request/second.
-- No weather or wind barbs. The backend reads aviationweather.gov with no API key; confirm
-  the Pi can reach it and that your airport identifiers are valid.
+- **The TV stays black or shows only the holding screen.** The app is not up yet or failed
+  to start: run `docker compose ps` and `docker compose logs --tail=50` on the Pi. If the
+  kiosk never appears at all, check `/dev/shm/hangar-kiosk/hangar-kiosk.log`, confirm
+  `dtoverlay=vc4-kms-v3d` is in `/boot/firmware/config.txt`, and make sure you rebooted
+  after the installer.
+- **`Unable to create the wlroots backend` in the kiosk log.** The kiosk must start from
+  the physical console (tty1) with no `WAYLAND_DISPLAY` in its environment. Do not export
+  `WAYLAND_DISPLAY` in your login shell.
+- **`docker: permission denied`.** Log out and back in after the installer adds you to the
+  `docker` group, or use `sudo`.
+- **No aircraft.** Open `http://<pi-ip>:8000/api/status` or press Test connection on the
+  admin page. For a local receiver, the URL must be its LAN address, not `localhost`.
+- **No weather or wind barbs.** Check that the Pi can reach `aviationweather.gov` and that
+  the identifier is right; some small fields have no weather station.
+- **Map tiles show "Access blocked" or do not load.** The Pi cannot reach OpenStreetMap, or
+  the tiles are being requested without a Referer (a proxy in front of the app can cause
+  this). Check connectivity, or point `tile_url` at your own tile server.
+- **A red banner on the admin page about `config.yaml`.** The file could not be read; the
+  display is running with a backup or defaults. Fix the file by hand, or save from the admin
+  page to write a fresh one (the broken file is kept as `config.yaml.bak.1`).
+- **The footer dot is amber or red.** Amber means the last traffic snapshot is more than
+  ten seconds old; red means the source is failing. Hover over it in a browser, or check
+  `/api/status`, for the reason.
 
-## Notes
+## For developers and AI agents
 
-- The frontend is plain JavaScript built with Vite. Modules are split by responsibility.
-- Aircraft are colored by altitude band so flight-category colors stay reserved for wind
-  barbs and METAR text. The two color systems never appear on the same kind of marker.
-- The default basemap is key-free raster OpenStreetMap. To use vector tiles, set
-  `display.basemap` to `vector` and provide a style URL in `display.tile_url`.
-- Map tiles and glyphs are fetched from public services, so the display needs internet. For
-  an offline hangar, host tiles and glyphs locally and point `display.tile_url` at them.
-```
+Architecture, code conventions, invariants, and the build, test, and verify workflow are in
+[AGENTS.md](AGENTS.md).
