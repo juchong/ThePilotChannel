@@ -4,6 +4,7 @@
 // GeoJSON-source pitfalls. Airport wind barbs are also HTML markers.
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { esc } from "./dom.js";
 import { bboxForRadius } from "./geo.js";
 import { SHAPES } from "./shapes.js";
 import { windBarbSVG } from "./windbarb.js";
@@ -58,9 +59,12 @@ function rasterStyle(tileUrl) {
 
 export class HangarMap {
   constructor(container, { basemap, tileUrl } = {}) {
+    // "vector": tileUrl is a MapLibre style JSON URL. "raster_osm": key-free OSM
+    // tiles, or tileUrl as a raster tile template override.
+    const style = basemap === "vector" && tileUrl ? tileUrl : rasterStyle(basemap === "vector" ? "" : tileUrl);
     this.map = new maplibregl.Map({
       container,
-      style: rasterStyle(basemap === "vector" ? tileUrl : tileUrl || null),
+      style,
       center: [-122.27, 47.39],
       zoom: 9,
       attributionControl: false,
@@ -77,7 +81,6 @@ export class HangarMap {
     this._ac = new Map(); // hex -> { marker, iconEl, labelEl, name, color, track }
     this._radarLayers = []; // one raster layer id per radar frame (built once, reused)
     this._showLabels = true;
-    window.__hmap = this.map;
     this.ready = this.map.once("load").then(() => this._initLayers());
   }
 
@@ -168,9 +171,9 @@ export class HangarMap {
               size: BARB_PX,
             })
           : windBarbSVG({ speedKt: null, color: "#ffffff", size: BARB_PX });
-        el.innerHTML = `${barb}<div class="map-airport-label">${ap.icao}</div>`;
+        el.innerHTML = `${barb}<div class="map-airport-label">${esc(ap.icao)}</div>`;
       } else {
-        el.innerHTML = `<div class="map-airport-dot"></div><div class="map-airport-label">${ap.icao}</div>`;
+        el.innerHTML = `<div class="map-airport-dot"></div><div class="map-airport-label">${esc(ap.icao)}</div>`;
       }
       const marker = new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([ap.lon, ap.lat]).addTo(this.map);
       this._apMarkers.push(marker);
