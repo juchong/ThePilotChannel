@@ -8,9 +8,35 @@ services:
     restart: unless-stopped
     ports:
       - "8000:8000"
+    environment:
+      # Optional. When set, /admin and config writes require this password
+      # (HTTP Basic auth, any username). Put it in a .env file next to this
+      # compose file: HANGAR_ADMIN_PASSWORD=...
+      HANGAR_ADMIN_PASSWORD: ${HANGAR_ADMIN_PASSWORD:-}
     volumes:
       # bind-mount the data DIRECTORY (not a single file) so atomic writes work
       - ./data:/data
+    # Lets data_source.local_url reach a receiver on the Pi itself as
+    # http://host.docker.internal/... under rootful Docker. Under rootless
+    # Docker this name is not routable to the host: use the Pi's LAN IP instead.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Hardening: nothing in the container needs capabilities or a writable
+    # root filesystem; config writes go to the /data bind mount.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    # Cap the container log on disk. Without this the json-file log grew to
+    # 1.6 GB in nine days on the kiosk's SD card.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/healthz').status==200 else 1)"]
       interval: 30s

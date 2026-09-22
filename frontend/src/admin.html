@@ -8,56 +8,75 @@
     <link rel="stylesheet" href="./admin.css" />
   </head>
   <body class="admin">
-    <div class="admin-wrap">
+    <div class="admin-wrap" id="admin-root">
       <header class="admin-header">
         <h1>The Pilot Channel Admin</h1>
         <div class="actions">
           <span id="status" class="status">—</span>
-          <a href="/" target="_blank" class="btn ghost">Open display ↗</a>
-          <button id="save" class="btn primary">Save &amp; reload kiosk</button>
+          <a href="/" target="_blank" rel="noopener" class="btn ghost">Open display ↗</a>
+          <button id="save" type="button" class="btn primary">Save &amp; reload kiosk</button>
         </div>
       </header>
 
-      <section class="card">
-        <h2>Airports <button class="btn sm" data-add="airport">+ add</button></h2>
+      <div id="config-alert" class="alert" style="display:none"></div>
+      <p id="backend-status" class="hint"></p>
+
+      <section class="card" data-section="airports">
+        <h2>Airports <button type="button" class="btn sm" data-add="airport">+ add</button></h2>
         <div id="airports"></div>
       </section>
 
-      <section class="card">
-        <h2>Regions <button class="btn sm" data-add="region">+ add</button></h2>
+      <section class="card" data-section="regions">
+        <h2>Regions <button type="button" class="btn sm" data-add="region">+ add</button></h2>
         <div id="regions"></div>
       </section>
 
       <div class="grid2">
-        <section class="card">
+        <section class="card" data-section="cycle">
           <h2>Cycle &amp; timing</h2>
           <div id="cycle"></div>
         </section>
-        <section class="card">
+        <section class="card" data-section="data_source">
           <h2>Data source</h2>
           <div id="datasource"></div>
-          <button id="test-source" class="btn sm">Test connection</button>
-          <span id="test-result" class="status"></span>
+          <div class="row-actions" style="justify-content:flex-start;margin-top:10px">
+            <button id="test-source" type="button" class="btn sm">Test connection</button>
+            <span id="test-result" class="status"></span>
+          </div>
         </section>
       </div>
 
-      <section class="card">
+      <section class="card" data-section="display">
         <h2>Display &amp; weather</h2>
-        <div id="display"></div>
+        <div id="display" data-section="weather"></div>
       </section>
 
-      <section class="card">
+      <section class="card" data-section="satellite">
         <h2>Satellite loop (NOAA GOES)</h2>
         <div id="satellite"></div>
       </section>
 
-      <section class="card">
+      <section class="card" data-section="radar">
         <h2>NEXRAD radar overlay (on regional view)</h2>
         <div id="radar"></div>
       </section>
 
-      <p class="hint">Saving writes <code>config.yaml</code> and pushes a reload to the kiosk.</p>
+      <section class="card" data-section="screen">
+        <h2>Screen</h2>
+        <p class="hint" style="margin-top:0">Black out the picture from an automation (for example Home Assistant) with
+          <code>POST /api/display/blackout</code> and <code>POST /api/display/restore</code>; see the README for a ready-made
+          <code>rest_command</code>. These buttons call the same endpoints.</p>
+        <div class="row-actions" style="justify-content:flex-start">
+          <button id="blackout-10" type="button" class="btn sm">Black out for 10 s</button>
+          <button id="blackout-hold" type="button" class="btn sm">Black out until restored</button>
+          <button id="screen-restore" type="button" class="btn sm primary">Restore</button>
+          <span id="screen-state" class="status"></span>
+        </div>
+      </section>
+
+      <p class="hint">Saving writes <code>config.yaml</code> (keeping the previous versions as <code>config.yaml.bak.1..3</code>) and pushes a reload to the kiosk.</p>
     </div>
+    <datalist id="tz-list"></datalist>
     <script type="module" src="./admin.js"></script>
   </body>
 </html>

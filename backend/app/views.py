@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from typing import Dict, List
 
-from .config import Config
-from .geo import miles_to_nm
+from .config import RADAR_MAX_AGE_MIN, Config
+from .geo import haversine_nm, miles_to_nm
 
 
 def build_views(cfg: Config) -> List[Dict]:
@@ -79,8 +79,8 @@ def _radar_payload(cfg: Config) -> Dict:
     (oldest -> newest) of IEM time-lagged tile-layer suffixes, plus the tile
     template. Framing comes from the regional view it is attached to."""
     r = cfg.radar
-    n = max(1, r.frames)
-    step = max(1, r.interval_min)
+    step = max(5, r.interval_min)
+    n = max(1, min(r.frames, RADAR_MAX_AGE_MIN // step + 1))  # IEM lag layers stop at -m55m
     frames: List[Dict] = []
     for k in range(n - 1, -1, -1):  # oldest first so the loop animates forward in time
         age = k * step
@@ -105,18 +105,18 @@ def _order(cfg: Config, local_views: List[Dict], regional_views: List[Dict]) -> 
             return ordered
 
     if cfg.cycle.interleave_regional and regional_views:
+        if not local_views:
+            return list(regional_views)
         ordered = []
         for i, lv in enumerate(local_views):
             ordered.append(lv)
             ordered.append(regional_views[i % len(regional_views)])
-        if not local_views:
-            ordered = regional_views
+        # more regions than local views: append the ones the round-robin never reached
+        ordered.extend(regional_views[len(local_views):])
         return ordered
 
     return local_views + regional_views
 
 
 def _within(lat, lon, clat, clon, radius_mi) -> bool:
-    from .geo import haversine_nm
-
     return haversine_nm(lat, lon, clat, clon) <= miles_to_nm(radius_mi)

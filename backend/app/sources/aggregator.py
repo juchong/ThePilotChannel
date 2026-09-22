@@ -22,7 +22,7 @@ class AggregatorSource(TrafficSource):
         self.api_key = api_key
 
     def _url(self, lat: float, lon: float, nm: float) -> str:
-        nm = min(round(nm), MAX_NM)
+        nm = max(1, min(round(nm), MAX_NM))
         if self.provider == "adsbfi":
             return f"https://opendata.adsb.fi/api/v3/lat/{lat}/lon/{lon}/dist/{nm}"
         if self.provider == "adsblol":
@@ -33,7 +33,7 @@ class AggregatorSource(TrafficSource):
         raise ValueError(f"unknown aggregator provider: {self.provider}")
 
     async def fetch(self, lat: float, lon: float, radius_nm: float) -> List[Dict]:
-        headers = {"User-Agent": "hangar-display/0.1"}
+        headers = {}
         if self.api_key and self.provider == "airplaneslive":
             headers["auth"] = self.api_key
         resp = await self.client.get(self._url(lat, lon, radius_nm), headers=headers, timeout=6.0)
