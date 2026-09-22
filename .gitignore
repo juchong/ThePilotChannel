@@ -6,3 +6,4 @@ __pycache__/
 data/config.yaml.tmp
 .env
 data/config.yaml.bak.*
+data/tiles/

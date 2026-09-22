@@ -25,6 +25,7 @@ from .config import (
 )
 from .satellite import SatelliteSource
 from .sources.aggregator import AggregatorSource
+from .tiles import TileCache
 from .sources.local import LocalReadsbSource
 from .views import build_views
 from .weather import MetarSource
@@ -63,6 +64,8 @@ class DataManager:
         )
         self.metar = MetarSource(self.client)
         self.satellite = SatelliteSource(self.client)
+        self.tiles = TileCache(self.client)
+        self._warm_task: Optional[asyncio.Task] = None
 
         self._traffic_cache: Dict[str, Dict] = {}   # view_id -> {ts, aircraft, source}
         self._traffic_health: Dict[str, Dict] = {}  # view_id -> {healthy, error}
@@ -96,6 +99,24 @@ class DataManager:
             asyncio.create_task(self._weather_loop(), name="weather-loop"),
             asyncio.create_task(self._traffic_loop(), name="traffic-loop"),
         ]
+        self.warm_tiles()
+
+    def warm_tiles(self, delay_s: float = 0.0) -> None:
+        """(Re)start the basemap tile warm-up for the configured views."""
+        if self._warm_task and not self._warm_task.done():
+            self._warm_task.cancel()
+
+        async def run():
+            if delay_s:
+                await asyncio.sleep(delay_s)
+            try:
+                await self.tiles.warm(self.views())
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                log.error("tile warm-up failed: %s", exc)
+
+        self._warm_task = self._spawn(run(), name="tile-warm")
 
     async def stop(self):
         for t in self._loops + list(self._tasks):
@@ -124,6 +145,7 @@ class DataManager:
         self._area_cache.clear()
         self._local_state = None  # let a changed local_url be tried right away
         self._weather_wake.set()  # refresh METARs for any new airports now
+        self.warm_tiles(delay_s=5.0)  # cache basemap tiles for any new or moved views
         self._broadcast({"event": "config_changed", "version": self.config_version})
         return self.config_version
 
@@ -499,6 +521,7 @@ class DataManager:
             },
             "subscribers": len(self._subscribers),
             "display": self.display_state(),
+            "tiles": {"dir": self.tiles.root, **self.tiles.warm_state},
         }
 
     def subscribe(self) -> asyncio.Queue:

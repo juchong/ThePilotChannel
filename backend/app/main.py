@@ -18,6 +18,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .config import ICAO_RE, Config, mask_secrets, unknown_keys, unmask_secrets
 from .manager import DataManager, TooManySubscribers
+from .tiles import valid_tile
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 # httpx logs every upstream request at INFO (one line per second on a kiosk); keep warnings only.
@@ -208,6 +209,17 @@ async def get_satellite(
 @app.get("/api/status")
 async def get_status():
     return manager.status()
+
+
+@app.get("/tiles/{z}/{x}/{y}.png")
+async def get_tile(z: int, x: int, y: int):
+    """Basemap tile from the on-disk cache (fetched from OpenStreetMap once)."""
+    if not valid_tile(z, x, y):
+        raise HTTPException(status_code=404, detail="no such tile")
+    path = await manager.tiles.ensure(z, x, y)
+    if path is None:
+        raise HTTPException(status_code=502, detail="tile unavailable")
+    return FileResponse(path, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.post("/api/test-source", dependencies=[Depends(require_admin)])

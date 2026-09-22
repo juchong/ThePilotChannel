@@ -155,8 +155,10 @@ Press **Test connection** to check the source before saving; it reports how many
 each source sees near your first airport.
 
 **Display.** Your IANA timezone (for example `America/Denver`) for the clock. The map
-uses OpenStreetMap tiles by default; if you have your own tile server or a vector style
-URL from a map provider, enter it here.
+uses OpenStreetMap tiles by default. The Pi keeps a copy of every tile your views need in
+`data/tiles` (fetched once, refreshed every two weeks) and downloads them for new airports
+and regions in the background after you save, so views switch without the map redrawing.
+If you have your own tile server or a vector style URL from a map provider, enter it here.
 
 **Weather.** How often METARs refresh and when to flag a report as stale.
 
@@ -305,6 +307,8 @@ actions:
   card); the kiosk browser's log is `/dev/shm/hangar-kiosk/hangar-kiosk.log`.
 - **Undo a bad config change:** copy `data/config.yaml.bak.1` over `data/config.yaml` and
   run `docker compose restart`.
+- **Map looks out of date or oddly cached:** delete the `data/tiles` folder; it is rebuilt
+  automatically.
 
 ## Troubleshooting
 
@@ -322,9 +326,9 @@ actions:
   admin page. For a local receiver, the URL must be its LAN address, not `localhost`.
 - **No weather or wind barbs.** Check that the Pi can reach `aviationweather.gov` and that
   the identifier is right; some small fields have no weather station.
-- **Map tiles show "Access blocked" or do not load.** The Pi cannot reach OpenStreetMap, or
-  the tiles are being requested without a Referer (a proxy in front of the app can cause
-  this). Check connectivity, or point `tile_url` at your own tile server.
+- **Map tiles do not load.** The Pi cannot reach OpenStreetMap. Check connectivity; tiles
+  already in `data/tiles` keep working meanwhile. Or point `tile_url` at your own tile
+  server.
 - **A red banner on the admin page about `config.yaml`.** The file could not be read; the
   display is running with a backup or defaults. Fix the file by hand, or save from the admin
   page to write a fresh one (the broken file is kept as `config.yaml.bak.1`).

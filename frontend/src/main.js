@@ -233,12 +233,14 @@ function switchView(idx) {
   return state.view.dwell_s;
 }
 
-// Toggle the stage between layouts: "map" (map + side panel) and "sat"
-// (fullscreen satellite loop).
+// Toggle the stage between "map" (map + side panel) and "sat" (fullscreen
+// satellite loop). The satellite view is an overlay: the map container keeps
+// its size underneath. Hiding the map with display:none shrinks it to 0x0 and
+// MapLibre then trims its tile cache to a handful of tiles, so every later
+// view would refetch its basemap and render blurry first.
 function showStage(mode) {
+  el("stage").classList.toggle("stage-sat", mode === "sat");
   el("sat").classList.toggle("active", mode === "sat");
-  el("map").style.display = mode === "sat" ? "none" : "";
-  el("side").style.display = mode === "map" ? "flex" : "none";
 }
 
 function showRadarOverlays(on) {
@@ -362,6 +364,7 @@ function startRadarOverlay(view) {
   const radar = view.radar;
   if (!radar || !(radar.frames || []).length) return;
   state.map.ensureRadar(radar.frames, { tileBase: radar.tile_base, opacity: radar.opacity });
+  state.map.refreshRadar(); // new 5-minute bucket -> reload the frames
   renderRadarLegend();
   showRadarOverlays(true);
   animateRadar(view, radar.frames, radar.label);

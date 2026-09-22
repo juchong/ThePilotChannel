@@ -44,6 +44,8 @@ backend/app/
   views.py         config -> ordered list of views (local, regional, satellite)
   weather.py       aviationweather.gov METAR fetch, decode, flight category
   satellite.py     NOAA STAR CDN directory listing -> recent GOES frame URLs
+  tiles.py         basemap tile cache/proxy and per-view warm-up (tile math mirrors
+                   the display's fitBounds framing)
   geo.py           haversine, unit conversion
   sources/         traffic adapters: local.py (tar1090/readsb), aggregator.py
 backend/tests/test_api.py   pytest suite (TestClient, upstreams monkeypatched)
@@ -72,6 +74,13 @@ Dockerfile, docker-compose.yml, data/config.yaml
 - Radar frames are MapLibre raster layers built once per page session and animated by
   toggling `visibility` and `raster-opacity` (cross-fade). Never add and remove raster
   sources per view: removed textures are not reclaimed on the Pi and GPU memory grows.
+  Their tile URLs carry a 5-minute bucket (`?v=`) and `refreshRadar()` re-points them
+  with `setTiles` when the regional view starts; without that the retained tile cache
+  would show the same radar frames for the life of the page.
+- The map container is never hidden with `display: none`. The satellite view is an
+  overlay (`#sat` absolute over the stage, map and side panel `visibility: hidden`).
+  A 0x0 map makes MapLibre shrink its per-source tile cache to a few tiles and evict
+  everything, so every later view refetches its basemap and renders blurry first.
 - The satellite loop is parallel `<img>` preloading followed by `src` swapping. Do not
   pre-decode frames into ImageBitmaps or draw them on a canvas: 24 frames at 1200x1200 is
   138 MB of GPU memory, the Pi's CMA pool is 512 MB and is shared with map tile textures,
@@ -92,10 +101,16 @@ Dockerfile, docker-compose.yml, data/config.yaml
 
 ### Network and upstream services
 
-- Never set a `Referrer-Policy` header or otherwise strip the Referer on the display page.
-  OpenStreetMap's tile servers serve an "Access blocked" tile to requests without one; the
-  page origin `http://localhost:8000/` must be sent. Keep tile usage light: in-memory tile
-  cache, `refreshExpiredTiles: false`, and no prefetch beyond warming the configured views.
+- Basemap tiles are served by the backend from an on-disk cache (`GET /tiles/{z}/{x}/{y}.png`,
+  `tiles.py`, directory `HANGAR_TILE_CACHE`, default `/data/tiles`), fetched from
+  OpenStreetMap once per tile with an identifying User-Agent and a 14-day TTL. The cache is
+  warmed at startup and after a config change with the tiles every configured view can
+  show (both layouts, ideal zoom plus parent), capped so a bad config cannot bulk download.
+  Keep OSM usage light and attributed: the footer credits OpenStreetMap, and warm-up must
+  stay paced (two concurrent fetches). A custom `display.tile_url` bypasses the proxy.
+- Never set a `Referrer-Policy` header or otherwise strip the Referer on pages that talk
+  to OpenStreetMap directly (a custom raster `tile_url` may): their tile servers serve an
+  "Access blocked" tile to requests without one.
 - `/api/traffic` never blocks on an upstream fetch, and freshness comes from the background
   loop in `manager.py`, not from client polls. Refreshing only when a client polls aliases
   with the 1 Hz poll and halves the effective update rate.
@@ -199,7 +214,8 @@ Dockerfile, docker-compose.yml, data/config.yaml
 ## Runtime environment
 
 - Environment variables: `HANGAR_CONFIG` (default `/data/config.yaml`), `HANGAR_STATIC`
-  (default `/app/static`), `HANGAR_ADMIN_PASSWORD` (optional; compose reads it from `.env`).
+  (default `/app/static`), `HANGAR_TILE_CACHE` (default `/data/tiles`),
+  `HANGAR_ADMIN_PASSWORD` (optional; compose reads it from `.env`).
 - Container: the process is root inside the container on purpose. Under rootless Docker
   that is the unprivileged host user, and a non-root container user could not write the
   bind-mounted `data/` directory. Compensating controls in `docker-compose.yml`: all
@@ -223,7 +239,9 @@ Dockerfile, docker-compose.yml, data/config.yaml
 - `GET /api/weather?ids=<csv>`, `GET /api/weather/bbox?min_lat=&min_lon=&max_lat=&max_lon=`
   (at most 20 by 30 degrees), `GET /api/weather/area?lat=&lon=&radius_nm=`.
 - `GET /api/satellite?sat=&sector=&band=&size=&frames=` recent frame URLs.
-- `GET /api/status` source, health, uptime, weather, config, and display state.
+- `GET /api/status` source, health, uptime, weather, config, display, and tile cache state.
+- `GET /tiles/{z}/{x}/{y}.png` cached basemap tile (fetched upstream on a miss; a stale
+  tile is served if upstream fails; 404 for invalid coordinates).
 - `POST /api/test-source` tries a `data_source` block from the first enabled airport.
 - `GET /api/display`, `POST /api/display/blackout` (`{"seconds", "reason"}`, both
   optional), `POST /api/display/restore`.

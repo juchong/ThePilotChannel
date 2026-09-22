@@ -43,13 +43,14 @@ function shapeSvg(name, color, size) {
   return raw.split("#ffffff").join(color).replace('width="64" height="64"', `width="${size}" height="${size}"`);
 }
 
+// Default basemap tiles come from the backend's on-disk cache (/tiles), which
+// is warmed for every configured view and fetches from OpenStreetMap once per
+// tile. Serving from localhost makes view switches render immediately.
 function rasterStyle(tileUrl) {
-  const tiles = tileUrl
-    ? [tileUrl]
-    : ["https://a.tile.openstreetmap.org/{z}/{x}/{y}.png", "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png"];
+  const tiles = tileUrl ? [tileUrl] : [`${location.origin}/tiles/{z}/{x}/{y}.png`];
   return {
     version: 8,
-    sources: { osm: { type: "raster", tiles, tileSize: 256, attribution: "© OpenStreetMap" } },
+    sources: { osm: { type: "raster", tiles, tileSize: 256, attribution: "© OpenStreetMap contributors" } },
     layers: [
       { id: "bg", type: "background", paint: { "background-color": "#0d1117" } },
       { id: "osm", type: "raster", source: "osm", paint: { "raster-brightness-max": 0.85, "raster-saturation": -0.2 } },
@@ -80,6 +81,9 @@ export class HangarMap {
     this._apMarkers = [];
     this._ac = new Map(); // hex -> { marker, iconEl, labelEl, name, color, track }
     this._radarLayers = []; // one raster layer id per radar frame (built once, reused)
+    this._radarFrames = [];
+    this._radarTileBase = "";
+    this._radarBucket = null; // 5-minute bucket the radar tile URLs were last pointed at
     this._showLabels = true;
     this.ready = this.map.once("load").then(() => this._initLayers());
   }
@@ -204,12 +208,15 @@ export class HangarMap {
   ensureRadar(frames, { tileBase, opacity = 0.75 } = {}) {
     this._radarOpacity = opacity;
     if (this._radarLayers.length || !(frames || []).length) return;
+    this._radarFrames = frames;
+    this._radarTileBase = tileBase;
+    this._radarBucket = radarBucket();
     const beforeId = this.map.getLayer("ring") ? "ring" : undefined;
     frames.forEach((f, i) => {
       const id = `radar-${i}`;
       this.map.addSource(id, {
         type: "raster",
-        tiles: [`${tileBase}${f.suffix}/{z}/{x}/{y}.png`],
+        tiles: [this._radarTileUrl(f)],
         tileSize: 256,
         attribution: "NEXRAD via Iowa Environmental Mesonet",
       });
@@ -231,6 +238,26 @@ export class HangarMap {
       this._radarLayers.push(id);
     });
     this._radarCur = -1;
+  }
+
+  _radarTileUrl(frame) {
+    // The bucket in the query string makes MapLibre treat each 5-minute period
+    // as new tiles. Without it the tile cache (which we deliberately keep) would
+    // show the same radar frames for the life of the page.
+    return `${this._radarTileBase}${frame.suffix}/{z}/{x}/{y}.png?v=${this._radarBucket}`;
+  }
+
+  // Point the radar sources at the current 5-minute bucket if it changed since
+  // the tiles were last loaded. Called when the regional view starts.
+  refreshRadar() {
+    if (!this._radarLayers.length) return;
+    const bucket = radarBucket();
+    if (bucket === this._radarBucket) return;
+    this._radarBucket = bucket;
+    this._radarLayers.forEach((id, i) => {
+      const src = this.map.getSource(id);
+      if (src && typeof src.setTiles === "function") src.setTiles([this._radarTileUrl(this._radarFrames[i])]);
+    });
   }
 
   // Cross-fade to frame i: fade it in while fading the previous frame out, and
@@ -286,7 +313,7 @@ export class HangarMap {
       seen.add(v.id);
       const [w, s, e, n] = bboxForRadius(v.center_lat, v.center_lon, v.radius_nm);
       this.map.fitBounds([[w, s], [e, n]], { padding: 40, animate: false });
-      await this._waitForTiles(1500);
+      await this._waitForTiles(5000);
     }
   }
 
@@ -318,6 +345,10 @@ export class HangarMap {
 
 function empty() {
   return { type: "FeatureCollection", features: [] };
+}
+
+function radarBucket() {
+  return Math.floor(Date.now() / (5 * 60 * 1000));
 }
 
 function ringPolygon(lat, lon, radiusNm, steps = 64) {
