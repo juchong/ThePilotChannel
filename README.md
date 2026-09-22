@@ -28,9 +28,10 @@ The display cycles through views automatically. A bar across the top drains to s
 time left on the current view.
 
 - **Local view, one per airport.** Centered on the airport with a radius you choose (5
-  miles is typical). Live aircraft are drawn as type-based silhouettes (airliner, light
-  single, helicopter, turboprop, business jet, glider, balloon, military), colored by
-  altitude and rotated to their track, each labeled with its callsign or registration.
+  miles is typical). Live aircraft are drawn with tar1090's aircraft icons, chosen the same
+  way tar1090 does (by aircraft type, then type class and weight, then the broadcast
+  category), colored by altitude and rotated to their track, each labeled with its callsign
+  or registration.
   Aircraft on the ground are included. The side panel shows the airport's METAR, decoded
   and raw, with a large wind barb, and a list of every aircraft in view with general
   aviation first.
@@ -343,6 +344,23 @@ actions:
 - **The footer dot is amber or red.** Amber means the last traffic snapshot is more than
   ten seconds old; red means the source is failing. Hover over it in a browser, or check
   `/api/status`, for the reason.
+
+## Credits and licenses
+
+- Aircraft icons and their assignment tables are from [tar1090](https://github.com/wiedehopf/tar1090)
+  (GPL-2.0, based on FlightAware's dump1090; the C-130 icon is by Peter Lowden, CC BY 4.0).
+  They are vendored under `frontend/src/lib/vendor/tar1090/` with tar1090's license.
+- The aircraft type table (ICAO type designator to type description and wake category) is
+  from [tar1090-db](https://github.com/wiedehopf/tar1090-db).
+- Map data © OpenStreetMap contributors. Weather from the NWS Aviation Weather Center,
+  radar from the Iowa Environmental Mesonet, satellite imagery from NOAA STAR.
+
+## License
+
+The Pilot Channel is free software: you can redistribute it and modify it under the terms
+of the GNU General Public License, version 2, as published by the Free Software Foundation.
+See [LICENSE](LICENSE). It is distributed in the hope that it will be useful, but without
+any warranty. Copyright (C) 2026 Juan J Chong.
 
 ## For developers and AI agents
 

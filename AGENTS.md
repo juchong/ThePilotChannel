@@ -49,7 +49,8 @@ backend/app/
   tiles.py         basemap tile cache/proxy and per-view warm-up (tile math mirrors
                    the display's fitBounds framing)
   geo.py           haversine, unit conversion
-  sources/         traffic adapters: local.py (tar1090/readsb), aggregator.py
+  sources/         traffic adapters: local.py (tar1090/readsb), aggregator.py; base.py
+                   normalizes records and adds type_desc/wtc from data/icao_aircraft_types.json
 backend/tests/test_api.py   pytest suite (TestClient, upstreams monkeypatched)
 frontend/src/
   index.html, main.js, styles.css    the display and its cycle
@@ -59,7 +60,8 @@ frontend/src/
   lib/dom.js        esc(), el(), sleep()
   lib/map.js        MapLibre wrapper: markers, barbs, radar layers, view framing
   lib/aircraft.js   aircraft store, drop timeout, importance sort
-  lib/shapes.js     silhouettes and type/category classification
+  lib/shapes.js     icon assignment (tar1090 methodology) and rendering
+  lib/vendor/tar1090/markers.js, LICENSE   vendored tar1090 shapes and tables (GPL-2.0)
   lib/windbarb.js   wind barb SVG
   lib/geo.js        client geo helpers
 deploy/bootstrap.sh   idempotent OS provisioning for a fresh Pi (also --check / --dry-run)
@@ -99,8 +101,14 @@ Dockerfile, docker-compose.yml, data/config.yaml
 - Two color systems that never mix: aircraft are colored by altitude band; wind barbs and
   METAR text are colored by flight category (VFR green, MVFR blue, IFR red, LIFR magenta,
   white when unknown).
-- Aircraft type and the GA-versus-airliner tier come from the ICAO type designator and the
-  ADS-B emitter category (`shapes.js`), never from the callsign.
+- Aircraft icons follow tar1090: `lib/shapes.js` calls the vendored `getBaseMarker()` in
+  `lib/vendor/tar1090/markers.js` (tar1090's shapes and tables, GPL-2.0, license in that
+  directory; regenerate from upstream rather than editing), which picks a shape by exact
+  ICAO type designator, then ICAO 8643 type description plus wake turbulence category, then
+  ADS-B emitter category. The backend supplies `type_desc` and `wtc` per aircraft from the
+  vendored tar1090-db type table (`backend/app/data/icao_aircraft_types.json`) and passes
+  `db_flags`. The GA-versus-airline tier (`isGA()`) comes from those fields and the
+  military flag, never from the callsign. Shapes flagged `noRotate` are drawn upright.
 - Negative reported altitude means invalid; drop the aircraft. Local views include ground
   traffic. The regional view is weather only and asks `/api/weather/bbox` for every station
   inside the map's visible bounds.
@@ -194,6 +202,9 @@ Dockerfile, docker-compose.yml, data/config.yaml
 - Frontend: ES modules, no framework, no build tooling beyond Vite. Keep modules single
   purpose and keep the display's per-second work minimal (skip DOM rebuilds when the
   rendered markup is unchanged).
+- The project is licensed GPL-2.0 (see LICENSE). Anything vendored must be GPL-2.0
+  compatible and keep its own copyright and license notices next to it, as
+  `lib/vendor/tar1090/` does.
 - Brand name is "The Pilot Channel". Avoid em dashes in prose.
 - Commit only when asked. Do not put history, attribution, or change notes into source
   files or this document.

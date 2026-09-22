@@ -6,7 +6,7 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { esc } from "./dom.js";
 import { bboxForRadius } from "./geo.js";
-import { SHAPES } from "./shapes.js";
+import { iconSvg } from "./shapes.js";
 import { windBarbSVG } from "./windbarb.js";
 
 export const ALT_STOPS = [
@@ -24,7 +24,9 @@ const UNKNOWN_COLOR = "#cbd5e1";
 // Scale map glyphs up on high-resolution panels (e.g. 4K) so they are the same
 // physical size as on a 1080p screen. CSS handles the rest of the UI.
 const UI = typeof window !== "undefined" && window.innerWidth >= 2560 ? 2 : 1;
-const AC_ICON_PX = 32 * UI;
+// tar1090 draws its shapes at their native size (an airliner is about 23 x 32 px);
+// this multiplies that for the TV, and doubles on 4K panels.
+const AC_ICON_SCALE = 1.1 * UI;
 const BARB_PX = 78 * UI;
 // Radar frame cross-fade duration (ms). Should be a bit under the frame step so
 // each frame dissolves into the next, making the 5-minute steps look fluid.
@@ -36,11 +38,6 @@ export function altColorFor(altFt, onGround) {
   let c = ALT_STOPS[0][1];
   for (const [stop, col] of ALT_STOPS) if (altFt >= stop) c = col;
   return c;
-}
-
-function shapeSvg(name, color, size) {
-  const raw = SHAPES[name] || SHAPES.default;
-  return raw.split("#ffffff").join(color).replace('width="64" height="64"', `width="${size}" height="${size}"`);
 }
 
 // Default basemap tiles come from the backend's on-disk cache (/tiles), which
@@ -142,12 +139,14 @@ export class HangarMap {
         rec = { marker, iconEl, labelEl, name: null, color: null, track: null, lat, lon };
         this._ac.set(p.hex, rec);
       }
-      if (rec.name !== p.icon || rec.color !== color) {
-        rec.iconEl.innerHTML = shapeSvg(p.icon, color, AC_ICON_PX);
-        rec.name = p.icon;
+      const iconKey = `${p.icon.name}@${p.icon.scale}`;
+      if (rec.name !== iconKey || rec.color !== color) {
+        rec.iconEl.innerHTML = iconSvg(p.icon, color, AC_ICON_SCALE);
+        rec.name = iconKey;
         rec.color = color;
       }
-      const trk = Math.round(p.track || 0);
+      // balloons and ground markers are drawn upright regardless of track
+      const trk = p.icon.noRotate ? 0 : Math.round(p.track || 0);
       if (rec.track !== trk) {
         rec.iconEl.style.transform = `translate(-50%,-50%) rotate(${trk}deg)`;
         rec.track = trk;

@@ -364,6 +364,21 @@ def test_sse_connected_event_carries_display_state(client):
     client.post("/api/display/restore", auth=AUTH)
 
 
+# ---- aircraft type lookup (for tar1090-style icons) -------------------------------------
+
+def test_normalize_aircraft_adds_type_description_and_wtc():
+    from app.sources.base import AIRCRAFT_TYPES, normalize_aircraft, type_info
+
+    assert len(AIRCRAFT_TYPES) > 2000
+    assert type_info("A320") == ("L2J", "M")
+    assert type_info("c172") == ("L1P", "L")
+    assert type_info("ZZZZ") == (None, None) and type_info(None) == (None, None)
+    ac = normalize_aircraft({"hex": "a", "lat": 1, "lon": 2, "t": "DH8D", "dbFlags": 1})
+    assert (ac["type_desc"], ac["wtc"], ac["db_flags"]) == ("L2T", "M", 1)
+    ac = normalize_aircraft({"hex": "b", "lat": 1, "lon": 2})
+    assert ac["type_desc"] is None and ac["wtc"] is None and ac["db_flags"] is None
+
+
 # ---- basemap tile cache ----------------------------------------------------------------
 
 def test_tile_math_matches_display_framing():

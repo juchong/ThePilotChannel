@@ -62,12 +62,12 @@ export class AircraftStore {
         hex: ac.hex,
         label: (ac.callsign || ac.registration || ac.hex || "").trim(),
         type: ac.type,
-        iconType: classify(ac.category, ac.type),
+        icon: classify(ac), // { name, scale, noRotate }, tar1090 methodology
         track: ac.track ?? prev?.track ?? 0,
         gs: ac.gs ?? 0,
         altFt,
         onGround: !!ac.on_ground,
-        ga: isGA(ac.category, ac.type),
+        ga: isGA(ac),
         lat: ac.lat,
         lon: ac.lon,
         fixTs,
@@ -155,7 +155,7 @@ export class AircraftStore {
         geometry: { type: "Point", coordinates: [a.dispLon, a.dispLat] },
         properties: {
           hex: a.hex,
-          icon: a.iconType,
+          icon: a.icon,
           track: a.track || 0,
           altFt: a.altFt == null ? -1 : a.altFt,
           onGround: a.onGround ? 1 : 0,
