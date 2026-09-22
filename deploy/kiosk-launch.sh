@@ -3,6 +3,11 @@
 # Invoked from the autologin session on tty1 (which owns seat0 / DRM master).
 set -u
 
+# If cage exits immediately and repeatedly, getty@tty1 would trip systemd's
+# start-rate limit (5 starts in 10 s) and stop respawning the kiosk. A short
+# pause keeps a crash loop under that limit.
+sleep 2
+
 # The OS runs from an SD card, so keep all of Chromium's churning writes (profile,
 # disk cache, GPU/shader cache) and the kiosk log on a RAM disk (/dev/shm, tmpfs)
 # to minimize SD wear. These are all disposable across reboots.
@@ -14,6 +19,8 @@ mkdir -p "$PROFILE_DIR" "$CACHE_DIR"
 LOG="$RAMDIR/hangar-kiosk.log"
 exec >>"$LOG" 2>&1
 echo "=== kiosk launch $(date) ==="
+
+APP_URL="http://localhost:8000/"
 
 # Ensure a runtime dir exists for Wayland.
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
@@ -33,13 +40,41 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
   wlrctl pointer move 100000 100000
 ) &
 
-# Wait for the dockerized backend to be serving before opening the browser.
-echo "waiting for backend health..."
-until curl -sf http://localhost:8000/healthz >/dev/null 2>&1; do sleep 2; done
-echo "backend healthy, starting cage + chromium"
+# A branded holding page shown while Docker and the backend come up, instead of
+# a black TV. It probes /healthz and navigates to the display as soon as the
+# backend answers; if the backend is unreachable it just keeps waiting.
+WAIT_PAGE="$RAMDIR/waiting.html"
+cat >"$WAIT_PAGE" <<HTML
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>The Pilot Channel</title>
+<style>
+html,body{margin:0;height:100%;background:#0b0f14;color:#8b98a5;font-family:ui-sans-serif,system-ui,sans-serif;cursor:none}
+.c{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px}
+.b{font-weight:800;letter-spacing:4px;font-size:34px;background:linear-gradient(90deg,#38bdf8,#818cf8);-webkit-background-clip:text;background-clip:text;color:transparent}
+.s{font-size:20px}
+</style></head><body><div class="c"><div class="b">THE PILOT CHANNEL</div><div class="s" id="s">Starting…</div></div>
+<script>
+const APP = "$APP_URL";
+let n = 0;
+async function probe() {
+  n++;
+  try {
+    await fetch(APP + "healthz", { mode: "no-cors", cache: "no-store" });
+    location.replace(APP);
+    return;
+  } catch (e) {}
+  document.getElementById("s").textContent = "Waiting for the backend to start… (" + n + ")";
+  setTimeout(probe, 2000);
+}
+probe();
+</script></body></html>
+HTML
 
 CHROME_BIN="$(command -v chromium || command -v chromium-browser)"
+echo "starting cage + chromium ($CHROME_BIN)"
 
+# Flags after --kiosk turn off Chromium background services (update checks,
+# sync, Google push connections, component updates) that a kiosk never needs and
+# that otherwise cost CPU and network on the Pi.
 exec cage -- "$CHROME_BIN" \
   --kiosk \
   --ozone-platform=wayland \
@@ -49,10 +84,16 @@ exec cage -- "$CHROME_BIN" \
   --noerrdialogs \
   --disable-infobars \
   --no-first-run \
+  --no-default-browser-check \
   --disable-translate \
-  --disable-features=TranslateUI \
+  --disable-features=TranslateUI,MediaRouter,OptimizationHints \
+  --disable-background-networking \
+  --disable-component-update \
+  --disable-sync \
+  --disable-default-apps \
+  --disable-breakpad \
   --check-for-update-interval=31536000 \
   --password-store=basic \
   --disable-pinch \
   --overscroll-history-navigation=0 \
-  http://localhost:8000
+  "file://$WAIT_PAGE"
