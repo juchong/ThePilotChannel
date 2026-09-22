@@ -243,6 +243,28 @@ def test_interleave_keeps_extra_regions():
     assert ids == ["local:KSEA", "region:A", "region:B"]
 
 
+def test_local_view_fetch_radius_covers_the_screen():
+    cfg = Config.model_validate({"airports": [{"icao": "KSEA", "lat": 47.45, "lon": -122.31, "local_radius_mi": 5}], "satellite": {"enabled": False}})
+    v = build_views(cfg)[0]
+    assert v["radius_nm"] == 4.34 and v["fetch_radius_nm"] == 9.78
+
+
+def test_traffic_refresh_uses_fetch_radius(client, monkeypatch):
+    seen = {}
+
+    async def fake(lat, lon, nm):
+        seen["nm"] = nm
+        return []
+
+    monkeypatch.setattr(main_mod.manager, "_fetch_traffic", fake)
+    assert put(client, base_cfg()).status_code == 200
+    client.get("/api/traffic", params={"view": "local:KSEA"})
+    deadline = time.time() + 5
+    while time.time() < deadline and "nm" not in seen:
+        time.sleep(0.1)
+    assert seen["nm"] == 9.78
+
+
 def test_radar_frames_never_exceed_iem_window():
     cfg = Config.model_validate({"regions": [{"name": "A", "center_lat": 47, "center_lon": -122}], "radar": {"frames": 12, "interval_min": 5}})
     frames = build_views(cfg)[0]["radar"]["frames"]

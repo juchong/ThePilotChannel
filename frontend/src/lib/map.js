@@ -53,7 +53,15 @@ function rasterStyle(tileUrl) {
     sources: { osm: { type: "raster", tiles, tileSize: 256, attribution: "© OpenStreetMap contributors" } },
     layers: [
       { id: "bg", type: "background", paint: { "background-color": "#0d1117" } },
-      { id: "osm", type: "raster", source: "osm", paint: { "raster-brightness-max": 0.85, "raster-saturation": -0.2 } },
+      // raster-fade-duration 0: a tile that does get (re)loaded appears at once
+      // instead of dissolving in over MapLibre's default 300 ms, which reads as
+      // the map "sharpening" after a view switch.
+      {
+        id: "osm",
+        type: "raster",
+        source: "osm",
+        paint: { "raster-brightness-max": 0.85, "raster-saturation": -0.2, "raster-fade-duration": 0 },
+      },
     ],
   };
 }
@@ -70,11 +78,17 @@ export class HangarMap {
       zoom: 9,
       attributionControl: false,
       interactive: false,
-      // The cycle revisits a small fixed set of views, so cache tiles in memory
-      // and do not re-fetch expired tiles. OSM raster tiles change rarely, so
-      // reusing them makes view switches near-instant. Kept modest (not unbounded)
-      // because each cached tile is a GPU texture and this runs 24/7 on a Pi.
-      maxTileCacheSize: 400,
+      // The cycle revisits a small fixed set of views, so keep every view's
+      // tiles in memory and never re-fetch expired ones: a view switch then
+      // renders from textures already on the GPU with no reload at all.
+      // MapLibre sizes each source's cache as (tiles in the viewport) x
+      // maxTileCacheZoomLevels, capped by maxTileCacheSize; the default of 5
+      // levels (about 200 tiles on a 1080p panel) held only the most frequent
+      // views and the others reloaded on every switch. 12 levels (about 480
+      // tiles here) covers half a dozen views; each tile is a 256 KB texture, so
+      // this is still bounded on the Pi's shared GPU memory.
+      maxTileCacheSize: 480,
+      maxTileCacheZoomLevels: 12,
       refreshExpiredTiles: false,
       fadeDuration: 0,
     });

@@ -216,6 +216,7 @@ function switchView(idx) {
     state.map.resize();
     state.map.frameView(state.view);
     state.map.showLabels(true);
+    state.store.setBounds(state.map.visibleBbox()); // the backend returns a superset; show what is on screen
     el("panel-title").textContent = "AIRCRAFT IN VIEW";
     renderLegend("alt");
     renderSideHeader();

@@ -292,7 +292,9 @@ class DataManager:
 
     async def _refresh_traffic(self, view_id: str, view: Dict) -> None:
         try:
-            aircraft = await self._fetch_traffic(view["center_lat"], view["center_lon"], view["radius_nm"])
+            aircraft = await self._fetch_traffic(
+                view["center_lat"], view["center_lon"], view.get("fetch_radius_nm", view["radius_nm"])
+            )
             aircraft = self._drop_stale_positions(aircraft)
             self._traffic_cache[view_id] = {
                 "ts": time.monotonic(),

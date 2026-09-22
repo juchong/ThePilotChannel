@@ -102,6 +102,15 @@ Dockerfile, docker-compose.yml, data/config.yaml
 - Negative reported altitude means invalid; drop the aircraft. Local views include ground
   traffic. The regional view is weather only and asks `/api/weather/bbox` for every station
   inside the map's visible bounds.
+- A local view's traffic is fetched for `fetch_radius_nm` (twice the framing radius, which
+  covers the whole visible 16:9 rectangle); the store trims to the map's visible bounds and
+  drops an unreported aircraft as soon as its reckoned position is off screen. Fetching
+  only the framing circle made aircraft freeze at the ring and vanish mid-screen.
+- The basemap holds every configured view's tiles in MapLibre's memory cache
+  (`maxTileCacheZoomLevels: 12`, `maxTileCacheSize: 480`) and the `osm` layer has
+  `raster-fade-duration: 0`. With the default five-level cache, less frequent views were
+  evicted and reloaded (and faded in) on every switch. Measure with the DevTools
+  `Network` domain: a settled cycle should show zero `/tiles/` responses per switch.
 - The UI is designed at 1920 wide. `@media (min-width: 2560px)` in `styles.css` and the
   `UI` factor in `map.js` scale it for 4K panels. The kiosk runs at the panel's native
   resolution; never use Chromium `--force-device-scale-factor` (cage renders into a quarter

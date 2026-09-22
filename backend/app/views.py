@@ -6,6 +6,8 @@ from typing import Dict, List
 from .config import RADAR_MAX_AGE_MIN, Config
 from .geo import haversine_nm, miles_to_nm
 
+FETCH_RADIUS_FACTOR = 2.25  # see fetch_radius_nm below: covers the corners of a 16:9 map (half-diagonal ~2.16r)
+
 
 def build_views(cfg: Config) -> List[Dict]:
     """Return ordered view descriptors. Each: id, type, label, center, radius, airports."""
@@ -22,6 +24,12 @@ def build_views(cfg: Config) -> List[Dict]:
                 "center_lon": ap.lon,
                 "radius_mi": ap.local_radius_mi,
                 "radius_nm": round(miles_to_nm(ap.local_radius_mi), 2),
+                # Traffic is fetched for a circle that covers the whole visible
+                # rectangle including its corners (the map fits the radius to its
+                # shorter side, so the half-diagonal is about 2.16x the radius on
+                # a 16:9 panel). Aircraft then move off the screen instead of
+                # vanishing at the ring.
+                "fetch_radius_nm": round(miles_to_nm(ap.local_radius_mi) * FETCH_RADIUS_FACTOR, 2),
                 "dwell_s": cfg.cycle.local_dwell_s,
                 "airports": [ap.icao],
             }

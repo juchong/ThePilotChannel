@@ -21,12 +21,25 @@ export class AircraftStore {
     if (s) this.dropTimeoutS = s;
   }
 
+  // Visible map rectangle {minLat, minLon, maxLat, maxLon}; aircraft are only
+  // listed and drawn inside it (with a margin so a marker can slide off the
+  // edge), and an aircraft that stops being reported is dropped as soon as it
+  // is outside it, so leaving the screen looks like leaving, not vanishing.
+  setBounds(b) {
+    this.bounds = b || null;
+  }
+
+  _inBounds(lat, lon, marginDeg = 0.01) {
+    const b = this.bounds;
+    if (!b) return true;
+    return lat >= b.minLat - marginDeg && lat <= b.maxLat + marginDeg && lon >= b.minLon - marginDeg && lon <= b.maxLon + marginDeg;
+  }
+
   // list: aircraft records from a /api/traffic snapshot; snapshot: the snapshot
   // itself ({ ts, age_s }) so fix ages can be taken relative to it, which makes
   // backend and browser clock skew irrelevant.
-  update(list, snapshot = {}) {
-    const now = Date.now();
-    const perf = performance.now();
+  update(list, snapshot = {}, nowMs = Date.now()) {
+    const now = nowMs;
     const snapAgeMs = Math.max(0, (snapshot.age_s || 0) * 1000);
     const seen = new Set();
     for (const ac of list) {
@@ -57,7 +70,7 @@ export class AircraftStore {
         lat: ac.lat,
         lon: ac.lon,
         fixTs,
-        lastSeen: perf,
+        lastSeen: now,
         // display state: correction offset (degrees) and where it was last drawn
         offLat: 0,
         offLon: 0,
@@ -91,7 +104,11 @@ export class AircraftStore {
       this.map.set(ac.hex, rec);
     }
     for (const [hex, a] of this.map) {
-      if (!seen.has(hex) && perf - a.lastSeen > this.dropTimeoutS * 1000) {
+      if (seen.has(hex)) continue;
+      // No longer reported: gone off screen (drop now) or lost signal on screen
+      // (keep dead-reckoning until the drop timeout).
+      const [pLat, pLon] = this._predict(a, now);
+      if (!this._inBounds(pLat, pLon) || now - a.lastSeen > this.dropTimeoutS * 1000) {
         this.map.delete(hex);
       }
     }
@@ -120,6 +137,7 @@ export class AircraftStore {
     const features = [];
     for (const a of this.map.values()) {
       if (!includeGround && a.onGround) continue;
+      if (!this._inBounds(a.dispLat, a.dispLon)) continue;
       features.push({
         type: "Feature",
         geometry: { type: "Point", coordinates: [a.dispLon, a.dispLat] },
@@ -142,8 +160,10 @@ export class AircraftStore {
     return (a.ga ? 0 : 100000) + (a.onGround ? 60000 : a.altFt || 0);
   }
 
+  // The side panel lists what is actually on screen (no margin); markers keep
+  // the margin so they can slide off the edge before being removed.
   list({ includeGround = true } = {}) {
-    let items = [...this.map.values()];
+    let items = [...this.map.values()].filter((a) => this._inBounds(a.dispLat, a.dispLon, 0));
     if (!includeGround) items = items.filter((a) => !a.onGround);
     return items.sort((a, b) => this._score(a) - this._score(b));
   }
