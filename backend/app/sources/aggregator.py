@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Dict, List
 
-from .base import TrafficSource, normalize_aircraft
+from .base import TrafficSource, feed_now, normalize_aircraft
 
 # radius is capped at 250 nm by every provider.
 MAX_NM = 250
@@ -39,9 +39,10 @@ class AggregatorSource(TrafficSource):
         resp = await self.client.get(self._url(lat, lon, radius_nm), headers=headers, timeout=6.0)
         resp.raise_for_status()
         data = resp.json()
+        now_s = feed_now(data)
         out: List[Dict] = []
         for raw in data.get("ac", []):
-            ac = normalize_aircraft(raw)
+            ac = normalize_aircraft(raw, now_s)
             if ac is not None:
                 out.append(ac)
         return out

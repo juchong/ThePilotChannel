@@ -10,9 +10,12 @@ from typing import Dict, List, Optional
 import httpx
 
 
-def normalize_aircraft(raw: Dict) -> Optional[Dict]:
+def normalize_aircraft(raw: Dict, now_s: Optional[float] = None) -> Optional[Dict]:
     """Map an ADSBExchange-v2 / readsb aircraft record to the unified schema.
 
+    now_s is the feed's own timestamp (seconds) for the record set; with the
+    record's seen_pos it gives fix_ts, when the position was actually measured,
+    which the display uses to dead-reckon the aircraft between updates.
     Returns None if the record has no usable position.
     """
     lat = raw.get("lat")
@@ -30,6 +33,10 @@ def normalize_aircraft(raw: Dict) -> Optional[Dict]:
     alt_ft = None if on_ground else (alt if isinstance(alt, (int, float)) else None)
 
     callsign = (raw.get("flight") or "").strip() or None
+    seen_pos = raw.get("seen_pos")
+    fix_ts = None
+    if isinstance(now_s, (int, float)) and isinstance(seen_pos, (int, float)):
+        fix_ts = round(now_s - seen_pos, 3)
 
     return {
         "hex": raw.get("hex"),
@@ -45,9 +52,19 @@ def normalize_aircraft(raw: Dict) -> Optional[Dict]:
         "baro_rate": raw.get("baro_rate"),
         "category": raw.get("category"),
         "seen": raw.get("seen"),
-        "seen_pos": raw.get("seen_pos"),
+        "seen_pos": seen_pos,
+        "fix_ts": fix_ts,
         "squawk": raw.get("squawk"),
     }
+
+
+def feed_now(data: Dict) -> Optional[float]:
+    """The feed's timestamp in seconds: readsb writes seconds, the v2 aggregator
+    APIs write milliseconds."""
+    now = data.get("now")
+    if not isinstance(now, (int, float)):
+        return None
+    return now / 1000.0 if now > 1e11 else float(now)
 
 
 class TrafficSource:

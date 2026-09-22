@@ -75,6 +75,13 @@ class SecurityHeaders:
                 ]
                 if path.startswith("/api/") or path == "/healthz":
                     extra.append((b"cache-control", b"no-store"))
+                elif path == "/" or path.endswith(".html") or path == "/admin":
+                    # The kiosk must always revalidate the page so a rebuilt
+                    # bundle is picked up on reload; Chromium otherwise serves
+                    # a heuristically cached index.html and keeps the old JS.
+                    extra.append((b"cache-control", b"no-cache"))
+                elif path.startswith("/assets/"):
+                    extra.append((b"cache-control", b"public, max-age=31536000, immutable"))
                 for k, v in extra:
                     if k not in have:
                         headers.append((k, v))
@@ -118,7 +125,7 @@ async def healthz():
 async def admin_page():
     path = os.path.join(STATIC_DIR, "admin.html")
     if os.path.isfile(path):
-        return FileResponse(path, headers={"Cache-Control": "no-store"})
+        return FileResponse(path, headers={"Cache-Control": "no-cache"})
     raise HTTPException(status_code=404, detail="admin page not built")
 
 

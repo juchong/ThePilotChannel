@@ -116,18 +116,18 @@ export class HangarMap {
         const labelEl = document.createElement("div");
         labelEl.className = "ac-label";
         el.append(iconEl, labelEl);
-        const marker = new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([lon, lat]).addTo(this.map);
-        // Defer enabling the transform transition so the marker doesn't fly in
-        // from the corner on its first placement. Subsequent position updates
-        // (once per poll) then glide smoothly; the browser handles the tween,
-        // which is monotonic between successive fixes (no overshoot/reverse).
-        requestAnimationFrame(() => {
-          el.style.transition = "transform 1.1s linear";
-        });
-        rec = { marker, iconEl, labelEl, name: null, color: null, track: null };
+        // Placed once here; from then on moveAircraft() positions it every
+        // frame from the store's dead reckoning. No CSS transition: a transition
+        // tied to poll timing stalls when a poll repeats a fix and jumps when
+        // one is late.
+        // subpixelPositioning: fractional pixel positions, so slow aircraft glide
+        // instead of stepping a whole pixel at a time.
+        const marker = new maplibregl.Marker({ element: el, anchor: "center", subpixelPositioning: true })
+          .setLngLat([lon, lat])
+          .addTo(this.map);
+        rec = { marker, iconEl, labelEl, name: null, color: null, track: null, lat, lon };
         this._ac.set(p.hex, rec);
       }
-      rec.marker.setLngLat([lon, lat]);
       if (rec.name !== p.icon || rec.color !== color) {
         rec.iconEl.innerHTML = shapeSvg(p.icon, color, AC_ICON_PX);
         rec.name = p.icon;
@@ -145,6 +145,21 @@ export class HangarMap {
         rec.marker.remove();
         this._ac.delete(hex);
       }
+    }
+  }
+
+  // Move every aircraft marker to where the store says it should be drawn at
+  // nowMs (dead reckoning plus correction blending). Called from the display's
+  // animation loop while a local view is on screen.
+  moveAircraft(store, nowMs) {
+    for (const [hex, rec] of this._ac) {
+      const a = store.map.get(hex);
+      if (!a) continue;
+      const [lat, lon] = store.displayPosition(a, nowMs);
+      if (lat === rec.lat && lon === rec.lon) continue;
+      rec.lat = lat;
+      rec.lon = lon;
+      rec.marker.setLngLat([lon, lat]);
     }
   }
 

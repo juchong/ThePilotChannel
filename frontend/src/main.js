@@ -6,6 +6,7 @@ import { windBarbSVG } from "./lib/windbarb.js";
 
 const CAT_FALLBACK = "#ffffff";
 const POLL_MS = 1000;                 // traffic poll cadence on local views
+const MOTION_FRAME_MS = 50;           // aircraft marker update interval (20 fps)
 const FALLBACK_DWELL_S = 15;          // used if a view switch throws
 const WATCHDOG_MS = 30 * 1000;        // how often the watchdog checks
 const WATCHDOG_STALL_MS = 5 * 60 * 1000; // no successful API call for this long -> reload
@@ -33,6 +34,7 @@ const state = {
   weather: {},
   pollTimer: null,
   pollSeq: 0,
+  motionRaf: null,
   dwellTimer: null,
   satTimer: null,
   blackoutTimer: null, // local safety timer for a timed remote blackout
@@ -190,6 +192,7 @@ function nextView(idx) {
 
 function switchView(idx) {
   stopPolling();
+  stopMotion();
   if (state.satTimer) clearTimeout(state.satTimer);
   if (!state.views.length) {
     showOverlay("No views configured. Open /admin to add airports.");
@@ -218,6 +221,7 @@ function switchView(idx) {
     renderSideHeader();
     renderAirportBarbs();
     startPolling();
+    startMotion();
   } else {
     // Regional = weather: wind barbs for ALL stations in view, drawn on top of an
     // animated NEXRAD precipitation overlay. No aircraft.
@@ -268,13 +272,44 @@ function stopPolling() {
   state.pollTimer = null;
 }
 
+// ---- aircraft motion ------------------------------------------------------
+// Between snapshots each aircraft is dead-reckoned from its last fix (see
+// AircraftStore), and the markers are moved at MOTION_FRAME_MS while a local
+// view is on screen. Motion is therefore continuous regardless of when the
+// receiver, the backend, or the poll happen to deliver the next fix.
+function startMotion() {
+  stopMotion();
+  let last = 0;
+  const frame = (t) => {
+    if (!state.view || state.view.type !== "local") {
+      state.motionRaf = null;
+      return;
+    }
+    if (t - last >= MOTION_FRAME_MS) {
+      last = t;
+      try {
+        state.map.moveAircraft(state.store, Date.now());
+      } catch (e) {
+        console.error("motion frame failed", e);
+      }
+    }
+    state.motionRaf = requestAnimationFrame(frame);
+  };
+  state.motionRaf = requestAnimationFrame(frame);
+}
+
+function stopMotion() {
+  if (state.motionRaf) cancelAnimationFrame(state.motionRaf);
+  state.motionRaf = null;
+}
+
 async function pollTraffic() {
   const view = state.view;
   try {
     const r = await api.getTraffic(view.id);
     state.lastOk = Date.now();
     if (state.view !== view) return; // view changed while awaiting; drop result
-    state.store.update(r.aircraft || []);
+    state.store.update(r.aircraft || [], r);
     // Ground aircraft are shown only in local views, not the regional overview.
     const includeGround = view.type === "local";
     state.map.setAircraft(state.store.toGeoJSON({ includeGround })); // render immediately on new data

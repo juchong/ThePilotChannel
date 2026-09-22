@@ -259,12 +259,14 @@ class DataManager:
                             self._polled.pop(view_id, None)
                         continue
                     cached = self._traffic_cache.get(view_id)
-                    if cached and now - cached["ts"] < TRAFFIC_REFRESH_S * 0.9:
+                    if cached and now - cached["ts"] < TRAFFIC_REFRESH_S * 0.85:
                         continue
                     self._kick_refresh(view_id, views[view_id])
             except Exception as exc:  # noqa: BLE001
                 log.error("traffic loop error: %s", exc)
-            await asyncio.sleep(TRAFFIC_REFRESH_S / 4)
+            # A fine tick keeps the refresh period just under the display's 1 s
+            # poll, so the display never sees the same snapshot twice in a row.
+            await asyncio.sleep(TRAFFIC_REFRESH_S / 10)
 
     def _snapshot(self, view_id: str, cached: Optional[Dict]) -> Dict:
         health = self._traffic_health.get(view_id, {"healthy": True, "error": None})

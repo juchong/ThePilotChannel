@@ -20,8 +20,10 @@ watching it, so robustness and low resource use matter more than features.
 - `frontend/` plain JavaScript ES modules built with Vite. No framework. `src/main.js` is
   the display, `src/admin.js` the configuration page, `src/lib/*` shared modules. The
   Docker build compiles it into the image at `/app/static`.
-- `deploy/` the native kiosk layer. `install.sh` provisions the Pi; `kiosk-launch.sh` is
-  exec'd from a tty1 autologin shell and starts cage (Wayland compositor) plus Chromium.
+- `deploy/` the native kiosk layer. `bootstrap.sh` provisions a fresh Pi (packages, rootless
+  Docker, GPU overlay, seatd, tty1 autologin, Wi-Fi power saving, `.env`, first build) and
+  is the reference for what the OS must look like; `kiosk-launch.sh` is exec'd from the
+  tty1 autologin shell and starts cage (Wayland compositor) plus Chromium.
   The kiosk is not in Docker because it needs the GPU and HDMI output directly.
 - `data/config.yaml` is the single source of truth for configuration, validated by the
   pydantic model in `backend/app/config.py`. It is bind-mounted as a directory
@@ -60,7 +62,8 @@ frontend/src/
   lib/shapes.js     silhouettes and type/category classification
   lib/windbarb.js   wind barb SVG
   lib/geo.js        client geo helpers
-deploy/install.sh, kiosk-launch.sh, getty-autologin.conf
+deploy/bootstrap.sh   idempotent OS provisioning for a fresh Pi (also --check / --dry-run)
+deploy/kiosk-launch.sh, getty-autologin.conf
 Dockerfile, docker-compose.yml, data/config.yaml
 ```
 
@@ -69,8 +72,13 @@ Dockerfile, docker-compose.yml, data/config.yaml
 ### Rendering
 
 - Aircraft are HTML `maplibregl.Marker`s, not a GeoJSON symbol layer. Rapid `setData` on a
-  GeoJSON source wedges it. Motion is a CSS `transform` transition on the marker element,
-  updated once per poll.
+  GeoJSON source wedges it. Motion is client-side dead reckoning: `AircraftStore` keeps each
+  aircraft's last fix (position, ground speed, track, and the fix time taken relative to
+  the snapshot, so clock skew does not matter) and `moveAircraft()` positions markers at
+  20 fps from `displayPosition()`, which blends a new fix in over about half a second
+  instead of jumping. Do not reintroduce a CSS transition keyed to poll timing: receivers
+  produce a new position per aircraft only about once a second with jitter, so a
+  poll-driven tween stalls and jumps.
 - Radar frames are MapLibre raster layers built once per page session and animated by
   toggling `visibility` and `raster-opacity` (cross-fade). Never add and remove raster
   sources per view: removed textures are not reclaimed on the Pi and GPU memory grows.
@@ -153,6 +161,12 @@ Dockerfile, docker-compose.yml, data/config.yaml
 - SSE `connected` carries `boot_id`, config `version`, and the current `display` state. The
   display reloads on a changed boot id or version and applies blackout state from the
   event. Subscribe to events before map setup so this works even while tiles load.
+- HTML responses are `Cache-Control: no-cache` and hashed `/assets/` are immutable
+  (`SecurityHeaders` in `main.py`), and the kiosk holding page navigates to the display
+  with a unique `?launch=` query. Without both, Chromium's cache on the RAM disk serves a
+  heuristically "fresh" old `index.html` for days (its `Last-Modified` is the build time)
+  and the kiosk keeps running an old bundle after a rebuild. When checking a deploy, compare
+  `document.scripts` in the live page with the script the server serves at `/`.
 - The remote blackout (`POST /api/display/blackout` and `/restore`) is a full-screen cover
   (`#blackout`), not a stop: the cycle and polling keep running underneath so restore is
   instant. A timed blackout auto-restores server-side and the display arms its own
@@ -201,7 +215,9 @@ Dockerfile, docker-compose.yml, data/config.yaml
   (`--remote-debugging-port`) when you need page state.
 - Verify the display on the real kiosk: screenshots with
   `WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/run/user/1000 grim out.png`, per-process CPU
-  from `top`, and GPU memory from `CmaFree` in `/proc/meminfo`. Any performance change must
+  from `top`, and GPU memory from `CmaFree` in `/proc/meminfo`. The kiosk Chromium exposes
+  the DevTools protocol on `127.0.0.1:9222` (localhost only), so page state can be read or
+  sampled live: `curl -s 127.0.0.1:9222/json` lists the page target. Any performance change must
   be measured there before it is called an improvement. The regional radar view is the
   heaviest view by design (renderer 30 to 60 percent of a core, GPU about 20 percent); local
   views sit near 10 percent.
@@ -216,6 +232,10 @@ Dockerfile, docker-compose.yml, data/config.yaml
 - Environment variables: `HANGAR_CONFIG` (default `/data/config.yaml`), `HANGAR_STATIC`
   (default `/app/static`), `HANGAR_TILE_CACHE` (default `/data/tiles`),
   `HANGAR_ADMIN_PASSWORD` (optional; compose reads it from `.env`).
+- Docker runs rootless as the kiosk user (Docker CE from Docker's apt repo, user
+  `docker.service`, linger enabled, CLI on the `rootless` context; the rootful daemon is
+  disabled by the bootstrap). Keep OS-level requirements in `deploy/bootstrap.sh` and verify
+  a Pi with `bootstrap.sh --check` rather than by hand.
 - Container: the process is root inside the container on purpose. Under rootless Docker
   that is the unprivileged host user, and a non-root container user could not write the
   bind-mounted `data/` directory. Compensating controls in `docker-compose.yml`: all

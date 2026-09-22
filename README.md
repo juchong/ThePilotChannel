@@ -59,52 +59,57 @@ from a free public aggregator (adsb.fi, adsb.lol, or airplanes.live).
 
 ## Install on the Raspberry Pi
 
-This sets up the Pi to boot straight into the full-screen display with no desktop.
+One script turns a freshly flashed Pi into the kiosk. It is safe to run again at any time,
+and `--check` reports what is and is not set up without changing anything.
 
 1. **Flash the OS.** Use Raspberry Pi Imager to write Raspberry Pi OS Lite (64-bit). In the
    Imager settings (gear icon) set a hostname, enable SSH, create your user, and enter your
    Wi-Fi details if you are not using Ethernet.
 
-2. **Boot the Pi and connect over SSH** (or plug in a keyboard), then update it:
+2. **Boot the Pi and connect over SSH** (or plug in a keyboard) as the user you created.
+
+3. **Run the bootstrap.** Pick an admin password so that only you can change the display
+   (leave the option off if you really want it open to everyone on your network):
 
    ```bash
-   sudo apt-get update && sudo apt-get full-upgrade -y
+   curl -fsSL https://raw.githubusercontent.com/juchong/ThePilotChannel/main/deploy/bootstrap.sh \
+     | bash -s -- --admin-password 'choose-a-password' --reboot
    ```
 
-3. **Get the code:**
+   It takes ten to twenty minutes on a Pi 4, most of it the system update and the first
+   build of the app. With `--reboot` the Pi restarts by itself when done; otherwise run
+   `sudo reboot`. The TV shows a "The Pilot Channel" holding screen while the app starts,
+   then the display.
 
-   ```bash
-   sudo apt-get install -y git
-   git clone https://github.com/juchong/ThePilotChannel.git
-   cd ThePilotChannel
-   ```
+4. **Check that it worked.** From your phone or laptop open `http://<pi-ip>:8000/admin`
+   (the bootstrap prints the address). On the Pi, `~/ThePilotChannel/deploy/bootstrap.sh --check`
+   should report every step as `[ok]`.
 
-4. **Optional but recommended: set an admin password.** Without one, anyone on your network
-   can change the display. Create a file named `.env` next to `docker-compose.yml`:
+What the bootstrap does, in order, each step only if it is not already done:
 
-   ```bash
-   echo 'HANGAR_ADMIN_PASSWORD=choose-a-password' > .env
-   ```
+- Updates the system (`apt-get full-upgrade`; skip with `--no-upgrade`).
+- Installs the kiosk browser and its compositor (`chromium`, `cage`, `wlrctl`, `seatd`),
+  `grim` for screenshots, `git`, `curl`, and the two packages rootless Docker needs
+  (`uidmap`, `dbus-user-session`).
+- Clones this repository to `~/ThePilotChannel` (or uses the clone it is run from).
+- Installs Docker CE with Docker's own installer, then switches it to rootless mode for
+  your user: the daemon runs as you, not root, starts at boot without a login, and the
+  root-level daemon is disabled so it does not waste memory.
+- Enables the GPU overlay (`dtoverlay=vc4-kms-v3d`, `max_framebuffers=2`) the kiosk needs.
+- Enables `seatd` and puts your user in the `video`, `render`, and `input` groups so the
+  kiosk can drive the HDMI output directly.
+- Configures automatic login on the TV console (tty1) and adds a hook to your login shell
+  that starts the kiosk there and nowhere else (not over SSH).
+- Turns Wi-Fi power saving off, which otherwise drops connections on an unattended Pi.
+- Writes the admin password to `.env` if you gave one.
+- Builds the app image and starts it, waiting until it answers.
 
-5. **Run the installer.** It installs the kiosk browser (cage and Chromium), installs Docker
-   if it is missing, enables the GPU, sets up automatic login on the TV console, and starts
-   the app:
+Options: `--check`, `--dry-run`, `--no-upgrade`, `--no-start`, `--reboot`,
+`--admin-password PW`, `--repo-dir DIR`. Run it with `--help` for the same list.
 
-   ```bash
-   sudo bash deploy/install.sh
-   ```
-
-6. **Reboot:**
-
-   ```bash
-   sudo reboot
-   ```
-
-The TV shows a "The Pilot Channel" holding screen while the app starts, then the display.
-The first start pulls map tiles and imagery, so give it a minute.
-
-**Check that it worked:** `docker compose ps` on the Pi shows the `hangar-display` service
-as healthy, and `http://<pi-ip>:8000/admin` opens from your phone or laptop.
+The kiosk runs natively (cage plus Chromium) rather than in Docker because it needs the
+GPU and HDMI output. It keeps Chromium's profile, cache, and its log on a RAM disk
+(`/dev/shm/hangar-kiosk`) to spare the SD card.
 
 ## Try it without a Pi
 
@@ -320,8 +325,9 @@ actions:
 - **`Unable to create the wlroots backend` in the kiosk log.** The kiosk must start from
   the physical console (tty1) with no `WAYLAND_DISPLAY` in its environment. Do not export
   `WAYLAND_DISPLAY` in your login shell.
-- **`docker: permission denied`.** Log out and back in after the installer adds you to the
-  `docker` group, or use `sudo`.
+- **`docker` commands fail or say the daemon is not running.** Docker runs in rootless
+  mode as your user: run `docker` commands as that user without `sudo`, and check
+  `systemctl --user status docker`. `deploy/bootstrap.sh --check` reports what is wrong.
 - **No aircraft.** Open `http://<pi-ip>:8000/api/status` or press Test connection on the
   admin page. For a local receiver, the URL must be its LAN address, not `localhost`.
 - **No weather or wind barbs.** Check that the Pi can reach `aviationweather.gov` and that

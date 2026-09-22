@@ -161,7 +161,11 @@ def test_security_headers(client):
     assert r.headers["cache-control"] == "no-store"
     # The OSM tile servers block requests without a Referer; the display page
     # must keep the browser's default referrer policy.
-    assert "referrer-policy" not in client.get("/").headers
+    page = client.get("/")
+    assert "referrer-policy" not in page.headers
+    # HTML must be revalidated on every load so a rebuilt bundle is picked up.
+    assert page.headers["cache-control"] == "no-cache"
+    assert client.get("/admin", auth=AUTH).headers["cache-control"] == "no-cache"
 
 
 # ---- traffic / weather / satellite ---------------------------------------------
@@ -377,3 +381,17 @@ def test_warm_reports_counts(client, monkeypatch):
     assert result["state"] == "done" and result["total"] > 0
     assert result["fetched"] + result["cached"] == result["total"] and result["failed"] == 0
     assert client.get("/healthz").json()["status"]["tiles"]["state"] == "done"
+
+
+# ---- fix timestamps for client-side dead reckoning ---------------------------------
+
+def test_normalize_aircraft_fix_time():
+    from app.sources.base import feed_now, normalize_aircraft
+
+    ac = normalize_aircraft({"hex": "a", "lat": 1, "lon": 2, "seen_pos": 2.5, "gs": 100, "track": 90}, now_s=1000.0)
+    assert ac["fix_ts"] == 997.5 and ac["seen_pos"] == 2.5
+    assert normalize_aircraft({"hex": "b", "lat": 1, "lon": 2}, now_s=1000.0)["fix_ts"] is None
+    assert normalize_aircraft({"hex": "c", "lat": 1, "lon": 2, "seen_pos": 1})["fix_ts"] is None
+    assert feed_now({"now": 1790000000.5}) == 1790000000.5          # readsb: seconds
+    assert feed_now({"now": 1790000000500}) == 1790000000.5         # aggregators: milliseconds
+    assert feed_now({}) is None

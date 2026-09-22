@@ -98,7 +98,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
   padding: 0 4px; border-radius: 3px; margin-right: 4px; vertical-align: middle; }
 
 /* On-map aircraft markers */
-.ac-marker { position: relative; width: 0; height: 0; pointer-events: none; }
+.ac-marker { position: relative; width: 0; height: 0; pointer-events: none; will-change: transform; }
 .ac-icon { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%);
   filter: drop-shadow(0 0 1.5px #000) drop-shadow(0 0 1.5px #000); }
 .ac-icon svg { display: block; }

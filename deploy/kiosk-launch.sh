@@ -59,7 +59,10 @@ async function probe() {
   n++;
   try {
     await fetch(APP + "healthz", { mode: "no-cors", cache: "no-store" });
-    location.replace(APP);
+    // A unique query string defeats Chromium's cached copy of the page, which
+    // survives kiosk restarts on the RAM disk and would otherwise keep serving
+    // an old bundle after the app is rebuilt.
+    location.replace(APP + "?launch=" + Date.now());
     return;
   } catch (e) {}
   document.getElementById("s").textContent = "Waiting for the backend to start… (" + n + ")";
@@ -74,7 +77,8 @@ echo "starting cage + chromium ($CHROME_BIN)"
 
 # Flags after --kiosk turn off Chromium background services (update checks,
 # sync, Google push connections, component updates) that a kiosk never needs and
-# that otherwise cost CPU and network on the Pi.
+# that otherwise cost CPU and network on the Pi. The DevTools port is bound to
+# localhost only, for inspecting the live display from a shell on the Pi.
 exec cage -- "$CHROME_BIN" \
   --kiosk \
   --ozone-platform=wayland \
@@ -96,4 +100,6 @@ exec cage -- "$CHROME_BIN" \
   --password-store=basic \
   --disable-pinch \
   --overscroll-history-navigation=0 \
+  --remote-debugging-port=9222 \
+  --remote-debugging-address=127.0.0.1 \
   "file://$WAIT_PAGE"
