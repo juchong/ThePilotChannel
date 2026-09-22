@@ -228,8 +228,9 @@ Dockerfile, docker-compose.yml, data/config.yaml
   stream open, so `--dump-dom` will not return either. Drive it over the DevTools protocol
   (`--remote-debugging-port`) when you need page state.
 - Verify the display on the real kiosk: screenshots with
-  `WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/run/user/1000 grim out.png`, per-process CPU
-  from `top`, and GPU memory from `CmaFree` in `/proc/meminfo`. The kiosk Chromium exposes
+  `WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/run/user/1000 grim -t jpeg -q 88 -s 0.47 out.jpg`
+  (grim on the Pi writes png, jpeg, webp, avif, and gif; `-s` scales the 4K panel), per-process
+  CPU from `top`, and GPU memory from `CmaFree` in `/proc/meminfo`. The kiosk Chromium exposes
   the DevTools protocol on `127.0.0.1:9222` (localhost only), so page state can be read or
   sampled live: `curl -s 127.0.0.1:9222/json` lists the page target. Any performance change must
   be measured there before it is called an improvement. The regional radar view is the
@@ -240,6 +241,15 @@ Dockerfile, docker-compose.yml, data/config.yaml
   admin page at `/admin.html`.
 - Dependencies are pinned: `backend/requirements.txt` exactly, `frontend/package-lock.json`
   committed and installed with `npm ci`. Run `pip-audit` inside the image when bumping.
+
+## Documentation screenshots
+
+`docs/display-*.jpg` are captured from the live kiosk with grim at 1920 wide (JPEG, quality
+88) once each view is fully rendered: the KSEA local view a few seconds in, the regional view
+with the radar loop and barbs loaded, and the satellite view once its loop is animating.
+`docs/admin.png` is headless Chromium against the running backend at 1120 px wide. Time the
+captures to a view start through the DevTools port rather than by hand, and check that the
+frame shows real data (aircraft listed, stations listed, frames loaded) before keeping it.
 
 ## Runtime environment
 
