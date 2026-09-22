@@ -174,18 +174,44 @@ def test_traffic_unknown_view_is_404(client):
     assert client.get("/api/traffic", params={"view": "local:NOPE"}).status_code == 404
 
 
-def test_traffic_snapshot_has_age_and_drops_stale_positions(client):
+def test_first_poll_waits_for_a_fresh_snapshot(client):
     assert put(client, base_cfg()).status_code == 200
+    # the fake source answers instantly, so the very first poll already has data
     r = client.get("/api/traffic", params={"view": "local:KSEA"}).json()
-    assert r["pending"] is True and r["aircraft"] == []
-    deadline = time.time() + 5
-    while time.time() < deadline:
-        r = client.get("/api/traffic", params={"view": "local:KSEA"}).json()
-        if not r.get("pending"):
-            break
-        time.sleep(0.1)
-    assert r["count"] == 1 and r["aircraft"][0]["hex"] == "a1"
+    assert not r.get("pending") and r["count"] == 1 and r["aircraft"][0]["hex"] == "a1"
     assert r["age_s"] >= 0 and r["stale"] is False and r["healthy"] is True
+
+
+def test_leftover_snapshot_is_not_served_as_data(client, monkeypatch):
+    import asyncio
+
+    assert put(client, base_cfg()).status_code == 200
+    assert client.get("/api/traffic", params={"view": "local:KSEA"}).json()["count"] == 1
+    m = main_mod.manager
+    m._traffic_cache["local:KSEA"]["ts"] -= 120          # pretend the view was last visited two minutes ago
+    m._polled.pop("local:KSEA", None)
+
+    async def slow(lat, lon, nm):                         # the refresh takes longer than the first-poll wait
+        await asyncio.sleep(3)
+        return [{"hex": "a1", "lat": lat, "lon": lon, "seen_pos": 1}]
+
+    monkeypatch.setattr(m, "_fetch_traffic", slow)
+    t0 = time.time()
+    r = client.get("/api/traffic", params={"view": "local:KSEA"}).json()
+    assert time.time() - t0 < 2.5                          # bounded wait
+    assert r["pending"] is True and r["aircraft"] == [] and r["stale"] is True and r["age_s"] >= 120
+
+    # but when refreshes are failing, the last known aircraft are shown (frozen, flagged)
+    m._polled.pop("local:KSEA", None)                      # deactivate the view so the loop stops refreshing it
+    time.sleep(3.5)                                        # and let the slow refresh above finish
+    m._traffic_cache["local:KSEA"]["ts"] -= 120
+
+    async def broken(lat, lon, nm):
+        raise RuntimeError("receiver down")
+
+    monkeypatch.setattr(m, "_fetch_traffic", broken)
+    r = client.get("/api/traffic", params={"view": "local:KSEA"}).json()
+    assert r["count"] == 1 and r["healthy"] is False and r["stale"] is True and r["error"] == "receiver down"
 
 
 def test_weather_refreshes_on_config_change(client):

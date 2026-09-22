@@ -10,6 +10,7 @@ import { classify, isGA } from "./shapes.js";
 const MAX_EXTRAPOLATION_MS = 30 * 1000; // beyond this, hold the last predicted position
 const CORRECTION_TAU_MS = 600;          // a new fix's correction decays with this time constant
 const MAX_FIX_AGE_MS = 15 * 1000;       // clamp implausible fix ages (clock skew, bad feeds)
+const SNAP_NM = 0.5;                    // a correction larger than this is a re-acquisition: snap, do not glide
 
 export class AircraftStore {
   constructor(dropTimeoutS = 15) {
@@ -82,11 +83,22 @@ export class AircraftStore {
         const newFix = prev.lat !== rec.lat || prev.lon !== rec.lon || Math.abs(prev.fixTs - rec.fixTs) > 250;
         if (newFix) {
           // Keep the marker where it is drawn right now and let the difference
-          // to the new prediction decay away instead of jumping.
+          // to the new prediction decay away instead of jumping. Unless the
+          // difference is far more than an aircraft moves between fixes: then
+          // the old position was wrong (stale data, a long gap) and gliding
+          // across the screen would look like flight that never happened.
           const [pLat, pLon] = this._predict(rec, now);
-          rec.offLat = prev.dispLat - pLat;
-          rec.offLon = prev.dispLon - pLon;
-          rec.offTs = now;
+          const dLat = prev.dispLat - pLat;
+          const dLon = prev.dispLon - pLon;
+          const distNm = Math.hypot(dLat * 60, dLon * 60 * Math.cos((pLat * Math.PI) / 180));
+          if (distNm <= SNAP_NM) {
+            rec.offLat = dLat;
+            rec.offLon = dLon;
+            rec.offTs = now;
+          } else {
+            prev.dispLat = pLat; // snap
+            prev.dispLon = pLon;
+          }
         } else {
           // Same fix as last time (the snapshot repeated): nothing changes.
           rec.fixTs = prev.fixTs;

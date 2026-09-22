@@ -35,6 +35,8 @@ log = logging.getLogger("hangar")
 TRAFFIC_REFRESH_S = 1.0        # target cadence for an actively viewed view
 ACTIVE_VIEW_WINDOW_S = 5.0     # keep refreshing a view for this long after its last poll
 TRAFFIC_STALE_S = 10.0         # snapshot older than this is flagged stale
+LEFTOVER_S = 3.0               # a snapshot older than this, for a view that just became active, is not data
+FIRST_POLL_WAIT_S = 1.5        # the first poll of a view may wait this long for its refresh
 LOCAL_RETRY_S = 60.0           # circuit breaker: after a local-source failure, skip it this long
 AGGREGATOR_MIN_INTERVAL = 1.0  # published public rate limit: 1 req/sec
 SAT_CACHE_TTL_S = 240.0
@@ -70,7 +72,7 @@ class DataManager:
         self._traffic_cache: Dict[str, Dict] = {}   # view_id -> {ts, aircraft, source}
         self._traffic_health: Dict[str, Dict] = {}  # view_id -> {healthy, error}
         self._polled: Dict[str, float] = {}         # view_id -> monotonic time of last client poll
-        self._refreshing: Set[str] = set()
+        self._refresh_tasks: Dict[str, asyncio.Task] = {}
         self._weather_cache: Dict[str, Dict] = {}
         self._weather_ts: Optional[float] = None
         self._weather_error: Optional[str] = None
@@ -228,24 +230,46 @@ class DataManager:
         return out
 
     # ---- traffic ---------------------------------------------------------
+    def _fresh(self, cached: Optional[Dict]) -> bool:
+        return cached is not None and (time.monotonic() - cached["ts"]) <= LEFTOVER_S
+
     async def get_traffic(self, view_id: str) -> Optional[Dict]:
-        """Non-blocking: records that the view is being watched (so the
-        background loop keeps it fresh), kicks an immediate refresh if there is
-        no snapshot yet, and returns the current snapshot with its age."""
+        """Records that the view is being watched (so the background loop keeps
+        it fresh) and returns the current snapshot with its age. Polls of an
+        active view never wait. When a view has just become active there is no
+        fresh snapshot, only a leftover from its previous visit (up to a whole
+        cycle old); handing that out would place every aircraft where it was
+        minutes ago. So the refresh is kicked immediately and the poll waits
+        for it, bounded by FIRST_POLL_WAIT_S; if it still is not fresh the
+        response is `pending` rather than old data, unless refreshes are
+        failing, in which case the last known aircraft are shown as stale."""
         view = next((v for v in self.views() if v["id"] == view_id), None)
         if view is None:
             return None
         self._polled[view_id] = time.monotonic()
         cached = self._traffic_cache.get(view_id)
-        if cached is None:
-            self._kick_refresh(view_id, view)
+        if not self._fresh(cached):
+            task = self._kick_refresh(view_id, view)
+            try:
+                await asyncio.wait_for(asyncio.shield(task), timeout=FIRST_POLL_WAIT_S)
+            except (asyncio.TimeoutError, asyncio.CancelledError):
+                pass
+            except Exception:  # noqa: BLE001  (the refresh records its own failure)
+                pass
+            cached = self._traffic_cache.get(view_id)
+        if not self._fresh(cached) and cached is not None:
+            health = self._traffic_health.get(view_id)
+            if health is None or health["healthy"]:
+                return self._snapshot(view_id, None, leftover_age=time.monotonic() - cached["ts"])
         return self._snapshot(view_id, cached)
 
-    def _kick_refresh(self, view_id: str, view: Dict) -> None:
-        if view_id in self._refreshing:
-            return
-        self._refreshing.add(view_id)
-        self._spawn(self._refresh_traffic(view_id, view), name=f"traffic:{view_id}")
+    def _kick_refresh(self, view_id: str, view: Dict) -> asyncio.Task:
+        task = self._refresh_tasks.get(view_id)
+        if task is not None and not task.done():
+            return task
+        task = self._spawn(self._refresh_traffic(view_id, view), name=f"traffic:{view_id}")
+        self._refresh_tasks[view_id] = task
+        return task
 
     async def _traffic_loop(self):
         """Keep every recently polled traffic view refreshed at TRAFFIC_REFRESH_S."""
@@ -268,13 +292,16 @@ class DataManager:
             # poll, so the display never sees the same snapshot twice in a row.
             await asyncio.sleep(TRAFFIC_REFRESH_S / 10)
 
-    def _snapshot(self, view_id: str, cached: Optional[Dict]) -> Dict:
+    def _snapshot(self, view_id: str, cached: Optional[Dict], leftover_age: Optional[float] = None) -> Dict:
         health = self._traffic_health.get(view_id, {"healthy": True, "error": None})
         if cached is None:
             return {
                 "view": view_id, "aircraft": [], "count": 0,
                 "source": self._source_status["active"],
-                "ts": None, "age_s": None, "stale": False, "pending": True,
+                "ts": None,
+                "age_s": round(leftover_age, 1) if leftover_age is not None else None,
+                "stale": leftover_age is not None,
+                "pending": True,
                 "healthy": health["healthy"], "error": health["error"],
             }
         age = time.monotonic() - cached["ts"]
@@ -313,8 +340,6 @@ class DataManager:
             if not prev or prev["healthy"] or prev["error"] != err:
                 log.error("traffic fetch failed for %s: %s", view_id, err)
             self._traffic_health[view_id] = {"healthy": False, "error": err}
-        finally:
-            self._refreshing.discard(view_id)
 
     # ---- weather ---------------------------------------------------------
     def _all_icaos(self) -> List[str]:

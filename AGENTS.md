@@ -76,7 +76,8 @@ Dockerfile, docker-compose.yml, data/config.yaml
   aircraft's last fix (position, ground speed, track, and the fix time taken relative to
   the snapshot, so clock skew does not matter) and `moveAircraft()` positions markers at
   20 fps from `displayPosition()`, which blends a new fix in over about half a second
-  instead of jumping. Do not reintroduce a CSS transition keyed to poll timing: receivers
+  instead of jumping, except that a correction over half a mile snaps (that is a
+  re-acquisition, and gliding it would draw flight that never happened). Do not reintroduce a CSS transition keyed to poll timing: receivers
   produce a new position per aircraft only about once a second with jitter, so a
   poll-driven tween stalls and jumps.
 - Radar frames are MapLibre raster layers built once per page session and animated by
@@ -128,9 +129,13 @@ Dockerfile, docker-compose.yml, data/config.yaml
 - Never set a `Referrer-Policy` header or otherwise strip the Referer on pages that talk
   to OpenStreetMap directly (a custom raster `tile_url` may): their tile servers serve an
   "Access blocked" tile to requests without one.
-- `/api/traffic` never blocks on an upstream fetch, and freshness comes from the background
-  loop in `manager.py`, not from client polls. Refreshing only when a client polls aliases
-  with the 1 Hz poll and halves the effective update rate.
+- `/api/traffic` polls of an active view never wait on an upstream fetch; freshness comes
+  from the background loop in `manager.py`, not from client polls (refreshing only when a
+  client polls aliases with the 1 Hz poll and halves the effective rate). The one
+  exception is the first poll of a view that just became active: it waits up to 1.5 s for
+  the refresh it kicked off, and if that is not enough it answers `pending` instead of the
+  leftover snapshot from the previous visit. Handing out a minutes-old leftover placed every
+  aircraft far behind its real position and the display then glided them into place.
 - All aggregator calls, including test endpoints, go through the shared rate limiter
   (`_rate_limited_aggregator_fetch`, 1 request per second).
 - The local receiver has a circuit breaker: log a failure once per state change and skip
