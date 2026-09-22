@@ -8,15 +8,15 @@ on the hangar Wi-Fi.
 
 Local airport view (live traffic, METAR, and wind barb):
 
-![Local airport view](docs/display-local.png)
+![Local airport view](docs/display-local.jpg)
 
 Regional weather view (wind barbs for every reporting airport in view, over the radar loop):
 
-![Regional weather view](docs/display-radar.png)
+![Regional weather view](docs/display-radar.jpg)
 
 Satellite loop view (animated NOAA GOES imagery):
 
-![Satellite loop view](docs/display-satellite.png)
+![Satellite loop view](docs/display-satellite.jpg)
 
 Admin page (remote configuration):
 
