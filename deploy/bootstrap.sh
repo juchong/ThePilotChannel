@@ -23,14 +23,16 @@
 #                         or the clone this script is run from)
 #
 # What it sets up (see README.md "Install on the Raspberry Pi"):
-#   system update; kiosk packages (cage, chromium, wlrctl, seatd, grim); Docker CE in
-#   rootless mode as this user (rootful daemon disabled); the GPU/KMS overlay; seatd and
-#   the video/render/input groups; automatic login on tty1 that launches the kiosk; Wi-Fi
+#   system update; kiosk packages (cage, chromium, wlrctl, seatd, grim, imagemagick); the
+#   grim wrapper that adds jpeg/webp/avif/gif screenshots; Docker CE in rootless mode as
+#   this user (rootful daemon disabled); the GPU/KMS overlay; seatd and the
+#   video/render/input groups; automatic login on tty1 that launches the kiosk; Wi-Fi
 #   power saving off; the optional admin password; and the app stack itself.
 set -euo pipefail
 
 REPO_URL="https://github.com/juchong/ThePilotChannel.git"
-APT_PACKAGES=(git curl ca-certificates cage chromium wlrctl seatd grim uidmap dbus-user-session)
+APT_PACKAGES=(git curl ca-certificates cage chromium wlrctl seatd grim imagemagick uidmap dbus-user-session)
+GRIM_WRAPPER=/usr/local/bin/grim
 MARK_BEGIN="# >>> hangar-kiosk >>>"
 MARK_END="# <<< hangar-kiosk <<<"
 
@@ -140,6 +142,32 @@ else
 fi
 if [ -f "$REPO_DIR/deploy/kiosk-launch.sh" ]; then
   [ -x "$REPO_DIR/deploy/kiosk-launch.sh" ] && ok "kiosk launcher executable" || { miss "kiosk launcher executable"; applying && run chmod +x "$REPO_DIR/deploy/kiosk-launch.sh"; }
+fi
+
+# ---- 3b. screenshots in web formats (grim wrapper + ImageMagick) ------------------------
+# Debian's grim writes only png/ppm. deploy/grim-web-wrapper.sh, installed as
+# /usr/local/bin/grim (which shadows /usr/bin/grim on PATH), adds jpeg, webp, avif,
+# gif, tiff, bmp, and heic by encoding grim's lossless PPM with ImageMagick. png/ppm
+# and unknown options pass straight through to the real grim. Remove
+# /usr/local/bin/grim to revert. WebP and AVIF/HEIC come from ImageMagick's
+# extra-codecs delegate, whose package name carries the library ABI version, so
+# it is resolved from the package index rather than hardcoded.
+log "Screenshots in web formats (grim wrapper + ImageMagick codecs)"
+EXTRA_PKG="$(apt-cache search --names-only 'libmagickcore.*extra' 2>/dev/null | awk '{print $1}' | grep -v hdri | head -1)"
+EXTRA_PKG="${EXTRA_PKG:-libmagickcore-7.q16-10-extra}"
+if pkg_installed "$EXTRA_PKG"; then ok "$EXTRA_PKG (webp, avif, heic codecs)"; else
+  miss "$EXTRA_PKG (webp, avif, heic codecs)"
+  if applying; then
+    export DEBIAN_FRONTEND=noninteractive
+    sudo_run apt-get install -y -q "$EXTRA_PKG"
+  fi
+fi
+WRAPPER_SRC="$REPO_DIR/deploy/grim-web-wrapper.sh"
+if [ -f "$WRAPPER_SRC" ] && cmp -s "$WRAPPER_SRC" "$GRIM_WRAPPER"; then ok "grim wrapper installed at $GRIM_WRAPPER"; else
+  miss "grim wrapper installed at $GRIM_WRAPPER"
+  if applying && [ -f "$WRAPPER_SRC" ]; then
+    sudo_run install -m 0755 "$WRAPPER_SRC" "$GRIM_WRAPPER"
+  fi
 fi
 
 # ---- 4. Docker Engine -----------------------------------------------------------------

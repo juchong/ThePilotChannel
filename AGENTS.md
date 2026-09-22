@@ -63,6 +63,7 @@ frontend/src/
   lib/windbarb.js   wind barb SVG
   lib/geo.js        client geo helpers
 deploy/bootstrap.sh   idempotent OS provisioning for a fresh Pi (also --check / --dry-run)
+deploy/grim-web-wrapper.sh   installed as /usr/local/bin/grim: web image formats via ImageMagick
 deploy/kiosk-launch.sh, getty-autologin.conf
 Dockerfile, docker-compose.yml, data/config.yaml
 ```
@@ -229,8 +230,12 @@ Dockerfile, docker-compose.yml, data/config.yaml
   (`--remote-debugging-port`) when you need page state.
 - Verify the display on the real kiosk: screenshots with
   `WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/run/user/1000 grim -t jpeg -q 88 -s 0.47 out.jpg`
-  (grim on the Pi writes png, jpeg, webp, avif, and gif; `-s` scales the 4K panel), per-process
-  CPU from `top`, and GPU memory from `CmaFree` in `/proc/meminfo`. The kiosk Chromium exposes
+  (`-s` scales the 4K panel), per-process CPU from `top`, and GPU memory from `CmaFree` in
+  `/proc/meminfo`. Debian's grim writes only png/ppm; the bootstrap installs
+  `deploy/grim-web-wrapper.sh` as `/usr/local/bin/grim`, which adds jpeg, webp, avif, gif,
+  tiff, bmp, and heic through ImageMagick, either with `-t webp` or inferred from the file
+  name (`grim shot.jpg`, `grim shot.webp`); png/ppm and unknown options pass through to the
+  real grim unchanged. `sudo rm /usr/local/bin/grim` reverts. The kiosk Chromium exposes
   the DevTools protocol on `127.0.0.1:9222` (localhost only), so page state can be read or
   sampled live: `curl -s 127.0.0.1:9222/json` lists the page target. Any performance change must
   be measured there before it is called an improvement. The regional radar view is the

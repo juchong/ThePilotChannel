@@ -90,7 +90,9 @@ What the bootstrap does, in order, each step only if it is not already done:
 - Updates the system (`apt-get full-upgrade`; skip with `--no-upgrade`).
 - Installs the kiosk browser and its compositor (`chromium`, `cage`, `wlrctl`, `seatd`),
   `grim` for screenshots, `git`, `curl`, and the two packages rootless Docker needs
-  (`uidmap`, `dbus-user-session`).
+  (`uidmap`, `dbus-user-session`). It also installs ImageMagick and a small wrapper so
+  `grim` can write `jpeg`, `webp`, `avif`, and `gif` screenshots (the stock Debian build
+  only writes `png`); `sudo rm /usr/local/bin/grim` reverts to the stock grim.
 - Clones this repository to `~/ThePilotChannel` (or uses the clone it is run from).
 - Installs Docker CE with Docker's own installer, then switches it to rootless mode for
   your user: the daemon runs as you, not root, starts at boot without a login, and the
