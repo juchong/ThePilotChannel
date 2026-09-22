@@ -2,6 +2,7 @@
   "name": "hangar-display-frontend",
   "version": "0.1.0",
   "private": true,
+  "license": "GPL-2.0-only",
   "type": "module",
   "scripts": {
     "dev": "vite",
