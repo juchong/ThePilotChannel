@@ -521,11 +521,10 @@ def test_radar_crossfade_defaults_off_and_is_configurable(client):
     assert regional["radar"]["crossfade"] is True
 
 
-# ---- the DNS-outage failure mode, exercised directly ---------------------------------------
+# ---- weather during a DNS outage -----------------------------------------------------------
 
 def test_cold_station_query_answers_within_the_bounded_wait_when_dns_hangs(client, monkeypatch):
-    """A resolver that hangs used to stall the regional view's request past the
-    display's 15 s timeout, which then blanked the station list."""
+    """A hanging resolver must not hold a cold station query past the bounded wait."""
     import asyncio
 
     from app import manager as mg
@@ -567,8 +566,7 @@ def test_metar_source_gives_up_after_second_transient_failure(monkeypatch):
 
 
 def test_metar_loop_retries_within_seconds_after_a_dns_failure(client, monkeypatch):
-    """After a failed refresh the loop used to sleep the full refresh interval
-    (five minutes); it must retry soon so the cache recovers with the network."""
+    """A failed refresh is retried after WEATHER_RETRY_S, not after the full refresh interval."""
     from app import manager as mg
 
     monkeypatch.setattr(mg, "WEATHER_RETRY_S", 0.3)
@@ -592,7 +590,7 @@ def test_metar_loop_retries_within_seconds_after_a_dns_failure(client, monkeypat
 
 
 def test_weather_store_is_written_by_a_refresh_and_restored_on_start(client):
-    """A restart during an outage used to come up with no weather at all."""
+    """A refresh writes the weather store and a fresh manager restores it at start."""
     import asyncio
     import json
 

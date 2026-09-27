@@ -188,9 +188,8 @@ class Radar(BaseModel):
     interval_min: int = Field(5, ge=5, le=RADAR_MAX_AGE_MIN)
     opacity: float = Field(0.75, ge=0, le=1)
     product: Literal["n0q", "n0r"] = "n0q"
-    # Dissolve between frames instead of stepping. Cosmetic: it makes MapLibre
-    # re-render the whole map continuously, which a Pi 4 driving a 4K panel
-    # cannot do faster than about 15 fps, so it is off by default.
+    # Dissolve between frames instead of stepping. Off by default: the fade
+    # forces a full map re-render for its whole duration.
     crossfade: bool = False
 
     @field_validator("interval_min")

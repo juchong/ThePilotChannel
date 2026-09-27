@@ -47,19 +47,16 @@ function rasterStyle(tileUrl) {
   const tiles = tileUrl ? [tileUrl] : [`${location.origin}/tiles/{z}/{x}/{y}.png`];
   return {
     version: 8,
-    // No global transition: MapLibre's default (300 ms) is applied to every
-    // style change, including the style's light, so each radar frame step
-    // (a visibility/opacity change every 550 ms) opened a 300 ms window in
-    // which the whole map re-rendered continuously. At 4K on a Pi 4 that held
-    // the regional view at 12 fps. Layers that want a transition (the
+    // No global transition: MapLibre's default applies to every style change,
+    // including the style's light, and re-renders the whole map for its
+    // duration on each radar frame step. Layers that want a transition (the
     // optional radar cross-fade) declare their own.
     transition: { duration: 0, delay: 0 },
     sources: { osm: { type: "raster", tiles, tileSize: 256, attribution: "© OpenStreetMap contributors" } },
     layers: [
       { id: "bg", type: "background", paint: { "background-color": "#0d1117" } },
-      // raster-fade-duration 0: a tile that does get (re)loaded appears at once
-      // instead of dissolving in over MapLibre's default 300 ms, which reads as
-      // the map "sharpening" after a view switch.
+      // raster-fade-duration 0: a (re)loaded tile appears at once instead of
+      // dissolving in.
       {
         id: "osm",
         type: "raster",
@@ -82,15 +79,12 @@ export class HangarMap {
       zoom: 9,
       attributionControl: false,
       interactive: false,
-      // The cycle revisits a small fixed set of views, so keep every view's
-      // tiles in memory and never re-fetch expired ones: a view switch then
-      // renders from textures already on the GPU with no reload at all.
-      // MapLibre sizes each source's cache as (tiles in the viewport) x
-      // maxTileCacheZoomLevels, capped by maxTileCacheSize; the default of 5
-      // levels (about 200 tiles on a 1080p panel) held only the most frequent
-      // views and the others reloaded on every switch. 12 levels (about 480
-      // tiles here) covers half a dozen views; each tile is a 256 KB texture, so
-      // this is still bounded on the Pi's shared GPU memory.
+      // The cycle revisits a fixed set of views: keep every view's tiles in
+      // memory and never re-fetch expired ones, so a switch renders from
+      // textures already on the GPU. MapLibre sizes each source's cache as
+      // (tiles in the viewport) x maxTileCacheZoomLevels, capped by
+      // maxTileCacheSize; 12 levels holds half a dozen views and stays bounded
+      // on the Pi's shared GPU memory (a tile is a 256 KB texture).
       maxTileCacheSize: 480,
       maxTileCacheZoomLevels: 12,
       refreshExpiredTiles: false,
@@ -241,18 +235,14 @@ export class HangarMap {
 
   // NEXRAD radar loop: one raster layer per time-lagged frame, BUILT ONCE per page
   // session and reused. Animated by toggling the layout `visibility` property;
-  // hidden (not removed) when off the regional view. Repeatedly adding/removing
-  // these raster sources on every regional view leaked GPU/dma-buf memory on the
-  // Pi (removed raster textures were never reclaimed). Building them once keeps a
-  // fixed, bounded set of textures, so memory no longer grows over time. Layers
+  // hidden, never removed, when off the regional view: the Pi does not reclaim
+  // removed raster textures, so the set of textures must stay fixed. Layers
   // sit below the ring/markers so aircraft and barbs draw on top.
   // frames: [{ suffix, age_min }]; tileBase: IEM tile template prefix.
   ensureRadar(frames, { tileBase, opacity = 0.75, crossfade = false } = {}) {
     this._radarOpacity = opacity;
-    // Cross-fading dissolves frames but forces a full map re-render for the
-    // whole fade (most of each step); on a Pi 4 at 4K that is 12 to 16 fps for
-    // the entire view. Off, frames step instantly and the map renders only at
-    // each step. The radar reads the same either way.
+    // Cross-fading forces a full map re-render for the whole fade; off, frames
+    // step instantly and the map renders only at each step.
     const fadeMs = crossfade ? RADAR_FADE_MS : 0;
     if (this._radarLayers.length || !(frames || []).length) return;
     this._radarFrames = frames;
@@ -265,11 +255,9 @@ export class HangarMap {
         type: "raster",
         tiles: [this._radarTileUrl(f)],
         tileSize: 256,
-        // The composite is about 1 km data, so zoom 9 (200 m/px) already
-        // oversamples it. Capping here makes MapLibre overzoom z9 tiles on
-        // closer views instead of fetching 4 to 8 times as many finer tiles for
-        // every frame each time the loop refreshes, which was a burst of a few
-        // hundred requests at the start of each regional view.
+        // The composite is about 1 km data, so zoom 9 already oversamples it;
+        // closer views overzoom z9 tiles instead of fetching finer ones for
+        // every frame.
         maxzoom: 9,
         attribution: "NEXRAD via Iowa Environmental Mesonet",
       });
@@ -330,7 +318,7 @@ export class HangarMap {
   }
 
   // Hide the radar loop without tearing down the sources (called when leaving the
-  // regional view). Keeping the sources avoids the add/remove churn that leaked.
+  // regional view); the Pi does not reclaim removed raster textures.
   hideRadar() {
     for (const id of this._radarLayers) {
       if (this.map.getLayer(id)) {

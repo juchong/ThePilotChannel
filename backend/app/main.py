@@ -21,7 +21,7 @@ from .manager import DataManager, TooManySubscribers
 from .tiles import valid_tile
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-# httpx logs every upstream request at INFO (one line per second on a kiosk); keep warnings only.
+# httpx logs every upstream request at INFO; keep warnings only.
 for _noisy in ("httpx", "httpcore"):
     logging.getLogger(_noisy).setLevel(logging.WARNING)
 

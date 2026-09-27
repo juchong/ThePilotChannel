@@ -95,12 +95,10 @@ What the bootstrap does, in order, each step only if it is not already done:
   `grim` can write `jpeg`, `webp`, `avif`, and `gif` screenshots (the stock Debian build
   only writes `png`); `sudo rm /usr/local/bin/grim` reverts to the stock grim.
 - Clones this repository to `~/ThePilotChannel` (or uses the clone it is run from).
-- Protects the Wi-Fi settings from power cuts. On the Debian 13 based Raspberry Pi OS, the
-  Wi-Fi details you entered in Imager live in files that NetworkManager rewrites every
-  time the Pi starts, and losing power in the first half minute of a boot can leave them
-  empty. The bootstrap moves them into a regular NetworkManager profile that is not
-  rewritten at startup, keeps a read-only backup copy that NetworkManager falls back to,
-  and stops cloud-init from bringing the old files back (`deploy/harden-wifi.sh`).
+- Protects the Wi-Fi settings from power cuts (`deploy/harden-wifi.sh`). Raspberry Pi OS
+  keeps the Wi-Fi details from Imager in files it rewrites at every boot, and a power cut
+  during boot can leave them empty. The bootstrap moves them into a regular NetworkManager
+  profile with a read-only backup copy and stops cloud-init from restoring the old files.
 - Installs Docker CE with Docker's own installer, then switches it to rootless mode for
   your user: the daemon runs as you, not root, starts at boot without a login, and the
   root-level daemon is disabled so it does not waste memory.
@@ -185,10 +183,9 @@ page and use the short code from its address, for example `pnw` (Pacific Northwe
 `1200x1200` frames suit a 1080p TV.
 
 **Radar overlay.** Shown on the regional view. Ten frames five minutes apart give a
-45-minute loop; the loop can reach back at most 55 minutes. Frames step every half second;
-"Cross-fade frames" dissolves them into each other instead, which looks smoother but makes
-a Pi 4 re-render the whole map continuously, so leave it off unless the rest of the view
-still feels fluid on your hardware.
+45-minute loop; the loop can reach back at most 55 minutes. Frames step every half second.
+"Cross-fade frames" dissolves them into each other instead; it is off by default because
+the fade is expensive on a Pi 4.
 
 **Screen.** Buttons to black out and restore the picture, the same thing an automation
 can do (see below).
@@ -257,7 +254,7 @@ radar:
   interval_min: 5            # multiple of 5; (frames - 1) x interval must be 55 or less
   opacity: 0.75
   product: n0q               # n0q (base reflectivity) | n0r
-  crossfade: false           # dissolve between frames (costly on a Pi 4; see above)
+  crossfade: false           # dissolve between frames (expensive on a Pi 4)
 ```
 
 ## Black out the screen from an automation
@@ -323,8 +320,8 @@ actions:
 - **Reboot the Pi:** everything starts again automatically, including after a power cut.
 - **Change the Wi-Fi network or password:** use `sudo nmtui` (Edit a connection), then run
   `sudo ~/ThePilotChannel/deploy/harden-wifi.sh` so the backup copy matches. To forget a
-  network for good, delete it in `nmtui` and also remove its `hardened-<uuid>.nmconnection`
-  file from `/usr/lib/NetworkManager/system-connections`.
+  network, delete it in `nmtui` and remove its `hardened-<uuid>.nmconnection` file from
+  `/usr/lib/NetworkManager/system-connections`.
 - **Logs:** the app's log is `docker compose logs -f` (capped so it cannot fill the SD
   card); the kiosk browser's log is `/dev/shm/hangar-kiosk/hangar-kiosk.log`.
 - **Undo a bad config change:** copy `data/config.yaml.bak.1` over `data/config.yaml` and
@@ -336,12 +333,11 @@ actions:
 
 - **The Pi does not come back on Wi-Fi after a power cut.** Plug in a network cable
   (Ethernet needs no saved settings) or a keyboard, then run
-  `sudo ~/ThePilotChannel/deploy/harden-wifi.sh`. When no Wi-Fi profile is left it
-  recreates one from the details you entered in Imager (kept in
-  `/boot/firmware/network-config`) and clears out the emptied files in `/etc/netplan`.
-  This is a [known Raspberry Pi OS problem](https://github.com/raspberrypi/trixie-feedback/issues/99)
-  that the bootstrap prevents; `~/ThePilotChannel/deploy/harden-wifi.sh --check` shows
-  whether a Pi is protected.
+  `sudo ~/ThePilotChannel/deploy/harden-wifi.sh`. It recreates the Wi-Fi profile from the
+  details you entered in Imager (kept in `/boot/firmware/network-config`) and removes the
+  emptied files in `/etc/netplan`. `deploy/harden-wifi.sh --check` shows whether a Pi is
+  protected; the cause is a
+  [Raspberry Pi OS issue](https://github.com/raspberrypi/trixie-feedback/issues/99).
 - **The TV stays black or shows only the holding screen.** The app is not up yet or failed
   to start: run `docker compose ps` and `docker compose logs --tail=50` on the Pi. If the
   kiosk never appears at all, check `/dev/shm/hangar-kiosk/hangar-kiosk.log`, confirm
@@ -357,10 +353,9 @@ actions:
   admin page. For a local receiver, the URL must be its LAN address, not `localhost`.
 - **No weather or wind barbs.** Check that the Pi can reach `aviationweather.gov` and that
   the identifier is right; some small fields have no weather station. The display keeps the
-  last weather it fetched (also across restarts) and turns the footer dot amber when it is
-  getting old and red when refreshes are failing; a red dot with everything else working
-  usually means your router's DNS is failing for internet names, which is common on home
-  routers. `docker compose logs` shows the exact error.
+  last weather it fetched, also across restarts, and turns the footer dot amber when it is
+  getting old and red when refreshes are failing. `docker compose logs` shows the error;
+  a name-resolution error means the router's DNS is not answering.
 - **Map tiles do not load.** The Pi cannot reach OpenStreetMap. Check connectivity; tiles
   already in `data/tiles` keep working meanwhile. Or point `tile_url` at your own tile
   server.

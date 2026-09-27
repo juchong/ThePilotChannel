@@ -30,8 +30,7 @@ services:
     read_only: true
     tmpfs:
       - /tmp
-    # Cap the container log on disk. Without this the json-file log grew to
-    # 1.6 GB in nine days on the kiosk's SD card.
+    # Cap the container log on disk (the OS runs from an SD card).
     logging:
       driver: json-file
       options:

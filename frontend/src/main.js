@@ -248,8 +248,7 @@ function switchView(idx) {
 // Toggle the stage between "map" (map + side panel) and "sat" (fullscreen
 // satellite loop). The satellite view is an overlay: the map container keeps
 // its size underneath. Hiding the map with display:none shrinks it to 0x0 and
-// MapLibre then trims its tile cache to a handful of tiles, so every later
-// view would refetch its basemap and render blurry first.
+// MapLibre then trims its tile cache to a handful of tiles.
 function showStage(mode) {
   el("stage").classList.toggle("stage-sat", mode === "sat");
   el("sat").classList.toggle("active", mode === "sat");

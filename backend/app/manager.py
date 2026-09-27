@@ -105,9 +105,8 @@ class DataManager:
 
     # ---- lifecycle -------------------------------------------------------
     async def start(self):
-        # Loop-bound primitives are created here, on the running loop, so the
-        # manager can be started more than once (each test client starts a new
-        # event loop; in production this happens once).
+        # Loop-bound primitives are created on the running loop so start()
+        # works on any event loop, not only the one active at import.
         self._weather_wake = asyncio.Event()
         self._agg_lock = asyncio.Lock()
         self._loops = [
@@ -183,9 +182,8 @@ class DataManager:
             self._agg_last = time.monotonic()
         return await self._aggregator_source(ds).fetch(lat, lon, nm)
 
-    # Circuit breaker for the local receiver. Failures are logged once per state
-    # change (not once per second) and the local source is skipped for
-    # LOCAL_RETRY_S before being tried again.
+    # Circuit breaker for the local receiver: a failure is logged once per
+    # state change and the receiver is skipped for LOCAL_RETRY_S.
     def _local_available(self) -> bool:
         if self._local_state != "down":
             return True

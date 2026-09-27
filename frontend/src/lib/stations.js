@@ -1,9 +1,7 @@
-// What the regional view shows after a station-set response.
-//
-// The backend answers station queries from its cache and reports a failing
-// background refresh through `error` and `stale`. When a refresh is failing
-// (a home router's DNS commonly fails for internet names for hours) the map
-// must keep showing the last known stations and only the footer dot changes.
+// What the regional view shows after a station-set response. The backend
+// answers from its cache and reports a failing background refresh through
+// `error` and `stale`; the map keeps the last known stations and only the
+// footer changes.
 
 // The station list to display: the fresh set if it has any stations, else the
 // last set shown, else the (empty) fresh set.

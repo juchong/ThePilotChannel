@@ -1,10 +1,7 @@
-"""Behaviour tests for the properties that matter on a 24/7 kiosk.
-
-Speed: the display's polls never wait on an upstream fetch and a watched view's
-snapshot stays fresher than the poll period. Reliability: outages are survived,
-backed off, and logged once, not once per second; caches and warm-up stay
-bounded. Quality: flight categories, winds, and visibilities decode correctly.
-Each test is named for the failure it prevents.
+"""Behaviour tests. Speed: polls never wait on an upstream fetch and a watched
+view's snapshot stays fresher than the poll period. Reliability: outages are
+backed off and logged once; caches and warm-up stay bounded. Quality: flight
+categories, winds, and visibilities decode correctly.
 """
 import asyncio
 import logging
@@ -116,9 +113,8 @@ def test_basemap_tile_cache_hit_is_fast(client, monkeypatch):
 # ---- reliability --------------------------------------------------------------------------
 
 def test_local_receiver_outage_backs_off_and_logs_once(client, monkeypatch, caplog):
-    """In auto mode a dead receiver used to be retried, and logged, on every
-    refresh: a warning per second filled the SD card. It must fall back to the
-    aggregator, retry the receiver only after LOCAL_RETRY_S, and log one line."""
+    """In auto mode a dead receiver falls back to the aggregator, is retried
+    only after LOCAL_RETRY_S, and is logged once."""
     from app.sources.aggregator import AggregatorSource
     from app.sources.local import LocalReadsbSource
 
@@ -140,10 +136,8 @@ def test_local_receiver_outage_backs_off_and_logs_once(client, monkeypatch, capl
     cfg["data_source"] = {"mode": "auto", "local_url": "http://192.0.2.10/tar1090/data/aircraft.json"}
     caplog.set_level(logging.INFO, logger="hangar")
     assert put(client, cfg).status_code == 200
-    # Only now use the real source selection. The background loop keeps refreshing
-    # the view the previous test polled; a refresh that started before the config
-    # change would try the receiver once under the old config (and log), and the
-    # config change then resets the breaker so it is tried, and logged, again.
+    # Real source selection only after the config is in place: the traffic loop
+    # may already be refreshing this view, and a config change resets the breaker.
     monkeypatch.delattr(m, "_fetch_traffic")
     deadline = time.time() + 3.0
     while time.time() < deadline:
@@ -164,8 +158,8 @@ def test_repeated_upstream_failures_log_once_per_state_change(client, monkeypatc
         raise RuntimeError("receiver down")
 
     caplog.set_level(logging.INFO, logger="hangar")
-    assert put(client, base_cfg()).status_code == 200  # resets the view's health, then...
-    monkeypatch.setattr(m, "_fetch_traffic", broken)  # ...the failures start (see the test above)
+    assert put(client, base_cfg()).status_code == 200  # resets the view's health
+    monkeypatch.setattr(m, "_fetch_traffic", broken)  # then the failures start
     deadline = time.time() + 2.5
     while time.time() < deadline:
         r = poll(client)

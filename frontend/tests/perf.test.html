@@ -3,9 +3,8 @@ import { check, done } from "./harness.js";
 import { AircraftStore } from "../src/lib/aircraft.js";
 import { classify, iconSvg } from "../src/lib/shapes.js";
 import { windBarbSVG } from "../src/lib/windbarb.js";
-// Per-frame and per-poll work must stay cheap: the kiosk is a Pi 4 driving a
-// 4K panel and the motion loop runs 20 times a second. Bounds are loose (this
-// runs on developer machines and on the Pi) but catch order-of-magnitude regressions.
+// Per-frame and per-poll work must stay cheap: the motion loop runs 20 times a
+// second. Bounds are loose but catch order-of-magnitude regressions.
 const N = 300, FRAMES = 100;
 const t0 = Date.now();
 const list = Array.from({ length: N }, (_, i) => ({ hex: "h" + i, lat: 47 + i * 0.001, lon: -122 - i * 0.001, gs: 100 + i, track: (i * 7) % 360, fix_ts: t0 / 1000, alt_ft: 1000 + i, type: i % 3 ? "B738" : "C172", type_desc: i % 3 ? "L2J" : "L1P", wtc: i % 3 ? "M" : "L", category: "A3" }));

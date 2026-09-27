@@ -1,31 +1,29 @@
 # AGENTS.md
 
-Orientation for AI agents and contributors working on this code. It describes how the
-repository is organized, the invariants that must hold, and how to build, test, and
-verify. It is not a changelog: `git log` holds the history. README.md is written for
-people deploying the display in their hangar, not for working on the code.
+Orientation for agents and contributors working on this code: how the repository is
+organized, the invariants that must hold, and how to build, test, and verify. It is not a
+changelog; `git log` holds the history. README.md is for people deploying the display.
 
 ## What this is
 
 A wall-mounted hangar display: a Raspberry Pi 4 drives an HDMI TV through Chromium in
 kiosk mode and cycles through live ADS-B traffic, METAR weather with wind barbs, a NEXRAD
-radar loop, and a NOAA GOES satellite loop. It runs 24/7 from an SD card with no one
-watching it, so robustness and low resource use matter more than features.
+radar loop, and a NOAA GOES satellite loop. It runs unattended from an SD card, so
+robustness and low resource use come before features.
 
 ## Architecture
 
 - `backend/` FastAPI on Python 3.13 with pydantic v2 and httpx. One process serves the
   REST API, a server-sent event (SSE) stream, and the built frontend as static files on
   port 8000. It runs in Docker via `docker compose` (rootless Docker on the reference Pi).
-- `frontend/` plain JavaScript ES modules built with Vite. No framework. `src/main.js` is
+- `frontend/` plain JavaScript ES modules built with Vite, no framework. `src/main.js` is
   the display, `src/admin.js` the configuration page, `src/lib/*` shared modules. The
   Docker build compiles it into the image at `/app/static`.
-- `deploy/` the native kiosk layer. `bootstrap.sh` provisions a fresh Pi (packages, rootless
-  Docker, GPU overlay, seatd, tty1 autologin, Wi-Fi power saving, `.env`, first build) and
-  is the reference for what the OS must look like; `kiosk-launch.sh` is exec'd from the
-  tty1 autologin shell and starts cage (Wayland compositor) plus Chromium.
-  `harden-wifi.sh`, run by the bootstrap, keeps the Wi-Fi profiles safe from power cuts.
-  The kiosk is not in Docker because it needs the GPU and HDMI output directly.
+- `deploy/` the native kiosk layer. `bootstrap.sh` provisions a fresh Pi and is the
+  reference for what the OS must look like; `kiosk-launch.sh` is exec'd from the tty1
+  autologin shell and starts cage (Wayland compositor) plus Chromium; `harden-wifi.sh`,
+  run by the bootstrap, keeps Wi-Fi in NetworkManager keyfiles. The kiosk is not in Docker
+  because it needs the GPU and HDMI output directly.
 - `data/config.yaml` is the single source of truth for configuration, validated by the
   pydantic model in `backend/app/config.py`. It is bind-mounted as a directory
   (`./data:/data`) so atomic renames and backup rotation work.
@@ -34,7 +32,7 @@ watching it, so robustness and low resource use matter more than features.
   and the display reloads.
 - Traffic flow: the display polls `/api/traffic?view=<id>` once a second. The backend
   answers from a per-view snapshot that a background loop keeps fresh at 1 s for every
-  recently polled view; the request itself never waits on an upstream fetch.
+  recently polled view; the request never waits on an upstream fetch.
 
 ## Repository map
 
@@ -61,9 +59,10 @@ frontend/src/
   lib/adminForm.js  admin field schema, rendering, typed collection, error mapping
   lib/dom.js        esc(), el(), sleep()
   lib/map.js        MapLibre wrapper: markers, barbs, radar layers, view framing
-  lib/aircraft.js   aircraft store, drop timeout, importance sort
+  lib/aircraft.js   aircraft store, dead reckoning, drop timeout, importance sort
   lib/shapes.js     icon assignment (tar1090 methodology) and rendering
   lib/vendor/tar1090/markers.js, LICENSE   vendored tar1090 shapes and tables (GPL-2.0)
+  lib/stations.js   which station set the regional view shows, footer state
   lib/windbarb.js   wind barb SVG
   lib/geo.js        client geo helpers
 deploy/bootstrap.sh   idempotent OS provisioning for a fresh Pi (also --check / --dry-run)
@@ -73,40 +72,34 @@ deploy/kiosk-launch.sh, getty-autologin.conf
 Dockerfile, docker-compose.yml, data/config.yaml
 ```
 
-## Invariants: do not regress these
+## Invariants
 
 ### Rendering
 
-- Aircraft are HTML `maplibregl.Marker`s, not a GeoJSON symbol layer. Rapid `setData` on a
-  GeoJSON source wedges it. Motion is client-side dead reckoning: `AircraftStore` keeps each
-  aircraft's last fix (position, ground speed, track, and the fix time taken relative to
+- Aircraft are HTML `maplibregl.Marker`s, not a GeoJSON symbol layer (rapid `setData` on a
+  GeoJSON source wedges it). Motion is client-side dead reckoning: `AircraftStore` keeps
+  each aircraft's last fix (position, ground speed, track, and the fix time relative to
   the snapshot, so clock skew does not matter) and `moveAircraft()` positions markers at
-  20 fps from `displayPosition()`, which blends a new fix in over about half a second
-  instead of jumping, except that a correction over half a mile snaps (that is a
-  re-acquisition, and gliding it would draw flight that never happened). Do not reintroduce a CSS transition keyed to poll timing: receivers
-  produce a new position per aircraft only about once a second with jitter, so a
-  poll-driven tween stalls and jumps.
+  20 fps from `displayPosition()`, which blends a new fix in over about half a second and
+  snaps when the correction exceeds half a mile. Do not key a CSS transition to poll
+  timing: receivers report a position per aircraft about once a second, with jitter.
 - Radar frames are MapLibre raster layers built once per page session and animated by
-  toggling `visibility` and `raster-opacity`. The cross-fade (`radar.crossfade`, default off)
-  sets a `raster-opacity-transition`, which makes MapLibre re-render the whole map for most
-  of every step; on a Pi 4 at 4K that held the entire regional view at 12 to 16 fps, so it
-  is opt-in. Never add and remove raster sources per view: removed textures are not
-  reclaimed on the Pi and GPU memory grows.
-  Their tile URLs carry a 5-minute bucket (`?v=`) and `refreshRadar()` re-points them
-  with `setTiles` when the regional view starts; without that the retained tile cache
-  would show the same radar frames for the life of the page.
-- The map container is never hidden with `display: none`. The satellite view is an
-  overlay (`#sat` absolute over the stage, map and side panel `visibility: hidden`).
-  A 0x0 map makes MapLibre shrink its per-source tile cache to a few tiles and evict
-  everything, so every later view refetches its basemap and renders blurry first.
+  toggling `visibility` and `raster-opacity`. Never add and remove raster sources per
+  view: the Pi does not reclaim removed raster textures. The cross-fade
+  (`radar.crossfade`, default off) sets a `raster-opacity-transition`, which re-renders
+  the whole map for the duration of every fade. Tile URLs carry a 5-minute bucket (`?v=`)
+  and `refreshRadar()` re-points them with `setTiles` when the regional view starts.
+- The style declares `transition: {duration: 0}` and `_initLayers` zeroes it for vector
+  styles. MapLibre's default global transition applies to every style change, including
+  the style's light, and re-renders the whole map for its duration on each radar step.
+- The map container is never hidden with `display: none`; the satellite view is an overlay
+  (`#sat` over the stage, map and side panel `visibility: hidden`). A 0x0 map shrinks
+  MapLibre's tile cache to a few tiles.
 - The satellite loop is parallel `<img>` preloading followed by `src` swapping. Do not
-  pre-decode frames into ImageBitmaps or draw them on a canvas: 24 frames at 1200x1200 is
-  138 MB of GPU memory, the Pi's CMA pool is 512 MB and is shared with map tile textures,
-  and the view goes black. Frames are about 750 KB each, so never load them one at a time
-  either.
-- Two color systems that never mix: aircraft are colored by altitude band; wind barbs and
-  METAR text are colored by flight category (VFR green, MVFR blue, IFR red, LIFR magenta,
-  white when unknown).
+  pre-decode frames into ImageBitmaps or draw them on a canvas (the frames exceed the Pi's
+  GPU memory, a CMA pool shared with map textures), and do not load them one at a time.
+- Two color systems that never mix: aircraft by altitude band; wind barbs and METAR text
+  by flight category (VFR green, MVFR blue, IFR red, LIFR magenta, white when unknown).
 - Aircraft icons follow tar1090: `lib/shapes.js` calls the vendored `getBaseMarker()` in
   `lib/vendor/tar1090/markers.js` (tar1090's shapes and tables, GPL-2.0, license in that
   directory; regenerate from upstream rather than editing), which picks a shape by exact
@@ -118,15 +111,14 @@ Dockerfile, docker-compose.yml, data/config.yaml
 - Negative reported altitude means invalid; drop the aircraft. Local views include ground
   traffic. The regional view is weather only and asks `/api/weather/bbox` for every station
   inside the map's visible bounds.
-- A local view's traffic is fetched for `fetch_radius_nm` (twice the framing radius, which
-  covers the whole visible 16:9 rectangle); the store trims to the map's visible bounds and
-  drops an unreported aircraft as soon as its reckoned position is off screen. Fetching
-  only the framing circle made aircraft freeze at the ring and vanish mid-screen.
-- The basemap holds every configured view's tiles in MapLibre's memory cache
-  (`maxTileCacheZoomLevels: 12`, `maxTileCacheSize: 480`) and the `osm` layer has
-  `raster-fade-duration: 0`. With the default five-level cache, less frequent views were
-  evicted and reloaded (and faded in) on every switch. Measure with the DevTools
-  `Network` domain: a settled cycle should show zero `/tiles/` responses per switch.
+- A local view's traffic is fetched for `fetch_radius_nm` (`FETCH_RADIUS_FACTOR` times the
+  framing radius, covering the corners of the 16:9 map). The store trims to the map's
+  visible bounds and drops an unreported aircraft as soon as its reckoned position is off
+  screen.
+- The basemap keeps every configured view's tiles in MapLibre's memory cache
+  (`maxTileCacheZoomLevels: 12`, `maxTileCacheSize: 480`, `refreshExpiredTiles: false`)
+  and the `osm` layer has `raster-fade-duration: 0`. A settled cycle shows no `/tiles/`
+  responses on a view switch (DevTools `Network` domain).
 - The UI is designed at 1920 wide. `@media (min-width: 2560px)` in `styles.css` and the
   `UI` factor in `map.js` scale it for 4K panels. The kiosk runs at the panel's native
   resolution; never use Chromium `--force-device-scale-factor` (cage renders into a quarter
@@ -138,43 +130,38 @@ Dockerfile, docker-compose.yml, data/config.yaml
   `tiles.py`, directory `HANGAR_TILE_CACHE`, default `/data/tiles`), fetched from
   OpenStreetMap once per tile with an identifying User-Agent and a 14-day TTL. The cache is
   warmed at startup and after a config change with the tiles every configured view can
-  show (both layouts, ideal zoom plus parent), capped so a bad config cannot bulk download.
-  Keep OSM usage light and attributed: the footer credits OpenStreetMap, and warm-up must
-  stay paced (two concurrent fetches). A custom `display.tile_url` bypasses the proxy.
+  show (both layouts, ideal zoom plus parent), capped per view and in total so a bad
+  config cannot bulk download. Warm-up runs two fetches at a time. The footer credits
+  OpenStreetMap. A custom `display.tile_url` bypasses the proxy.
 - Never set a `Referrer-Policy` header or otherwise strip the Referer on pages that talk
   to OpenStreetMap directly (a custom raster `tile_url` may): their tile servers serve an
   "Access blocked" tile to requests without one.
 - `/api/traffic` polls of an active view never wait on an upstream fetch; freshness comes
   from the background loop in `manager.py`, not from client polls (refreshing only when a
-  client polls aliases with the 1 Hz poll and halves the effective rate). The one
-  exception is the first poll of a view that just became active: it waits up to 1.5 s for
-  the refresh it kicked off, and if that is not enough it answers `pending` instead of the
-  leftover snapshot from the previous visit. Handing out a minutes-old leftover placed every
-  aircraft far behind its real position and the display then glided them into place.
+  client polls aliases with the 1 Hz poll). The first poll of a view that just became
+  active waits up to `FIRST_POLL_WAIT_S` for the refresh it started and otherwise answers
+  `pending` rather than the leftover snapshot from the previous visit.
 - All aggregator calls, including test endpoints, go through the shared rate limiter
   (`_rate_limited_aggregator_fetch`, 1 request per second).
-- The local receiver has a circuit breaker: log a failure once per state change and skip
-  the receiver for 60 s. Never log per poll; per-second log lines fill the SD card. Uvicorn
-  access logs are off and the httpx logger is at WARNING for the same reason.
+- The local receiver has a circuit breaker: a failure is logged once per state change and
+  the receiver is skipped for `LOCAL_RETRY_S`. Never log per poll. Uvicorn access logs are
+  off and the httpx logger is at WARNING.
 - Inside the container `localhost` is the container. Under rootless Docker
   `host.docker.internal` does not reach the host either; a receiver on the Pi is addressed
   by its LAN IP.
 - IEM serves NEXRAD time-lagged layers only up to `-m55m`; `config.py` enforces
-  `(frames - 1) * interval_min <= 55`. Radar sources are capped at `maxzoom: 9` (the data is
-  about 1 km); without the cap a refreshed loop fetched a few hundred tiles at the start of
-  each regional view on a 4K panel and the view stuttered.
-- Weather never blocks the display. `lib/stations.js` decides what the regional view shows
-  (the last non-empty station set survives a failing refresh; only the footer changes) and
-  is tested headlessly. Station-set queries (`/api/weather/bbox`, `/area`) are
-  stale-while-revalidate in `manager.py`: a cached set is returned at once with `age_s`,
-  `stale`, and the last `error`, and refreshed in the background; only a never-fetched set
-  waits, bounded. The METAR loop retries a failed refresh after 60 s, `weather.py` retries
-  transient errors (DNS `EAI_AGAIN`, connect and read timeouts) once, and the last good
-  weather is persisted to `weather-cache.json` next to the config so a restart during an
-  outage still has data. The display keeps the last station set on screen and only changes
-  the footer dot when a refresh fails. Home routers' DNS does fail for hours at a time;
-  public fallback resolvers are not an option here because the LAN receiver's name is only
-  known to the router.
+  `(frames - 1) * interval_min <= 55`. Radar sources are capped at `maxzoom: 9`: the data
+  is about 1 km, and closer views overzoom z9 tiles instead of fetching finer ones per
+  frame.
+- Weather never blocks the display. `/api/weather/bbox` and `/area` are
+  stale-while-revalidate (`manager.py`): a cached set is returned at once with `age_s`,
+  `stale`, and the last `error` and refreshed in the background; only a never-fetched set
+  waits, bounded by `WEATHER_COLD_WAIT_S`. The METAR loop retries a failed refresh after
+  `WEATHER_RETRY_S`; `weather.py` retries transient errors (DNS `EAI_AGAIN`, connect and
+  read timeouts) once; the last good weather is persisted to `weather-cache.json` next to
+  the config and restored at start. `lib/stations.js` keeps the last non-empty station set
+  through a failing refresh and changes only the footer. Do not add public fallback
+  resolvers: the LAN receiver's name is known only to the router.
 - Satellite frame URLs come from parsing the NOAA STAR CDN directory listing
   (`satellite.py`), cached for 240 s per parameter set. Query parameters are validated
   before they reach a URL.
@@ -186,8 +173,7 @@ Dockerfile, docker-compose.yml, data/config.yaml
 - The admin page renders from the field schema in `lib/adminForm.js`: typed inputs carry
   `data-f` (config path) and `data-t` (type), values are parsed by declared type, and all
   add/delete/move buttons are handled by one delegated click listener on the root. Do not
-  add per-render `addEventListener` calls (double-bound handlers) and do not decide a
-  field's type by whether its text looks numeric.
+  add per-render `addEventListener` calls and do not infer a field's type from its text.
 - Config loading never raises at import time. `load_config()` falls back to the newest
   readable `.bak.N`, then to defaults, and reports the problem through `/healthz` and the
   admin banner. Saves are atomic with fsync and rotate three backups.
@@ -197,19 +183,18 @@ Dockerfile, docker-compose.yml, data/config.yaml
 - `HANGAR_ADMIN_PASSWORD` gates `/admin`, `PUT /api/config`, `POST /api/test-source`, and
   `POST /api/display/*` with HTTP Basic auth. Read endpoints the display uses stay open.
   `admin.html` is only reachable through `/admin` (`AppStatic` blocks the direct path).
-- The display never calls `location.reload()` while the backend is unreachable, because
-  Chromium's error page has no script to recover; use `safeReload()`. Boot retries with
-  backoff, `nextView()` always schedules the next view even if a view throws, an invalid
-  timezone falls back to UTC, and a watchdog reloads only when the backend answers.
+- The display never calls `location.reload()` while the backend is unreachable (Chromium's
+  error page has no script to recover); use `safeReload()`. Boot retries with backoff,
+  `nextView()` always schedules the next view even if a view throws, an invalid timezone
+  falls back to UTC, and a watchdog reloads only when the backend answers.
 - SSE `connected` carries `boot_id`, config `version`, and the current `display` state. The
   display reloads on a changed boot id or version and applies blackout state from the
   event. Subscribe to events before map setup so this works even while tiles load.
-- HTML responses are `Cache-Control: no-cache` and hashed `/assets/` are immutable
+- HTML responses are `Cache-Control: no-cache`, hashed `/assets/` are immutable
   (`SecurityHeaders` in `main.py`), and the kiosk holding page navigates to the display
-  with a unique `?launch=` query. Without both, Chromium's cache on the RAM disk serves a
-  heuristically "fresh" old `index.html` for days (its `Last-Modified` is the build time)
-  and the kiosk keeps running an old bundle after a rebuild. When checking a deploy, compare
-  `document.scripts` in the live page with the script the server serves at `/`.
+  with a unique `?launch=` query, so a rebuilt bundle replaces Chromium's cached page. When
+  checking a deploy, compare `document.scripts` in the live page with the script the
+  server serves at `/`.
 - The remote blackout (`POST /api/display/blackout` and `/restore`) is a full-screen cover
   (`#blackout`), not a stop: the cycle and polling keep running underneath so restore is
   instant. A timed blackout auto-restores server-side and the display arms its own
@@ -226,8 +211,8 @@ Dockerfile, docker-compose.yml, data/config.yaml
   compatible and keep its own copyright and license notices next to it, as
   `lib/vendor/tar1090/` does.
 - Brand name is "The Pilot Channel". Avoid em dashes in prose.
-- Commit only when asked. Do not put history, attribution, or change notes into source
-  files or this document.
+- Commit only when asked. Do not put history, measurements, attribution, or change notes
+  into source files or this document; commit messages carry them.
 
 ## Build, test, verify
 
@@ -249,28 +234,25 @@ Dockerfile, docker-compose.yml, data/config.yaml
   ```
 
   `tests/support.py` prepares the environment (throwaway config, stub static dir, temp tile
-  cache, admin password) before `app.main` is imported, `tests/conftest.py` provides the
-  `client` fixture with every upstream stubbed, `test_api.py` covers the API surface, and
-  `test_behaviour.py` covers the properties that matter on the kiosk: polls never wait on
-  upstream, a watched view stays fresher than the poll period, outages back off and log
-  once, warm-up is bounded and identified, HTML revalidates, flight categories and winds
-  decode correctly. Each test is named for the failure it prevents; when a production
-  failure is fixed, add its test there. The SSE endpoint is an endless stream and hangs
+  cache, admin password) before `app.main` is imported; `tests/conftest.py` provides the
+  `client` fixture with every upstream stubbed, including tile warm-up. `test_api.py`
+  covers the API surface; `test_behaviour.py` covers speed, reliability, and decoding
+  properties. Name each test for the failure it prevents. The manager is a module
+  singleton whose loops keep refreshing views polled by earlier tests, so apply config
+  before installing a failing stub. The SSE endpoint is an endless stream and hangs
   Starlette's TestClient; exercise it with `curl -N`.
-- Frontend module tests live in `frontend/tests/*.test.html` and run headlessly with
-  `frontend/tests/run.sh` (needs a chromium binary, no npm packages): dead reckoning and
-  screen bounds (`store`), tar1090 icon assignment and the GA tier (`shapes`), keeping
-  stations through an outage (`stations`), wind barb notation (`windbarb`), the admin
-  form's delegated actions and typed collection (`adminform`), and per-frame cost bounds
-  (`perf`). `harness.js` prints PASS/FAIL lines the runner parses. Run it after any change
-  under `frontend/src/lib`.
+- Frontend module tests: `frontend/tests/*.test.html` run headlessly with
+  `frontend/tests/run.sh` (needs a chromium binary, no npm packages) and cover the aircraft
+  store, icon assignment, station selection, wind barbs, the admin form, and per-frame
+  cost bounds. `harness.js` prints the PASS/FAIL lines the runner parses. Run it after any
+  change under `frontend/src/lib`.
 - Try a build beside production: `docker build -t hangar-display:test .` then
   `docker run -d -p 8001:8000 -v "$PWD/data:/data" hangar-display:test`.
 - Frontend checks: `node --check` on each module. Headless Chromium
   (`chromium --headless=new --disable-gpu --dump-dom URL`) works for the admin page and for
   module tests loaded with `--allow-file-access-from-files`. Headless Chromium has no WebGL,
-  so the display's map never finishes loading there; the display page holds its event
-  stream open, so `--dump-dom` will not return either. Drive it over the DevTools protocol
+  so the display's map never finishes loading there, and the display page holds its event
+  stream open, so `--dump-dom` does not return. Drive it over the DevTools protocol
   (`--remote-debugging-port`) when you need page state.
 - Verify the display on the real kiosk: screenshots with
   `WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/run/user/1000 grim -t jpeg -q 88 -s 0.47 out.jpg`
@@ -278,13 +260,11 @@ Dockerfile, docker-compose.yml, data/config.yaml
   `/proc/meminfo`. Debian's grim writes only png/ppm; the bootstrap installs
   `deploy/grim-web-wrapper.sh` as `/usr/local/bin/grim`, which adds jpeg, webp, avif, gif,
   tiff, bmp, and heic through ImageMagick, either with `-t webp` or inferred from the file
-  name (`grim shot.jpg`, `grim shot.webp`); png/ppm and unknown options pass through to the
-  real grim unchanged. `sudo rm /usr/local/bin/grim` reverts. The kiosk Chromium exposes
-  the DevTools protocol on `127.0.0.1:9222` (localhost only), so page state can be read or
-  sampled live: `curl -s 127.0.0.1:9222/json` lists the page target. Any performance change must
-  be measured there before it is called an improvement. The regional radar view is the
-  heaviest view by design (renderer 30 to 60 percent of a core, GPU about 20 percent); local
-  views sit near 10 percent.
+  name; png/ppm and unknown options pass through to the real grim unchanged.
+  `sudo rm /usr/local/bin/grim` reverts. The kiosk Chromium exposes the DevTools protocol
+  on `127.0.0.1:9222` (localhost only): `curl -s 127.0.0.1:9222/json` lists the page target,
+  and `window.__tpcMap` is the MapLibre instance. Measure any performance change there
+  before calling it an improvement; the regional radar view is the heaviest view.
 - Dev servers: backend `uvicorn app.main:app --reload --port 8000` with `HANGAR_CONFIG` and
   `HANGAR_STATIC` set; frontend `npm run dev` proxies `/api` to port 8000 and serves the
   admin page at `/admin.html`.
@@ -297,8 +277,8 @@ Dockerfile, docker-compose.yml, data/config.yaml
 88) once each view is fully rendered: the KSEA local view a few seconds in, the regional view
 with the radar loop and barbs loaded, and the satellite view once its loop is animating.
 `docs/admin.png` is headless Chromium against the running backend at 1120 px wide. Time the
-captures to a view start through the DevTools port rather than by hand, and check that the
-frame shows real data (aircraft listed, stations listed, frames loaded) before keeping it.
+captures to a view start through the DevTools port, and check that the frame shows real
+data (aircraft listed, stations listed, frames loaded) before keeping it.
 
 ## Runtime environment
 
@@ -320,19 +300,14 @@ frame shows real data (aircraft listed, stations listed, frames loaded) before k
   probes `/healthz` and navigates to the display when the backend is up. The Chromium flags
   in `kiosk-launch.sh` disable background services (sync, component updates, push
   connections) that a kiosk never needs.
-- Network: profiles are native NetworkManager keyfiles, never netplan. Raspberry Pi's
-  NetworkManager build deletes and rewrites every file in `/etc/netplan` each time it
-  starts, without flushing them, so a power cut early in a boot leaves them empty and the
-  Pi off the network (raspberrypi/trixie-feedback#99). Imager's Wi-Fi arrives through
-  cloud-init as netplan. `deploy/harden-wifi.sh`, run by the bootstrap, copies each
-  netplan-generated profile to `/etc/NetworkManager/system-connections` under the same
-  UUID (the connection stays up), moves the netplan files aside, keeps a read-only copy of
-  every Wi-Fi profile in `/usr/lib/NetworkManager/system-connections`, and disables
-  cloud-init's network config. NetworkManager's unit has `ProtectSystem=yes`, so it cannot
-  write the `/usr/lib` copies, and it serves a profile from there whenever the `/etc` copy
-  is missing. Keep `/etc/netplan` empty: `harden-wifi.sh --check` fails otherwise, and
-  `--test-fallback` shows Wi-Fi connecting from the read-only copies. Ethernet needs no
-  saved profile; without one, NetworkManager creates `Wired connection 1` at every boot.
+- Network: Wi-Fi profiles are NetworkManager keyfiles in
+  `/etc/NetworkManager/system-connections` with read-only copies of the same UUID in
+  `/usr/lib/NetworkManager/system-connections`, never netplan: Raspberry Pi's
+  NetworkManager rewrites `/etc/netplan` at every start without flushing, so a power cut
+  during boot can empty it (raspberrypi/trixie-feedback#99). `deploy/harden-wifi.sh`
+  converts the cloud-init netplan profiles from Imager, disables cloud-init's network
+  config, and verifies with `--check`; `--test-fallback` connects from the read-only
+  copies. Keep `/etc/netplan` empty. Ethernet needs no saved profile.
 
 ## HTTP API
 
@@ -341,7 +316,8 @@ frame shows real data (aircraft listed, stations listed, frames loaded) before k
   `PUT /api/config` validates and writes; optional `If-Match`; 422 with `[{loc, msg}]`.
 - `GET /api/views` ordered view descriptors the display cycles through.
 - `GET /api/traffic?view=<id>` snapshot with `aircraft`, `ts`, `age_s`, `stale`,
-  `healthy`, `error`; 404 for an unknown view.
+  `healthy`, `error`, and `pending` while a newly active view has no fresh data; 404 for
+  an unknown view.
 - `GET /api/weather?ids=<csv>`, `GET /api/weather/bbox?min_lat=&min_lon=&max_lat=&max_lon=`
   (at most 20 by 30 degrees), `GET /api/weather/area?lat=&lon=&radius_nm=`; the last two
   return `{stations, age_s, stale, error}`.

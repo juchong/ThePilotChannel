@@ -25,10 +25,9 @@ def build_views(cfg: Config) -> List[Dict]:
                 "radius_mi": ap.local_radius_mi,
                 "radius_nm": round(miles_to_nm(ap.local_radius_mi), 2),
                 # Traffic is fetched for a circle that covers the whole visible
-                # rectangle including its corners (the map fits the radius to its
+                # rectangle including its corners: the map fits the radius to its
                 # shorter side, so the half-diagonal is about 2.16x the radius on
-                # a 16:9 panel). Aircraft then move off the screen instead of
-                # vanishing at the ring.
+                # a 16:9 panel.
                 "fetch_radius_nm": round(miles_to_nm(ap.local_radius_mi) * FETCH_RADIUS_FACTOR, 2),
                 "dwell_s": cfg.cycle.local_dwell_s,
                 "airports": [ap.icao],

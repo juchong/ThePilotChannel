@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
 # The Pilot Channel: keep the Pi's Wi-Fi settings intact through power cuts.
 #
-# On Raspberry Pi OS based on Debian 13, the Wi-Fi details entered in Raspberry Pi
-# Imager reach NetworkManager through cloud-init as netplan files in /etc/netplan, and
-# Raspberry Pi's NetworkManager build deletes and rewrites those files every time it
-# starts, without flushing them to disk. A power cut in the first half minute of a boot
-# can leave them empty, and the Pi comes back with no Wi-Fi at all
-# (https://github.com/raspberrypi/trixie-feedback/issues/99). Native NetworkManager
-# keyfiles are not rewritten at boot. This script, which deploy/bootstrap.sh runs:
+# On Raspberry Pi OS (Debian 13) the Wi-Fi details from Raspberry Pi Imager reach
+# NetworkManager through cloud-init as netplan files, which Raspberry Pi's NetworkManager
+# rewrites at every start without flushing; a power cut during boot can leave them empty
+# (https://github.com/raspberrypi/trixie-feedback/issues/99). Native keyfiles are not
+# rewritten. This script, run by deploy/bootstrap.sh:
 #
 #   - copies each netplan-generated profile to a keyfile in
 #     /etc/NetworkManager/system-connections under the same UUID, so the connection

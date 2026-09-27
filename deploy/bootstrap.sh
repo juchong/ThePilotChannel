@@ -172,11 +172,9 @@ if [ -f "$WRAPPER_SRC" ] && cmp -s "$WRAPPER_SRC" "$GRIM_WRAPPER"; then ok "grim
 fi
 
 # ---- 3c. Wi-Fi settings that survive power cuts -----------------------------------------
-# Raspberry Pi's NetworkManager rewrites the netplan files holding Imager's Wi-Fi settings
-# every time it starts, without flushing them to disk, so a power cut early in a boot can
-# leave the Pi with no Wi-Fi. deploy/harden-wifi.sh moves Wi-Fi into native keyfiles, keeps
-# read-only copies NetworkManager falls back to, and stops cloud-init from writing network
-# settings. It runs as soon as the clone exists so the rest of the setup is covered.
+# deploy/harden-wifi.sh moves Wi-Fi from netplan (rewritten at every boot) into native
+# NetworkManager keyfiles with read-only fallback copies and stops cloud-init from writing
+# network settings. It runs as soon as the clone exists.
 log "Wi-Fi settings that survive power cuts"
 HARDEN_WIFI="$REPO_DIR/deploy/harden-wifi.sh"
 if [ ! -f "$HARDEN_WIFI" ]; then
