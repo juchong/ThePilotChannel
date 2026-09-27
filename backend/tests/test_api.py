@@ -1,64 +1,15 @@
-"""Backend tests. Run from the backend directory (or the image's /app):
-
-    python -m pytest -q tests
-
-Environment is prepared before the app is imported so the module-level
-DataManager reads a throwaway config path and a stub static dir.
-"""
+"""API tests: configuration validation, auth, secrets, traffic snapshots, views,
+config durability, tiles, blackout, and weather resilience. Environment and the
+`client` fixture come from support.py and conftest.py."""
 import os
-import tempfile
 import time
 
-TMP = tempfile.mkdtemp(prefix="tpc-test-")
-CFG = os.path.join(TMP, "config.yaml")
-STATIC = os.path.join(TMP, "static")
-os.makedirs(STATIC)
-with open(os.path.join(STATIC, "admin.html"), "w") as fh:
-    fh.write("<html>admin</html>")
-with open(os.path.join(STATIC, "index.html"), "w") as fh:
-    fh.write("<html>display</html>")
-os.environ["HANGAR_CONFIG"] = CFG
-os.environ["HANGAR_STATIC"] = STATIC
-os.environ["HANGAR_ADMIN_PASSWORD"] = "hunter2"
-os.environ["HANGAR_TILE_CACHE"] = os.path.join(TMP, "tiles")
+import pytest
+from support import AUTH, CFG, base_cfg, put
 
-import pytest  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-
-from app import main as main_mod  # noqa: E402
-from app.config import SECRET_MASK, Config, load_config, save_config  # noqa: E402
-from app.views import build_views  # noqa: E402
-
-AUTH = ("admin", "hunter2")
-
-
-@pytest.fixture()
-def client(monkeypatch):
-    # never touch the network from tests
-    async def fake_metar(icaos, stale):
-        return {i.upper(): {"icao": i.upper(), "obs_time": time.time(), "wind": {}} for i in icaos}
-
-    async def fake_traffic(lat, lon, nm):
-        return [
-            {"hex": "a1", "lat": lat, "lon": lon, "seen_pos": 1},
-            {"hex": "a2", "lat": lat, "lon": lon, "seen_pos": 999},  # stale position, dropped
-        ]
-
-    monkeypatch.setattr(main_mod.manager.metar, "fetch", fake_metar)
-    monkeypatch.setattr(main_mod.manager, "_fetch_traffic", fake_traffic)
-    with TestClient(main_mod.app) as c:
-        yield c
-
-
-def base_cfg():
-    return {
-        "airports": [{"icao": "ksea", "name": "Seattle", "lat": 47.45, "lon": -122.31, "local_radius_mi": 5, "enabled": True}],
-        "regions": [{"name": "Puget Sound", "center_lat": 47.44, "center_lon": -122.27, "radius_mi": 30, "enabled": True}],
-    }
-
-
-def put(client, body, **kw):
-    return client.put("/api/config", json=body, auth=AUTH, **kw)
+from app import main as main_mod
+from app.config import SECRET_MASK, Config, load_config, save_config
+from app.views import build_views
 
 
 # ---- config validation ---------------------------------------------------------
@@ -458,3 +409,209 @@ def test_normalize_aircraft_fix_time():
     assert feed_now({"now": 1790000000.5}) == 1790000000.5          # readsb: seconds
     assert feed_now({"now": 1790000000500}) == 1790000000.5         # aggregators: milliseconds
     assert feed_now({}) is None
+
+
+# ---- weather resilience ------------------------------------------------------------------
+
+def test_bbox_weather_is_stale_while_revalidate(client, monkeypatch):
+    import asyncio
+
+    calls = []
+
+    async def fake_bbox(min_lat, min_lon, max_lat, max_lon, stale):
+        calls.append(time.time())
+        if len(calls) > 1:
+            await asyncio.sleep(3)  # a slow (or DNS-stalled) upstream on later refreshes
+        return [{"icao": "KSEA", "lat": 47.45, "lon": -122.31, "obs_time": time.time(), "wind": {}}]
+
+    m = main_mod.manager
+    monkeypatch.setattr(m.metar, "fetch_bbox", fake_bbox)
+    box = {"min_lat": 47, "min_lon": -123, "max_lat": 48, "max_lon": -121}
+    r = client.get("/api/weather/bbox", params=box).json()
+    assert [s["icao"] for s in r["stations"]] == ["KSEA"] and r["error"] is None and r["stale"] is False
+    # expire the cached set: the next call must answer immediately from cache and refresh in the background
+    key = next(k for k in m._area_cache if k.startswith("bbox:47.0:"))
+    m._area_cache[key]["ts"] -= 10_000
+    t0 = time.time()
+    r = client.get("/api/weather/bbox", params=box).json()
+    assert time.time() - t0 < 1.0 and [s["icao"] for s in r["stations"]] == ["KSEA"] and r["stale"] is True
+    assert len(calls) == 2  # background refresh started
+
+
+def test_bbox_weather_keeps_last_data_when_upstream_fails(client, monkeypatch):
+    m = main_mod.manager
+
+    async def ok(*a):
+        return [{"icao": "KBFI", "lat": 47.55, "lon": -122.31, "obs_time": time.time(), "wind": {}}]
+
+    async def broken(*a):
+        raise OSError("[Errno -3] Temporary failure in name resolution")
+
+    monkeypatch.setattr(m.metar, "fetch_bbox", ok)
+    box = {"min_lat": 47.4, "min_lon": -122.9, "max_lat": 47.9, "max_lon": -121.9}
+    assert client.get("/api/weather/bbox", params=box).json()["stations"][0]["icao"] == "KBFI"
+    key = next(k for k in m._area_cache if k.startswith("bbox:47.4:"))
+    m._area_cache[key]["ts"] -= 10_000
+    monkeypatch.setattr(m.metar, "fetch_bbox", broken)
+    client.get("/api/weather/bbox", params=box)          # triggers the background refresh, which fails
+    time.sleep(0.5)
+    r = client.get("/api/weather/bbox", params=box).json()
+    assert r["stations"][0]["icao"] == "KBFI" and "name resolution" in (r["error"] or "")
+
+
+def test_metar_source_retries_transient_errors(monkeypatch):
+    import asyncio
+
+    import httpx
+
+    from app import weather as w
+
+    attempts = []
+
+    class FakeClient:
+        async def get(self, url, params=None, timeout=None):
+            attempts.append(params)
+            if len(attempts) == 1:
+                raise httpx.ConnectError("[Errno -3] Temporary failure in name resolution")
+
+            class R:
+                def raise_for_status(self):
+                    pass
+
+                def json(self):
+                    return [{"icaoId": "KSEA", "obsTime": time.time(), "clouds": []}]
+
+            return R()
+
+    monkeypatch.setattr(w, "RETRY_DELAY_S", 0)
+    out = asyncio.run(w.MetarSource(FakeClient()).fetch(["KSEA"], 4500))
+    assert "KSEA" in out and len(attempts) == 2
+
+
+def test_weather_store_round_trip(tmp_path, monkeypatch):
+    import asyncio
+
+    from app import manager as mg
+
+    store = str(tmp_path / "weather-cache.json")
+    monkeypatch.setattr(mg, "WEATHER_STORE", store)
+    data = {
+        "metars": {"KSEA": {"icao": "KSEA", "obs_time": time.time(), "wind": {}}},
+        "metars_ts": time.time(),
+        "areas": {"bbox:1:2:3:4": {"ts": time.time(), "data": [{"icao": "KBFI", "lat": 1, "lon": 2, "wind": {}}]}},
+    }
+    import json
+
+    json.dump(data, open(store, "w"))
+    fresh = mg.DataManager.__new__(mg.DataManager)
+    fresh._weather_cache, fresh._weather_ts, fresh._area_cache = {}, None, {}
+    fresh._load_weather_store()
+    assert "KSEA" in fresh._weather_cache and fresh._area_cache["bbox:1:2:3:4"]["data"][0]["icao"] == "KBFI"
+    assert fresh._area_cache["bbox:1:2:3:4"]["error"] is None
+
+
+def test_radar_crossfade_defaults_off_and_is_configurable(client):
+    cfg = base_cfg()
+    assert put(client, cfg).status_code == 200
+    regional = next(v for v in client.get("/api/views").json()["views"] if v["type"] == "regional")
+    assert regional["radar"]["crossfade"] is False
+    cfg["radar"] = {"crossfade": True}
+    assert put(client, cfg).status_code == 200
+    regional = next(v for v in client.get("/api/views").json()["views"] if v["type"] == "regional")
+    assert regional["radar"]["crossfade"] is True
+
+
+# ---- the DNS-outage failure mode, exercised directly ---------------------------------------
+
+def test_cold_station_query_answers_within_the_bounded_wait_when_dns_hangs(client, monkeypatch):
+    """A resolver that hangs used to stall the regional view's request past the
+    display's 15 s timeout, which then blanked the station list."""
+    import asyncio
+
+    from app import manager as mg
+
+    monkeypatch.setattr(mg, "WEATHER_COLD_WAIT_S", 0.5)
+
+    async def hanging(*a):
+        await asyncio.sleep(4)
+        raise OSError("[Errno -3] Temporary failure in name resolution")
+
+    m = main_mod.manager
+    monkeypatch.setattr(m.metar, "fetch_bbox", hanging)
+    box = {"min_lat": 40, "min_lon": -100, "max_lat": 41, "max_lon": -99}  # never queried before
+    t0 = time.time()
+    r = client.get("/api/weather/bbox", params=box).json()
+    assert time.time() - t0 < 2.0
+    assert r["stations"] == [] and r["error"]
+
+
+def test_metar_source_gives_up_after_second_transient_failure(monkeypatch):
+    import asyncio
+
+    import httpx
+    import pytest
+
+    from app import weather as w
+
+    attempts = []
+
+    class AlwaysTimesOut:
+        async def get(self, url, params=None, timeout=None):
+            attempts.append(1)
+            raise httpx.ReadTimeout("slow")
+
+    monkeypatch.setattr(w, "RETRY_DELAY_S", 0)
+    with pytest.raises(httpx.ReadTimeout):
+        asyncio.run(w.MetarSource(AlwaysTimesOut()).fetch_bbox(47, -123, 48, -121, 4500))
+    assert len(attempts) == 2
+
+
+def test_metar_loop_retries_within_seconds_after_a_dns_failure(client, monkeypatch):
+    """After a failed refresh the loop used to sleep the full refresh interval
+    (five minutes); it must retry soon so the cache recovers with the network."""
+    from app import manager as mg
+
+    monkeypatch.setattr(mg, "WEATHER_RETRY_S", 0.3)
+    m = main_mod.manager
+    calls = []
+
+    async def flaky(icaos, stale):
+        calls.append(time.time())
+        if len(calls) < 3:
+            raise OSError("[Errno -3] Temporary failure in name resolution")
+        return {"KSEA": {"icao": "KSEA", "obs_time": time.time(), "wind": {}}}
+
+    monkeypatch.setattr(m.metar, "fetch", flaky)
+    m._weather_cache = {}
+    assert put(client, base_cfg()).status_code == 200  # a config save wakes the loop
+    deadline = time.time() + 8
+    while time.time() < deadline and "KSEA" not in client.get("/api/weather", params={"ids": "KSEA"}).json()["metars"]:
+        time.sleep(0.1)
+    assert "KSEA" in client.get("/api/weather", params={"ids": "KSEA"}).json()["metars"]
+    assert len(calls) >= 3 and calls[2] - calls[0] < 5
+
+
+def test_weather_store_is_written_by_a_refresh_and_restored_on_start(client):
+    """A restart during an outage used to come up with no weather at all."""
+    import asyncio
+    import json
+
+    from app import manager as mg
+
+    assert put(client, base_cfg()).status_code == 200  # refresh with the fixture's fake METAR source
+    deadline = time.time() + 8
+    while time.time() < deadline:
+        try:
+            if "KSEA" in json.load(open(mg.WEATHER_STORE))["metars"]:
+                break
+        except (OSError, ValueError):
+            pass
+        time.sleep(0.1)
+    stored = json.load(open(mg.WEATHER_STORE))
+    assert "KSEA" in stored["metars"]
+    fresh = mg.DataManager()  # a new process: no network yet, only the store
+    try:
+        assert "KSEA" in fresh._weather_cache
+        assert fresh.get_weather(["KSEA"])["KSEA"]["icao"] == "KSEA"
+    finally:
+        asyncio.run(fresh.client.aclose())

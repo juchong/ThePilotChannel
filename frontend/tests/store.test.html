@@ -1,0 +1,58 @@
+<!doctype html><html><body><pre id="out"></pre><script type="module">
+import { check, approx, done } from "./harness.js";
+import { AircraftStore } from "../src/lib/aircraft.js";
+// Motion: dead reckoning from the last fix, repeated snapshots are harmless,
+// corrections blend (small) or snap (large), and the screen bounds decide what
+// is shown and when an unreported aircraft is dropped.
+const t0 = Date.now();
+const snap = (ageS, t = t0) => ({ ts: t / 1000, age_s: ageS });
+const s = new AircraftStore(15);
+s.update([{ hex: "A", lat: 47, lon: -122, gs: 120, track: 90, fix_ts: t0 / 1000, alt_ft: 3000 }], snap(0), t0);
+const a = s.map.get("A");
+let [lat, lon] = s.displayPosition(a, t0);
+check("at fix time the drawn position is the fix", approx(lat, 47, 1e-9) && approx(lon, -122, 1e-9));
+[lat, lon] = s.displayPosition(a, t0 + 10000);
+const expLon = -122 + (120 / 3600 * 10) / (60 * Math.cos(47 * Math.PI / 180));
+check("10 s later it has moved along track by gs x dt", approx(lon, expLon, 3e-5) && approx(lat, 47, 1e-4), `lon ${lon.toFixed(6)} exp ${expLon.toFixed(6)}`);
+s.update([{ hex: "A", lat: 47, lon: -122, gs: 120, track: 90, fix_ts: t0 / 1000, alt_ft: 3000 }], snap(1.0, t0 + 1000), t0 + 1000);
+[lat, lon] = s.displayPosition(s.map.get("A"), t0 + 12000);
+check("a repeated (stale-poll) fix does not reset motion", lon > expLon);
+// small correction blends: drawn position unchanged at the instant of the new fix, converged ~3 s later
+const before = s.displayPosition(s.map.get("A"), t0 + 12000);
+const newLon = -122 + (120 / 3600 * 12.3) / (60 * Math.cos(47 * Math.PI / 180));
+s.update([{ hex: "A", lat: 47.0002, lon: newLon, gs: 120, track: 90, fix_ts: (t0 + 12000) / 1000, alt_ft: 3000 }], snap(0, t0 + 12000), t0 + 12000);
+const a2 = s.map.get("A");
+const just = s.displayPosition(a2, t0 + 12000);
+check("a small correction does not jump", approx(just[0], before[0], 1e-6) && approx(just[1], before[1], 1e-6));
+const later = s.displayPosition(a2, t0 + 15000), pred = s._predict(a2, t0 + 15000);
+check("and has converged within 1 m after 3 s", approx(later[0], pred[0], 1e-5) && approx(later[1], pred[1], 1.5e-5));
+// large correction snaps
+const farLon = newLon + 3 / (60 * Math.cos(47 * Math.PI / 180));
+s.update([{ hex: "A", lat: 47.0002, lon: farLon, gs: 120, track: 90, fix_ts: (t0 + 13000) / 1000, alt_ft: 3000 }], snap(0, t0 + 13000), t0 + 13000);
+const a3 = s.map.get("A");
+check("a 3 nm correction snaps (no glide across the screen)", approx(s.displayPosition(a3, t0 + 13000)[1], farLon, 1e-6) && a3.offLat === 0 && a3.offLon === 0);
+// ground / stationary / capped extrapolation / seen_pos fallback
+s.update([{ hex: "G", lat: 47.1, lon: -122.1, gs: 0, track: 45, on_ground: true, seen_pos: 0 }], snap(0), t0);
+const g = s.displayPosition(s.map.get("G"), t0 + 60000);
+check("ground aircraft never move", g[0] === 47.1 && g[1] === -122.1);
+check("extrapolation is capped at 30 s", approx(s.displayPosition(a3, t0 + 133000)[1], s.displayPosition(a3, t0 + 43000)[1], 1e-9));
+s.update([{ hex: "S", lat: 47, lon: -122, gs: 60, track: 0, seen_pos: 5 }], { ts: undefined, age_s: 0 }, t0);
+check("seen_pos dates the fix when fix_ts is missing", t0 - s.map.get("S").fixTs >= 4900);
+// bounds
+const b = new AircraftStore(15);
+b.setBounds({ minLat: 47.0, maxLat: 47.2, minLon: -122.4, maxLon: -122.0 });
+b.update([
+  { hex: "IN", lat: 47.1, lon: -122.2, gs: 100, track: 90, fix_ts: t0 / 1000 },
+  { hex: "OUT", lat: 47.5, lon: -122.2, gs: 100, track: 90, fix_ts: t0 / 1000 },
+  { hex: "EDGE", lat: 47.1, lon: -122.005, gs: 240, track: 90, fix_ts: t0 / 1000 },
+], snap(0), t0);
+check("off-screen aircraft are neither listed nor drawn", b.list().length === 2 && b.toGeoJSON().features.length === 2);
+b.update([], snap(0, t0 + 1000), t0 + 1000);
+check("an unreported aircraft off screen is dropped at once", !b.map.has("OUT"));
+check("an unreported aircraft on screen is kept (signal loss)", b.map.has("IN") && b.map.has("EDGE"));
+let edgeGone = null, inGone = null;
+for (let dt = 2000; dt <= 40000; dt += 1000) { b.update([], snap(0, t0 + dt), t0 + dt); if (edgeGone === null && !b.map.has("EDGE")) edgeGone = dt; if (inGone === null && !b.map.has("IN")) inGone = dt; }
+check("an aircraft slides off the edge and is dropped once outside", edgeGone !== null && edgeGone >= 8000 && edgeGone <= 12000, `${edgeGone / 1000}s`);
+check("an on-screen unreported aircraft is dropped only after the drop timeout", inGone !== null && inGone > 15000 && inGone <= 17000, `${inGone / 1000}s`);
+done();
+</script></body></html>

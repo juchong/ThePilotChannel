@@ -1,0 +1,35 @@
+<!doctype html><html><body><pre id="out"></pre><div id="probe"></div><script type="module">
+import { check, done } from "./harness.js";
+import { classify, isGA, iconSvg } from "../src/lib/shapes.js";
+// Icon assignment follows tar1090: designator, then type description + wake
+// category, then emitter category. The GA tier never looks at the callsign.
+const cases = [
+  [{ type: "B738", type_desc: "L2J", wtc: "M", category: "A3", callsign: "N123AB" }, "b738", false],
+  [{ type: "A20N", type_desc: "L2J", wtc: "M", category: "A3" }, "a320", false],
+  [{ type: "C172", type_desc: "L1P", wtc: "L", category: "A1", callsign: "RFS735" }, "cessna", true],
+  [{ type: "SR22", type_desc: "L1P", wtc: "L", category: "A1" }, "cirrus_sr22", true],
+  [{ type: "C25A", type_desc: "L2J", wtc: "L", category: "A2" }, "jet_nonswept", true],
+  [{ type: "GLEX", type_desc: "L2J", wtc: "M", category: "A3" }, "jet_swept", false],
+  [{ type: "DH8D", type_desc: "L2T", wtc: "M", category: "A3" }, "twin_large", false],
+  [{ type: "PC12", type_desc: "L1T", wtc: "L", category: "A1" }, "single_turbo", true],
+  [{ type: "EC35", type_desc: "H2T", wtc: "L", category: "A7" }, "helicopter", true],
+  [{ type: "B763", type_desc: "L2J", wtc: "H", category: "A5" }, "heavy_2e", false],
+  [{ type: "ZZZZ", type_desc: null, wtc: null, category: "A5" }, "heavy_2e", false],
+  [{ type: "XYZ1", type_desc: "L2J", wtc: "M", category: null }, "airliner", false],
+  [{ type: null, type_desc: null, wtc: null, category: null }, "unknown", true],
+  [{ type: "F16", type_desc: "L1J", wtc: "M", category: "A6", db_flags: 1 }, "hi_perf", false],
+  [{ type: "BALL", type_desc: null, wtc: null, category: "B2" }, "balloon", true],
+];
+for (const [rec, shape, ga] of cases) {
+  const icon = classify(rec);
+  check(`${rec.type ?? "(none)"} -> ${shape}${ga ? " (GA)" : ""}`, icon.name === shape && isGA(rec) === ga, `got ${icon.name} ga=${isGA(rec)}`);
+}
+check("balloons are drawn upright", classify({ type: "BALL", category: "B2" }).noRotate === true);
+check("airliners rotate with track", classify({ type: "B738", type_desc: "L2J", wtc: "M" }).noRotate === false);
+const svg = iconSvg(classify({ type: "B738", type_desc: "L2J", wtc: "M" }), "#22c55e", 1.1);
+document.getElementById("probe").innerHTML = svg;
+const el = document.querySelector("#probe svg");
+check("iconSvg renders an svg filled with the altitude color", !!el && svg.includes('fill="#22c55e"'));
+check("an airliner is about 25 x 35 px at display scale 1.1", el && +el.getAttribute("width") > 20 && +el.getAttribute("height") > 30 && +el.getAttribute("height") < 45, `${el?.getAttribute("width")}x${el?.getAttribute("height")}`);
+done();
+</script></body></html>

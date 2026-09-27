@@ -1,0 +1,35 @@
+<!doctype html><html><body><pre id="out"></pre><div id="probe"></div><script type="module">
+import { check, done } from "./harness.js";
+import { AircraftStore } from "../src/lib/aircraft.js";
+import { classify, iconSvg } from "../src/lib/shapes.js";
+import { windBarbSVG } from "../src/lib/windbarb.js";
+// Per-frame and per-poll work must stay cheap: the kiosk is a Pi 4 driving a
+// 4K panel and the motion loop runs 20 times a second. Bounds are loose (this
+// runs on developer machines and on the Pi) but catch order-of-magnitude regressions.
+const N = 300, FRAMES = 100;
+const t0 = Date.now();
+const list = Array.from({ length: N }, (_, i) => ({ hex: "h" + i, lat: 47 + i * 0.001, lon: -122 - i * 0.001, gs: 100 + i, track: (i * 7) % 360, fix_ts: t0 / 1000, alt_ft: 1000 + i, type: i % 3 ? "B738" : "C172", type_desc: i % 3 ? "L2J" : "L1P", wtc: i % 3 ? "M" : "L", category: "A3" }));
+const s = new AircraftStore(15);
+let t = performance.now();
+s.update(list, { ts: t0 / 1000, age_s: 0 }, t0);
+const tUpdate = performance.now() - t;
+t = performance.now();
+for (let f = 1; f <= FRAMES; f++) for (const a of s.map.values()) s.displayPosition(a, t0 + f * 50);
+const tFrames = performance.now() - t;
+check(`store.update of ${N} aircraft < 50 ms`, tUpdate < 50, `${tUpdate.toFixed(1)} ms`);
+check(`${FRAMES} motion frames for ${N} aircraft < 600 ms (< 6 ms per frame)`, tFrames < 600, `${tFrames.toFixed(1)} ms`);
+t = performance.now();
+let html = "";
+for (const a of s.map.values()) html += iconSvg(classify(a), "#22c55e", 1.1);
+const tIcons = performance.now() - t;
+check(`${N} icons classified and rendered < 200 ms`, tIcons < 200, `${tIcons.toFixed(1)} ms`);
+t = performance.now();
+for (let i = 0; i < 500; i++) windBarbSVG({ speedKt: (i % 12) * 5, dirDeg: i % 360, color: "#22c55e", size: 78 });
+const tBarbs = performance.now() - t;
+check("500 wind barbs < 150 ms", tBarbs < 150, `${tBarbs.toFixed(1)} ms`);
+t = performance.now();
+document.getElementById("probe").innerHTML = html;
+const tDom = performance.now() - t;
+check(`inserting ${N} icon svgs into the DOM < 300 ms`, tDom < 300, `${tDom.toFixed(1)} ms`);
+done();
+</script></body></html>

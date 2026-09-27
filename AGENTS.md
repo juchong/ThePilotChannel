@@ -52,7 +52,8 @@ backend/app/
   geo.py           haversine, unit conversion
   sources/         traffic adapters: local.py (tar1090/readsb), aggregator.py; base.py
                    normalizes records and adds type_desc/wtc from data/icao_aircraft_types.json
-backend/tests/test_api.py   pytest suite (TestClient, upstreams monkeypatched)
+backend/tests/    support.py (env), conftest.py (client fixture), test_api.py, test_behaviour.py
+frontend/tests/   headless module tests (*.test.html), harness.js, run.sh
 frontend/src/
   index.html, main.js, styles.css    the display and its cycle
   admin.html, admin.js, admin.css    the configuration page
@@ -247,9 +248,22 @@ Dockerfile, docker-compose.yml, data/config.yaml
     sh -c "pip install -q pytest && python -m pytest -q tests"
   ```
 
-  Tests set `HANGAR_CONFIG` and `HANGAR_STATIC` before importing `app.main` and monkeypatch
-  every upstream fetch. The SSE endpoint is an endless stream and hangs Starlette's
-  TestClient; exercise it with `curl -N`.
+  `tests/support.py` prepares the environment (throwaway config, stub static dir, temp tile
+  cache, admin password) before `app.main` is imported, `tests/conftest.py` provides the
+  `client` fixture with every upstream stubbed, `test_api.py` covers the API surface, and
+  `test_behaviour.py` covers the properties that matter on the kiosk: polls never wait on
+  upstream, a watched view stays fresher than the poll period, outages back off and log
+  once, warm-up is bounded and identified, HTML revalidates, flight categories and winds
+  decode correctly. Each test is named for the failure it prevents; when a production
+  failure is fixed, add its test there. The SSE endpoint is an endless stream and hangs
+  Starlette's TestClient; exercise it with `curl -N`.
+- Frontend module tests live in `frontend/tests/*.test.html` and run headlessly with
+  `frontend/tests/run.sh` (needs a chromium binary, no npm packages): dead reckoning and
+  screen bounds (`store`), tar1090 icon assignment and the GA tier (`shapes`), keeping
+  stations through an outage (`stations`), wind barb notation (`windbarb`), the admin
+  form's delegated actions and typed collection (`adminform`), and per-frame cost bounds
+  (`perf`). `harness.js` prints PASS/FAIL lines the runner parses. Run it after any change
+  under `frontend/src/lib`.
 - Try a build beside production: `docker build -t hangar-display:test .` then
   `docker run -d -p 8001:8000 -v "$PWD/data:/data" hangar-display:test`.
 - Frontend checks: `node --check` on each module. Headless Chromium
