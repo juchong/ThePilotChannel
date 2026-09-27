@@ -185,7 +185,7 @@ async def get_weather_area(
     lon: float = Query(..., ge=-180, le=180),
     radius_nm: float = Query(..., ge=1, le=500),
 ):
-    return {"stations": await manager.get_area_weather(lat, lon, radius_nm)}
+    return await manager.get_area_weather(lat, lon, radius_nm)
 
 
 @app.get("/api/weather/bbox")
@@ -199,7 +199,7 @@ async def get_weather_bbox(
         raise HTTPException(status_code=422, detail="max_lat/max_lon must exceed min_lat/min_lon")
     if (max_lat - min_lat) > 20 or (max_lon - min_lon) > 30:
         raise HTTPException(status_code=422, detail="bounding box too large (max 20 x 30 degrees)")
-    return {"stations": await manager.get_bbox_weather(min_lat, min_lon, max_lat, max_lon)}
+    return await manager.get_bbox_weather(min_lat, min_lon, max_lat, max_lon)
 
 
 @app.get("/api/satellite")

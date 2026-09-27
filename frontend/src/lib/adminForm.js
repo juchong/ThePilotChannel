@@ -64,6 +64,7 @@ export const FIELDS = {
     { k: "frames", label: "Frames", type: "number", attrs: num(1, 12, 1, { required: true }) },
     { k: "interval_min", label: "Interval (min)", type: "number", attrs: num(5, 55, 5, { required: true }), help: "IEM only serves lag layers up to 55 min: (frames - 1) x interval must be 55 or less." },
     { k: "opacity", label: "Opacity (0-1)", type: "number", attrs: num(0, 1, 0.05, { required: true }) },
+    { k: "crossfade", label: "Cross-fade frames", type: "bool", help: "Dissolves between frames. Costs a lot of GPU on a Pi 4 (the whole view drops to about 15 fps), so it is off by default." },
   ],
 };
 

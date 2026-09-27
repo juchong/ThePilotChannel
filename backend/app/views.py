@@ -98,6 +98,7 @@ def _radar_payload(cfg: Config) -> Dict:
         "label": r.label,
         "opacity": r.opacity,
         "product": r.product,
+        "crossfade": r.crossfade,
         # Iowa Environmental Mesonet RIDGE II composite, Web Mercator (EPSG:3857).
         "tile_base": f"https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-{r.product}-900913",
         "frames": frames,

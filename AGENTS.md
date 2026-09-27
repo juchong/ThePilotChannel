@@ -86,8 +86,11 @@ Dockerfile, docker-compose.yml, data/config.yaml
   produce a new position per aircraft only about once a second with jitter, so a
   poll-driven tween stalls and jumps.
 - Radar frames are MapLibre raster layers built once per page session and animated by
-  toggling `visibility` and `raster-opacity` (cross-fade). Never add and remove raster
-  sources per view: removed textures are not reclaimed on the Pi and GPU memory grows.
+  toggling `visibility` and `raster-opacity`. The cross-fade (`radar.crossfade`, default off)
+  sets a `raster-opacity-transition`, which makes MapLibre re-render the whole map for most
+  of every step; on a Pi 4 at 4K that held the entire regional view at 12 to 16 fps, so it
+  is opt-in. Never add and remove raster sources per view: removed textures are not
+  reclaimed on the Pi and GPU memory grows.
   Their tile URLs carry a 5-minute bucket (`?v=`) and `refreshRadar()` re-points them
   with `setTiles` when the regional view starts; without that the retained tile cache
   would show the same radar frames for the life of the page.
@@ -156,7 +159,21 @@ Dockerfile, docker-compose.yml, data/config.yaml
   `host.docker.internal` does not reach the host either; a receiver on the Pi is addressed
   by its LAN IP.
 - IEM serves NEXRAD time-lagged layers only up to `-m55m`; `config.py` enforces
-  `(frames - 1) * interval_min <= 55`.
+  `(frames - 1) * interval_min <= 55`. Radar sources are capped at `maxzoom: 9` (the data is
+  about 1 km); without the cap a refreshed loop fetched a few hundred tiles at the start of
+  each regional view on a 4K panel and the view stuttered.
+- Weather never blocks the display. `lib/stations.js` decides what the regional view shows
+  (the last non-empty station set survives a failing refresh; only the footer changes) and
+  is tested headlessly. Station-set queries (`/api/weather/bbox`, `/area`) are
+  stale-while-revalidate in `manager.py`: a cached set is returned at once with `age_s`,
+  `stale`, and the last `error`, and refreshed in the background; only a never-fetched set
+  waits, bounded. The METAR loop retries a failed refresh after 60 s, `weather.py` retries
+  transient errors (DNS `EAI_AGAIN`, connect and read timeouts) once, and the last good
+  weather is persisted to `weather-cache.json` next to the config so a restart during an
+  outage still has data. The display keeps the last station set on screen and only changes
+  the footer dot when a refresh fails. Home routers' DNS does fail for hours at a time;
+  public fallback resolvers are not an option here because the LAN receiver's name is only
+  known to the router.
 - Satellite frame URLs come from parsing the NOAA STAR CDN directory listing
   (`satellite.py`), cached for 240 s per parameter set. Query parameters are validated
   before they reach a URL.
@@ -312,7 +329,8 @@ frame shows real data (aircraft listed, stations listed, frames loaded) before k
 - `GET /api/traffic?view=<id>` snapshot with `aircraft`, `ts`, `age_s`, `stale`,
   `healthy`, `error`; 404 for an unknown view.
 - `GET /api/weather?ids=<csv>`, `GET /api/weather/bbox?min_lat=&min_lon=&max_lat=&max_lon=`
-  (at most 20 by 30 degrees), `GET /api/weather/area?lat=&lon=&radius_nm=`.
+  (at most 20 by 30 degrees), `GET /api/weather/area?lat=&lon=&radius_nm=`; the last two
+  return `{stations, age_s, stale, error}`.
 - `GET /api/satellite?sat=&sector=&band=&size=&frames=` recent frame URLs.
 - `GET /api/status` source, health, uptime, weather, config, display, and tile cache state.
 - `GET /tiles/{z}/{x}/{y}.png` cached basemap tile (fetched upstream on a miss; a stale

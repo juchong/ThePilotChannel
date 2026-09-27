@@ -47,6 +47,13 @@ function rasterStyle(tileUrl) {
   const tiles = tileUrl ? [tileUrl] : [`${location.origin}/tiles/{z}/{x}/{y}.png`];
   return {
     version: 8,
+    // No global transition: MapLibre's default (300 ms) is applied to every
+    // style change, including the style's light, so each radar frame step
+    // (a visibility/opacity change every 550 ms) opened a 300 ms window in
+    // which the whole map re-rendered continuously. At 4K on a Pi 4 that held
+    // the regional view at 12 fps. Layers that want a transition (the
+    // optional radar cross-fade) declare their own.
+    transition: { duration: 0, delay: 0 },
     sources: { osm: { type: "raster", tiles, tileSize: 256, attribution: "© OpenStreetMap contributors" } },
     layers: [
       { id: "bg", type: "background", paint: { "background-color": "#0d1117" } },
@@ -96,10 +103,17 @@ export class HangarMap {
     this._radarTileBase = "";
     this._radarBucket = null; // 5-minute bucket the radar tile URLs were last pointed at
     this._showLabels = true;
+    // Diagnostic handle for inspecting the live kiosk over the DevTools port
+    // (render rate, dirty flags, source state); nothing in the app uses it.
+    if (typeof window !== "undefined") window.__tpcMap = this.map;
     this.ready = this.map.once("load").then(() => this._initLayers());
   }
 
   _initLayers() {
+    // A vector style from a provider carries its own global transition; make it
+    // zero too (see rasterStyle) so radar steps never trigger continuous renders.
+    const sheet = this.map.style && this.map.style.stylesheet;
+    if (sheet && !(sheet.transition && sheet.transition.duration === 0)) sheet.transition = { duration: 0, delay: 0 };
     this.map.addSource("ring", { type: "geojson", data: empty() });
     this.map.addLayer({
       id: "ring",
@@ -233,8 +247,13 @@ export class HangarMap {
   // fixed, bounded set of textures, so memory no longer grows over time. Layers
   // sit below the ring/markers so aircraft and barbs draw on top.
   // frames: [{ suffix, age_min }]; tileBase: IEM tile template prefix.
-  ensureRadar(frames, { tileBase, opacity = 0.75 } = {}) {
+  ensureRadar(frames, { tileBase, opacity = 0.75, crossfade = false } = {}) {
     this._radarOpacity = opacity;
+    // Cross-fading dissolves frames but forces a full map re-render for the
+    // whole fade (most of each step); on a Pi 4 at 4K that is 12 to 16 fps for
+    // the entire view. Off, frames step instantly and the map renders only at
+    // each step. The radar reads the same either way.
+    const fadeMs = crossfade ? RADAR_FADE_MS : 0;
     if (this._radarLayers.length || !(frames || []).length) return;
     this._radarFrames = frames;
     this._radarTileBase = tileBase;
@@ -246,6 +265,12 @@ export class HangarMap {
         type: "raster",
         tiles: [this._radarTileUrl(f)],
         tileSize: 256,
+        // The composite is about 1 km data, so zoom 9 (200 m/px) already
+        // oversamples it. Capping here makes MapLibre overzoom z9 tiles on
+        // closer views instead of fetching 4 to 8 times as many finer tiles for
+        // every frame each time the loop refreshes, which was a burst of a few
+        // hundred requests at the start of each regional view.
+        maxzoom: 9,
         attribution: "NEXRAD via Iowa Environmental Mesonet",
       });
       this.map.addLayer(
@@ -257,7 +282,7 @@ export class HangarMap {
           // Frames cross-fade via raster-opacity transitions for smooth motion.
           paint: {
             "raster-opacity": 0,
-            "raster-opacity-transition": { duration: RADAR_FADE_MS, delay: 0 },
+            "raster-opacity-transition": { duration: fadeMs, delay: 0 },
             "raster-fade-duration": 0,
           },
         },

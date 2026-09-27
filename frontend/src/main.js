@@ -2,6 +2,7 @@ import { api, subscribeEvents } from "./lib/api.js";
 import { AircraftStore } from "./lib/aircraft.js";
 import { el, esc, sleep } from "./lib/dom.js";
 import { ALT_STOPS, HangarMap } from "./lib/map.js";
+import { nextStations, stationsFooter } from "./lib/stations.js";
 import { windBarbSVG } from "./lib/windbarb.js";
 
 const CAT_FALLBACK = "#ffffff";
@@ -43,6 +44,7 @@ const state = {
   clocksStarted: false,
   lastOk: Date.now(), // last successful API response (watchdog)
   lastListHtml: null,
+  lastStations: null, // last non-empty station set for the regional view
   tz: "UTC",
   timeFmt: null,
 };
@@ -233,6 +235,11 @@ function switchView(idx) {
     el("panel-title").textContent = "WEATHER STATIONS";
     renderLegend("cat");
     startRadarOverlay(state.view); // precipitation underneath; barbs (DOM markers) draw above
+    if (state.lastStations) {
+      // draw the last known stations immediately; the fetch below replaces them
+      state.map.setAirportBarbs(state.lastStations.map((s) => ({ icao: s.icao, lat: s.lat, lon: s.lon, metar: s })));
+      renderStationList(state.lastStations);
+    }
     showRegionalWeather(state.view);
   }
   return state.view.dwell_s;
@@ -399,7 +406,7 @@ const RADAR_DBZ = [
 function startRadarOverlay(view) {
   const radar = view.radar;
   if (!radar || !(radar.frames || []).length) return;
-  state.map.ensureRadar(radar.frames, { tileBase: radar.tile_base, opacity: radar.opacity });
+  state.map.ensureRadar(radar.frames, { tileBase: radar.tile_base, opacity: radar.opacity, crossfade: !!radar.crossfade });
   state.map.refreshRadar(); // new 5-minute bucket -> reload the frames
   renderRadarLegend();
   showRadarOverlays(true);
@@ -435,17 +442,21 @@ function renderRadarLegend() {
 async function showRegionalWeather(view) {
   try {
     // Use the actual visible map rectangle so every airport on screen gets a barb.
+    // The backend answers from its cache at once and refreshes in the background.
     const r = await api.getBboxWeather(state.map.visibleBbox());
     state.lastOk = Date.now();
-    const stations = (r.stations || []).filter((s) => s.lat != null);
     if (state.view !== view) return; // view changed while awaiting
-    state.map.setAirportBarbs(stations.map((s) => ({ icao: s.icao, lat: s.lat, lon: s.lon, metar: s })));
-    renderStationList(stations);
-    updateFooter({ source: "metar", healthy: true }, stations.length, "stations");
+    const stations = nextStations(state.lastStations, r);
+    if (stations !== state.lastStations) {
+      state.lastStations = stations;
+      state.map.setAirportBarbs(stations.map((s) => ({ icao: s.icao, lat: s.lat, lon: s.lon, metar: s })));
+      renderStationList(stations);
+    }
+    // A failing refresh keeps what is on screen; only the dot changes.
+    updateFooter(stationsFooter(r), stations.length, "stations");
   } catch (e) {
     if (state.view !== view) return;
-    renderStationList([]);
-    updateFooter({ healthy: false, error: e.message }, 0, "stations");
+    updateFooter(stationsFooter(null, e.message), (state.lastStations || []).length, "stations");
   }
 }
 

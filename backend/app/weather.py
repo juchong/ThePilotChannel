@@ -6,6 +6,7 @@ data the wind barb needs.
 """
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Dict, List, Optional
 
@@ -109,18 +110,30 @@ def normalize_metar(raw: Dict, stale_after_s: int) -> Dict:
     }
 
 
+TRANSIENT = (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout, httpx.RemoteProtocolError)
+RETRY_DELAY_S = 1.5
+
+
 class MetarSource:
     def __init__(self, client: httpx.AsyncClient):
         self.client = client
+
+    async def _get(self, params: Dict, timeout: float) -> httpx.Response:
+        """One retry for transient failures: a DNS hiccup (ConnectError with
+        EAI_AGAIN), a connect timeout, or a slow read. Anything else raises."""
+        try:
+            resp = await self.client.get(API_URL, params=params, timeout=timeout)
+        except TRANSIENT:
+            await asyncio.sleep(RETRY_DELAY_S)
+            resp = await self.client.get(API_URL, params=params, timeout=timeout)
+        resp.raise_for_status()
+        return resp
 
     async def fetch(self, icaos: List[str], stale_after_s: int) -> Dict[str, Dict]:
         if not icaos:
             return {}
         ids = ",".join(sorted({i.upper() for i in icaos}))
-        resp = await self.client.get(
-            API_URL, params={"ids": ids, "format": "json"}, timeout=8.0
-        )
-        resp.raise_for_status()
+        resp = await self._get({"ids": ids, "format": "json"}, 8.0)
         records = resp.json() or []
         out: Dict[str, Dict] = {}
         for raw in records:
@@ -133,9 +146,6 @@ class MetarSource:
         """All reporting stations within a bounding box (every airport with a
         METAR, not just configured ones)."""
         bbox = f"{min_lat},{min_lon},{max_lat},{max_lon}"
-        resp = await self.client.get(
-            API_URL, params={"bbox": bbox, "format": "json"}, timeout=10.0
-        )
-        resp.raise_for_status()
+        resp = await self._get({"bbox": bbox, "format": "json"}, 10.0)
         records = resp.json() or []
         return [normalize_metar(r, stale_after_s) for r in records if r.get("icaoId")]

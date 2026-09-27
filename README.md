@@ -185,7 +185,10 @@ page and use the short code from its address, for example `pnw` (Pacific Northwe
 `1200x1200` frames suit a 1080p TV.
 
 **Radar overlay.** Shown on the regional view. Ten frames five minutes apart give a
-45-minute loop; the loop can reach back at most 55 minutes.
+45-minute loop; the loop can reach back at most 55 minutes. Frames step every half second;
+"Cross-fade frames" dissolves them into each other instead, which looks smoother but makes
+a Pi 4 re-render the whole map continuously, so leave it off unless the rest of the view
+still feels fluid on your hardware.
 
 **Screen.** Buttons to black out and restore the picture, the same thing an automation
 can do (see below).
@@ -254,6 +257,7 @@ radar:
   interval_min: 5            # multiple of 5; (frames - 1) x interval must be 55 or less
   opacity: 0.75
   product: n0q               # n0q (base reflectivity) | n0r
+  crossfade: false           # dissolve between frames (costly on a Pi 4; see above)
 ```
 
 ## Black out the screen from an automation
@@ -352,7 +356,11 @@ actions:
 - **No aircraft.** Open `http://<pi-ip>:8000/api/status` or press Test connection on the
   admin page. For a local receiver, the URL must be its LAN address, not `localhost`.
 - **No weather or wind barbs.** Check that the Pi can reach `aviationweather.gov` and that
-  the identifier is right; some small fields have no weather station.
+  the identifier is right; some small fields have no weather station. The display keeps the
+  last weather it fetched (also across restarts) and turns the footer dot amber when it is
+  getting old and red when refreshes are failing; a red dot with everything else working
+  usually means your router's DNS is failing for internet names, which is common on home
+  routers. `docker compose logs` shows the exact error.
 - **Map tiles do not load.** The Pi cannot reach OpenStreetMap. Check connectivity; tiles
   already in `data/tiles` keep working meanwhile. Or point `tile_url` at your own tile
   server.

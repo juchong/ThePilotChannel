@@ -58,3 +58,4 @@ radar:
   interval_min: 5
   opacity: 0.75
   product: n0q
+  crossfade: false

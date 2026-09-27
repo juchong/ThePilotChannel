@@ -9,7 +9,9 @@ age and a stale flag so the display can show when data has stopped flowing.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import os
 import time
 import uuid
 from typing import Any, Dict, List, Optional, Set
@@ -17,6 +19,7 @@ from typing import Any, Dict, List, Optional, Set
 import httpx
 
 from .config import (
+    CONFIG_PATH,
     Config,
     DataSource,
     config_version,
@@ -43,6 +46,9 @@ SAT_CACHE_TTL_S = 240.0
 AREA_CACHE_MAX = 64
 SAT_CACHE_MAX = 16
 MAX_SUBSCRIBERS = 32
+WEATHER_RETRY_S = 60.0         # after a failed METAR refresh, try again this soon
+WEATHER_COLD_WAIT_S = 6.0      # a station query with nothing cached may wait this long for upstream
+WEATHER_STORE = os.path.join(os.path.dirname(CONFIG_PATH) or ".", "weather-cache.json")
 
 
 class TooManySubscribers(RuntimeError):
@@ -76,8 +82,10 @@ class DataManager:
         self._weather_cache: Dict[str, Dict] = {}
         self._weather_ts: Optional[float] = None
         self._weather_error: Optional[str] = None
-        self._area_cache: Dict[str, Dict] = {}
+        self._area_cache: Dict[str, Dict] = {}        # key -> {ts (wall), data, error}
+        self._area_refreshing: Set[str] = set()
         self._sat_cache: Dict[str, Dict] = {}
+        self._load_weather_store()
 
         self._agg_lock = asyncio.Lock()
         self._agg_last = 0.0
@@ -97,6 +105,11 @@ class DataManager:
 
     # ---- lifecycle -------------------------------------------------------
     async def start(self):
+        # Loop-bound primitives are created here, on the running loop, so the
+        # manager can be started more than once (each test client starts a new
+        # event loop; in production this happens once).
+        self._weather_wake = asyncio.Event()
+        self._agg_lock = asyncio.Lock()
         self._loops = [
             asyncio.create_task(self._weather_loop(), name="weather-loop"),
             asyncio.create_task(self._traffic_loop(), name="traffic-loop"),
@@ -249,13 +262,17 @@ class DataManager:
         self._polled[view_id] = time.monotonic()
         cached = self._traffic_cache.get(view_id)
         if not self._fresh(cached):
-            task = self._kick_refresh(view_id, view)
-            try:
-                await asyncio.wait_for(asyncio.shield(task), timeout=FIRST_POLL_WAIT_S)
-            except (asyncio.TimeoutError, asyncio.CancelledError):
-                pass
-            except Exception:  # noqa: BLE001  (the refresh records its own failure)
-                pass
+            task, created = self._kick_refresh(view_id, view)
+            # Only the poll that started the refresh waits for it. Later polls
+            # that find the same refresh still in flight (a hung upstream) must
+            # not queue up behind it: they answer at once with what there is.
+            if created:
+                try:
+                    await asyncio.wait_for(asyncio.shield(task), timeout=FIRST_POLL_WAIT_S)
+                except (asyncio.TimeoutError, asyncio.CancelledError):
+                    pass
+                except Exception:  # noqa: BLE001  (the refresh records its own failure)
+                    pass
             cached = self._traffic_cache.get(view_id)
         if not self._fresh(cached) and cached is not None:
             health = self._traffic_health.get(view_id)
@@ -263,13 +280,14 @@ class DataManager:
                 return self._snapshot(view_id, None, leftover_age=time.monotonic() - cached["ts"])
         return self._snapshot(view_id, cached)
 
-    def _kick_refresh(self, view_id: str, view: Dict) -> asyncio.Task:
+    def _kick_refresh(self, view_id: str, view: Dict):
+        """-> (task, created): the in-flight refresh for the view, or a new one."""
         task = self._refresh_tasks.get(view_id)
         if task is not None and not task.done():
-            return task
+            return task, False
         task = self._spawn(self._refresh_traffic(view_id, view), name=f"traffic:{view_id}")
         self._refresh_tasks[view_id] = task
-        return task
+        return task, True
 
     async def _traffic_loop(self):
         """Keep every recently polled traffic view refreshed at TRAFFIC_REFRESH_S."""
@@ -352,16 +370,23 @@ class DataManager:
                 if self._weather_error:
                     log.info("weather refresh recovered")
                 self._weather_error = None
+                wait = max(60, self.cfg.weather.refresh_s)
             except Exception as exc:  # noqa: BLE001
                 err = str(exc) or exc.__class__.__name__
                 if err != self._weather_error:
                     log.error("weather refresh failed: %s", err)
                 self._weather_error = err
+                wait = WEATHER_RETRY_S  # keep the cache fresh-ish through a flaky upstream or DNS
             self._weather_wake.clear()
             try:
-                await asyncio.wait_for(self._weather_wake.wait(), timeout=max(60, self.cfg.weather.refresh_s))
+                await asyncio.wait_for(self._weather_wake.wait(), timeout=wait)
             except asyncio.TimeoutError:
                 pass
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001  (never let the loop die)
+                log.error("weather loop wait failed: %s", exc)
+                await asyncio.sleep(wait)
 
     async def _refresh_weather(self):
         icaos = self._all_icaos()
@@ -375,7 +400,40 @@ class DataManager:
         merged.update(data)
         self._weather_cache = merged
         self._weather_ts = time.time()
+        self._save_weather_store()
         self._broadcast({"event": "weather_updated"})
+
+    # The last good weather is kept on disk so a restart during an upstream or
+    # DNS outage (the two happen together when a router's resolver fails) still
+    # has something to show, flagged stale by age.
+    def _load_weather_store(self) -> None:
+        try:
+            with open(WEATHER_STORE) as fh:
+                store = json.load(fh)
+        except (OSError, ValueError):
+            return
+        self._weather_cache = store.get("metars") or {}
+        self._weather_ts = store.get("metars_ts")
+        for key, entry in (store.get("areas") or {}).items():
+            if isinstance(entry, dict) and "data" in entry and "ts" in entry:
+                self._area_cache[key] = {"ts": entry["ts"], "data": entry["data"], "error": None}
+        if self._weather_cache or self._area_cache:
+            log.info("weather cache restored from %s (%d METARs, %d areas)", WEATHER_STORE, len(self._weather_cache), len(self._area_cache))
+
+    def _save_weather_store(self) -> None:
+        store = {
+            "metars": self._weather_cache,
+            "metars_ts": self._weather_ts,
+            "areas": {k: {"ts": v["ts"], "data": v["data"]} for k, v in self._area_cache.items()},
+        }
+
+        def write():
+            tmp = WEATHER_STORE + ".tmp"
+            with open(tmp, "w") as fh:
+                json.dump(store, fh, separators=(",", ":"))
+            os.replace(tmp, WEATHER_STORE)
+
+        self._spawn(asyncio.to_thread(write), name="weather-store")
 
     def _with_age(self, m: Dict) -> Dict:
         obs = m.get("obs_time")
@@ -396,60 +454,101 @@ class DataManager:
 
     @staticmethod
     def _cache_put(cache: Dict[str, Dict], key: str, data, max_entries: int) -> None:
-        cache[key] = {"ts": time.monotonic(), "data": data}
+        cache[key] = {"ts": time.time(), "data": data, "error": None}
         while len(cache) > max_entries:
             oldest = min(cache, key=lambda k: cache[k]["ts"])
             cache.pop(oldest, None)
 
-    async def get_area_weather(self, lat: float, lon: float, radius_nm: float) -> List[Dict]:
+    def _area_result(self, key: str) -> Dict:
+        """Response for a cached station set: the stations plus how old the set
+        is, whether it counts as stale (two refresh intervals), and the last
+        fetch error if the refresh is failing."""
+        cached = self._area_cache[key]
+        age = max(0.0, time.time() - cached["ts"])
+        return {
+            "stations": [self._with_age(s) for s in cached["data"]],
+            "age_s": round(age),
+            "stale": age > 2 * max(60, self.cfg.weather.refresh_s),
+            "error": cached.get("error"),
+        }
+
+    async def _area_fetch(self, key: str, fetch, what: str) -> bool:
+        """Run one upstream fetch for a station set and record the outcome."""
+        if key in self._area_refreshing:
+            return False
+        self._area_refreshing.add(key)
+        try:
+            stations = await fetch()
+            out = [s for s in stations if s.get("lat") is not None]
+            self._cache_put(self._area_cache, key, out, AREA_CACHE_MAX)
+            self._save_weather_store()
+            return True
+        except Exception as exc:  # noqa: BLE001
+            err = str(exc) or exc.__class__.__name__
+            cached = self._area_cache.get(key)
+            if cached is None or cached.get("error") != err:
+                log.error("%s weather fetch failed: %s", what, err)
+            if cached is not None:
+                cached["error"] = err
+            else:
+                self._area_cache[key] = {"ts": 0.0, "data": [], "error": err}
+            return False
+        finally:
+            self._area_refreshing.discard(key)
+
+    async def _area_get(self, key: str, fetch, what: str) -> Dict:
+        """Stale-while-revalidate: a cached station set is returned at once and
+        refreshed in the background when it has expired; only a set that was
+        never fetched waits (bounded) for upstream. The regional view therefore
+        never blocks on aviationweather.gov or on DNS."""
+        cached = self._area_cache.get(key)
+        ttl = max(60, self.cfg.weather.refresh_s)
+        if cached is not None and cached["ts"] > 0:
+            if time.time() - cached["ts"] > ttl and key not in self._area_refreshing:
+                self._spawn(self._area_fetch(key, fetch, what), name=f"weather:{key}")
+            return self._area_result(key)
+        if key not in self._area_refreshing:
+            task = self._spawn(self._area_fetch(key, fetch, what), name=f"weather:{key}")
+            try:
+                await asyncio.wait_for(asyncio.shield(task), timeout=WEATHER_COLD_WAIT_S)
+            except (asyncio.TimeoutError, asyncio.CancelledError):
+                pass
+        if key in self._area_cache:
+            return self._area_result(key)
+        return {"stations": [], "age_s": None, "stale": False, "error": "no data yet"}
+
+    async def get_area_weather(self, lat: float, lon: float, radius_nm: float) -> Dict:
         """All METAR stations within radius_nm of (lat, lon), cached by area."""
         import math
 
         from .geo import haversine_nm
 
         key = f"{round(lat, 2)}:{round(lon, 2)}:{round(radius_nm)}"
-        cached = self._area_cache.get(key)
-        now = time.monotonic()
-        if cached and (now - cached["ts"]) < max(60, self.cfg.weather.refresh_s):
-            return [self._with_age(s) for s in cached["data"]]
         dlat = radius_nm / 60.0
         dlon = radius_nm / (60.0 * max(0.1, math.cos(math.radians(lat))))
-        try:
+
+        async def fetch():
             stations = await self.metar.fetch_bbox(
                 lat - dlat, lon - dlon, lat + dlat, lon + dlon, self.cfg.weather.stale_after_s
             )
-        except Exception as exc:  # noqa: BLE001
-            log.error("area weather fetch failed: %s", exc)
-            return cached["data"] if cached else []
-        out = [
-            s for s in stations
-            if s.get("lat") is not None and haversine_nm(s["lat"], s["lon"], lat, lon) <= radius_nm
-        ]
-        self._cache_put(self._area_cache, key, out, AREA_CACHE_MAX)
-        return out
+            return [s for s in stations if s.get("lat") is not None and haversine_nm(s["lat"], s["lon"], lat, lon) <= radius_nm]
 
-    async def get_bbox_weather(self, min_lat, min_lon, max_lat, max_lon) -> List[Dict]:
+        return await self._area_get(key, fetch, "area")
+
+    async def get_bbox_weather(self, min_lat, min_lon, max_lat, max_lon) -> Dict:
         """All METAR stations within an explicit bounding box (the map's visible
-        rectangle), cached by box."""
+        rectangle), cached by box and refreshed in the background."""
         key = f"bbox:{round(min_lat, 2)}:{round(min_lon, 2)}:{round(max_lat, 2)}:{round(max_lon, 2)}"
-        cached = self._area_cache.get(key)
-        now = time.monotonic()
-        if cached and (now - cached["ts"]) < max(60, self.cfg.weather.refresh_s):
-            return [self._with_age(s) for s in cached["data"]]
-        try:
-            stations = await self.metar.fetch_bbox(min_lat, min_lon, max_lat, max_lon, self.cfg.weather.stale_after_s)
-        except Exception as exc:  # noqa: BLE001
-            log.error("bbox weather fetch failed: %s", exc)
-            return cached["data"] if cached else []
-        out = [s for s in stations if s.get("lat") is not None]
-        self._cache_put(self._area_cache, key, out, AREA_CACHE_MAX)
-        return out
+
+        async def fetch():
+            return await self.metar.fetch_bbox(min_lat, min_lon, max_lat, max_lon, self.cfg.weather.stale_after_s)
+
+        return await self._area_get(key, fetch, "bbox")
 
     async def get_satellite(self, sat: str, sector: str, band: str, size: str, frames: int) -> Dict:
         key = f"{sat}:{sector}:{band}:{size}:{frames}"
         cached = self._sat_cache.get(key)
-        now = time.monotonic()
-        if cached and (now - cached["ts"]) < SAT_CACHE_TTL_S:
+        if cached and (time.time() - cached["ts"]) < SAT_CACHE_TTL_S:
             return cached["data"]
         try:
             data = await self.satellite.frames(sat, sector, band, size, frames)

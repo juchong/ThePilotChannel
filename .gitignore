@@ -7,3 +7,4 @@ data/config.yaml.tmp
 .env
 data/config.yaml.bak.*
 data/tiles/
+data/weather-cache.json*
