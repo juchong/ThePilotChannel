@@ -24,14 +24,15 @@
 #
 # What it sets up (see README.md "Install on the Raspberry Pi"):
 #   system update; kiosk packages (cage, chromium, wlrctl, seatd, grim, imagemagick); the
-#   grim wrapper that adds jpeg/webp/avif/gif screenshots; Docker CE in rootless mode as
-#   this user (rootful daemon disabled); the GPU/KMS overlay; seatd and the
-#   video/render/input groups; automatic login on tty1 that launches the kiosk; Wi-Fi
-#   power saving off; the optional admin password; and the app stack itself.
+#   grim wrapper that adds jpeg/webp/avif/gif screenshots; Wi-Fi settings that survive
+#   power cuts (deploy/harden-wifi.sh); Docker CE in rootless mode as this user (rootful
+#   daemon disabled); the GPU/KMS overlay; seatd and the video/render/input groups;
+#   automatic login on tty1 that launches the kiosk; Wi-Fi power saving off; the optional
+#   admin password; and the app stack itself.
 set -euo pipefail
 
 REPO_URL="https://github.com/juchong/ThePilotChannel.git"
-APT_PACKAGES=(git curl ca-certificates cage chromium wlrctl seatd grim imagemagick uidmap dbus-user-session)
+APT_PACKAGES=(git curl ca-certificates cage chromium wlrctl seatd grim imagemagick uidmap dbus-user-session python3-yaml)
 GRIM_WRAPPER=/usr/local/bin/grim
 MARK_BEGIN="# >>> hangar-kiosk >>>"
 MARK_END="# <<< hangar-kiosk <<<"
@@ -44,7 +45,7 @@ ADMIN_PASSWORD="${HANGAR_ADMIN_PASSWORD:-}"
 REPO_DIR=""
 MISSING=0
 
-usage() { sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,/^set -euo pipefail$/p' "$0" | sed '$d; s/^# \{0,1\}//'; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -167,6 +168,25 @@ if [ -f "$WRAPPER_SRC" ] && cmp -s "$WRAPPER_SRC" "$GRIM_WRAPPER"; then ok "grim
   miss "grim wrapper installed at $GRIM_WRAPPER"
   if applying && [ -f "$WRAPPER_SRC" ]; then
     sudo_run install -m 0755 "$WRAPPER_SRC" "$GRIM_WRAPPER"
+  fi
+fi
+
+# ---- 3c. Wi-Fi settings that survive power cuts -----------------------------------------
+# Raspberry Pi's NetworkManager rewrites the netplan files holding Imager's Wi-Fi settings
+# every time it starts, without flushing them to disk, so a power cut early in a boot can
+# leave the Pi with no Wi-Fi. deploy/harden-wifi.sh moves Wi-Fi into native keyfiles, keeps
+# read-only copies NetworkManager falls back to, and stops cloud-init from writing network
+# settings. It runs as soon as the clone exists so the rest of the setup is covered.
+log "Wi-Fi settings that survive power cuts"
+HARDEN_WIFI="$REPO_DIR/deploy/harden-wifi.sh"
+if [ ! -f "$HARDEN_WIFI" ]; then
+  if [ "$MODE" = dry-run ]; then info "+ sudo bash $HARDEN_WIFI (once the clone exists)"; else miss "$HARDEN_WIFI present"; fi
+elif ! bash "$HARDEN_WIFI" --check; then
+  MISSING=$((MISSING + 1))
+  if [ "$MODE" = dry-run ]; then
+    bash "$HARDEN_WIFI" --dry-run || true  # the script's own plan, as a non-root preview
+  elif applying; then
+    sudo_run bash "$HARDEN_WIFI"
   fi
 fi
 

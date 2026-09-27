@@ -24,6 +24,7 @@ watching it, so robustness and low resource use matter more than features.
   Docker, GPU overlay, seatd, tty1 autologin, Wi-Fi power saving, `.env`, first build) and
   is the reference for what the OS must look like; `kiosk-launch.sh` is exec'd from the
   tty1 autologin shell and starts cage (Wayland compositor) plus Chromium.
+  `harden-wifi.sh`, run by the bootstrap, keeps the Wi-Fi profiles safe from power cuts.
   The kiosk is not in Docker because it needs the GPU and HDMI output directly.
 - `data/config.yaml` is the single source of truth for configuration, validated by the
   pydantic model in `backend/app/config.py`. It is bind-mounted as a directory
@@ -65,6 +66,7 @@ frontend/src/
   lib/windbarb.js   wind barb SVG
   lib/geo.js        client geo helpers
 deploy/bootstrap.sh   idempotent OS provisioning for a fresh Pi (also --check / --dry-run)
+deploy/harden-wifi.sh   Wi-Fi as NetworkManager keyfiles with read-only copies (also --check)
 deploy/grim-web-wrapper.sh   installed as /usr/local/bin/grim: web image formats via ImageMagick
 deploy/kiosk-launch.sh, getty-autologin.conf
 Dockerfile, docker-compose.yml, data/config.yaml
@@ -287,6 +289,19 @@ frame shows real data (aircraft listed, stations listed, frames loaded) before k
   probes `/healthz` and navigates to the display when the backend is up. The Chromium flags
   in `kiosk-launch.sh` disable background services (sync, component updates, push
   connections) that a kiosk never needs.
+- Network: profiles are native NetworkManager keyfiles, never netplan. Raspberry Pi's
+  NetworkManager build deletes and rewrites every file in `/etc/netplan` each time it
+  starts, without flushing them, so a power cut early in a boot leaves them empty and the
+  Pi off the network (raspberrypi/trixie-feedback#99). Imager's Wi-Fi arrives through
+  cloud-init as netplan. `deploy/harden-wifi.sh`, run by the bootstrap, copies each
+  netplan-generated profile to `/etc/NetworkManager/system-connections` under the same
+  UUID (the connection stays up), moves the netplan files aside, keeps a read-only copy of
+  every Wi-Fi profile in `/usr/lib/NetworkManager/system-connections`, and disables
+  cloud-init's network config. NetworkManager's unit has `ProtectSystem=yes`, so it cannot
+  write the `/usr/lib` copies, and it serves a profile from there whenever the `/etc` copy
+  is missing. Keep `/etc/netplan` empty: `harden-wifi.sh --check` fails otherwise, and
+  `--test-fallback` shows Wi-Fi connecting from the read-only copies. Ethernet needs no
+  saved profile; without one, NetworkManager creates `Wired connection 1` at every boot.
 
 ## HTTP API
 

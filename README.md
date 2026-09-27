@@ -95,6 +95,12 @@ What the bootstrap does, in order, each step only if it is not already done:
   `grim` can write `jpeg`, `webp`, `avif`, and `gif` screenshots (the stock Debian build
   only writes `png`); `sudo rm /usr/local/bin/grim` reverts to the stock grim.
 - Clones this repository to `~/ThePilotChannel` (or uses the clone it is run from).
+- Protects the Wi-Fi settings from power cuts. On the Debian 13 based Raspberry Pi OS, the
+  Wi-Fi details you entered in Imager live in files that NetworkManager rewrites every
+  time the Pi starts, and losing power in the first half minute of a boot can leave them
+  empty. The bootstrap moves them into a regular NetworkManager profile that is not
+  rewritten at startup, keeps a read-only backup copy that NetworkManager falls back to,
+  and stops cloud-init from bringing the old files back (`deploy/harden-wifi.sh`).
 - Installs Docker CE with Docker's own installer, then switches it to rootless mode for
   your user: the daemon runs as you, not root, starts at boot without a login, and the
   root-level daemon is disabled so it does not waste memory.
@@ -311,6 +317,10 @@ actions:
   The display notices the new version and reloads on its own.
 - **Restart the display browser:** `pkill -x cage`. It comes straight back.
 - **Reboot the Pi:** everything starts again automatically, including after a power cut.
+- **Change the Wi-Fi network or password:** use `sudo nmtui` (Edit a connection), then run
+  `sudo ~/ThePilotChannel/deploy/harden-wifi.sh` so the backup copy matches. To forget a
+  network for good, delete it in `nmtui` and also remove its `hardened-<uuid>.nmconnection`
+  file from `/usr/lib/NetworkManager/system-connections`.
 - **Logs:** the app's log is `docker compose logs -f` (capped so it cannot fill the SD
   card); the kiosk browser's log is `/dev/shm/hangar-kiosk/hangar-kiosk.log`.
 - **Undo a bad config change:** copy `data/config.yaml.bak.1` over `data/config.yaml` and
@@ -320,6 +330,14 @@ actions:
 
 ## Troubleshooting
 
+- **The Pi does not come back on Wi-Fi after a power cut.** Plug in a network cable
+  (Ethernet needs no saved settings) or a keyboard, then run
+  `sudo ~/ThePilotChannel/deploy/harden-wifi.sh`. When no Wi-Fi profile is left it
+  recreates one from the details you entered in Imager (kept in
+  `/boot/firmware/network-config`) and clears out the emptied files in `/etc/netplan`.
+  This is a [known Raspberry Pi OS problem](https://github.com/raspberrypi/trixie-feedback/issues/99)
+  that the bootstrap prevents; `~/ThePilotChannel/deploy/harden-wifi.sh --check` shows
+  whether a Pi is protected.
 - **The TV stays black or shows only the holding screen.** The app is not up yet or failed
   to start: run `docker compose ps` and `docker compose logs --tail=50` on the Pi. If the
   kiosk never appears at all, check `/dev/shm/hangar-kiosk/hangar-kiosk.log`, confirm
