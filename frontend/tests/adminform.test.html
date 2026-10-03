@@ -2,7 +2,7 @@
 <div id="root"><div id="airports"></div><div id="regions"></div><div id="cycle"></div><div id="datasource"></div><div id="display"></div><div id="satellite"></div><div id="radar" data-section="radar"></div></div>
 <pre id="out"></pre><script type="module">
 import { check, done } from "./harness.js";
-import { renderAll, collect, applyAction, applyErrors, clearErrors, validateNative } from "../src/lib/adminForm.js";
+import { renderAll, collect, applyAction, applyErrors, clearErrors, validateNative, syncRange } from "../src/lib/adminForm.js";
 // The admin form must never lose or mangle data: one delegated handler (the
 // old per-render binding deleted two rows per click), typed collection (a
 // name of "2024" stays a string), escaping, and server errors mapped to fields.
@@ -22,6 +22,13 @@ let cfg = {
 renderAll(cfg, roots);
 root.addEventListener("click", (ev) => { const btn = ev.target.closest("[data-add],[data-del],[data-move]"); if (!btn || btn.disabled) return; collect(root, cfg); if (applyAction(cfg, btn)) renderAll(cfg, roots); });
 check("values are escaped, not rendered as markup", !root.querySelector("#satellite b") && root.querySelector('[data-f="satellite.label"]').value === "GOES <b>West</b>");
+const opacity = root.querySelector('[data-f="radar.opacity"]');
+const readout = () => opacity.parentElement.querySelector("output").textContent;
+check("radar opacity is a slider with a percent readout", opacity.type === "range" && opacity.dataset.t === "number" && readout() === "75%");
+root.addEventListener("input", (ev) => syncRange(ev.target));
+opacity.value = "0.4";
+opacity.dispatchEvent(new Event("input", { bubbles: true }));
+check("moving the slider updates the readout", readout() === "40%");
 root.querySelector('[data-f="airports.0.name"]').value = "Auburn EDITED";
 root.querySelector('[data-move="airports.0.1"]').click();
 check("move-down swaps exactly once", cfg.airports.map((a) => a.icao).join() === "KBFI,KS50,KSEA,KPAE");
@@ -36,6 +43,7 @@ collect(root, cfg);
 check("a numeric-looking name stays a string", cfg.airports[0].name === "2024");
 check("number fields parse as numbers, empty as null", cfg.airports[0].lat === 47.123 && cfg.airports[1].lon === null);
 check("checkboxes and the secret mask round-trip", cfg.airports[0].enabled === false && cfg.data_source.api_key === "********" && cfg.radar.crossfade === false);
+check("the slider collects as a number", cfg.radar.opacity === 0.4);
 root.querySelector('[data-f="airports.0.lat"]').value = "999";
 check("native validation flags out-of-range and missing values", validateNative(root) === 2);
 clearErrors(root);

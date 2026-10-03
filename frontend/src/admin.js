@@ -5,6 +5,7 @@ import {
   clearErrors,
   collect,
   renderAll,
+  syncRange,
   validateNative,
 } from "./lib/adminForm.js";
 import { el, esc } from "./lib/dom.js";
@@ -49,7 +50,10 @@ async function boot() {
       markDirty();
     }
   });
-  root.addEventListener("input", markDirty);
+  root.addEventListener("input", (ev) => {
+    syncRange(ev.target);
+    markDirty();
+  });
   root.addEventListener("change", markDirty);
   window.addEventListener("beforeunload", (e) => {
     if (!dirty) return;

@@ -19,6 +19,9 @@ label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 3px
 input, select { width: 100%; background: #0d1117; border: 1px solid #2b3641; color: var(--text);
   border-radius: 6px; padding: 7px 9px; font-size: 14px; }
 input[type="checkbox"] { width: auto; }
+.range { display: flex; align-items: center; gap: 10px; }
+.range input[type="range"] { padding: 0; border: none; background: transparent; accent-color: var(--accent); }
+.range output { min-width: 3.2em; text-align: right; font-size: 14px; font-variant-numeric: tabular-nums; }
 
 .btn { background: #2b3641; color: var(--text); border: none; border-radius: 7px; padding: 9px 14px;
   font-size: 14px; cursor: pointer; text-decoration: none; display: inline-block; }

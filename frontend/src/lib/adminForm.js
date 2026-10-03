@@ -63,7 +63,7 @@ export const FIELDS = {
     { k: "product", label: "Product", type: "select", options: ["n0q", "n0r"] },
     { k: "frames", label: "Frames", type: "number", attrs: num(1, 12, 1, { required: true }) },
     { k: "interval_min", label: "Interval (min)", type: "number", attrs: num(5, 55, 5, { required: true }), help: "IEM only serves lag layers up to 55 min: (frames - 1) x interval must be 55 or less." },
-    { k: "opacity", label: "Opacity (0-1)", type: "number", attrs: num(0, 1, 0.05, { required: true }) },
+    { k: "opacity", label: "Opacity", type: "range", fmt: "percent", attrs: num(0, 1, 0.05), help: "How strongly the radar shows over the map." },
     { k: "crossfade", label: "Cross-fade frames", type: "bool", help: "Dissolves between frames instead of stepping. Off by default: the fade re-renders the whole map and is expensive on a Pi." },
   ],
 };
@@ -87,6 +87,11 @@ export function inputHtml(path, f, value) {
       );
     case "number":
       return wrap(`<input ${common} type="number" data-t="number" value="${esc(value ?? "")}" ${attrs}>`);
+    case "range":
+      return wrap(
+        `<div class="range"><input ${common} type="range" data-t="number" data-fmt="${esc(f.fmt || "")}" value="${esc(value ?? "")}" ${attrs}>` +
+          `<output for="${id}">${esc(rangeText(value, f.fmt))}</output></div>`
+      );
     case "secret":
       return wrap(
         `<input ${common} type="password" autocomplete="new-password" data-t="text" value="${esc(value ?? "")}" placeholder="${value ? "(set)" : "(none)"}" ${attrs}>`
@@ -94,6 +99,18 @@ export function inputHtml(path, f, value) {
     default:
       return wrap(`<input ${common} type="text" data-t="text" value="${esc(value ?? "")}" ${attrs}>`);
   }
+}
+
+function rangeText(v, fmt) {
+  if (v == null || v === "") return "";
+  return fmt === "percent" ? `${Math.round(Number(v) * 100)}%` : String(v);
+}
+
+// Keep a slider's readout current; call from a delegated "input" listener.
+export function syncRange(inp) {
+  if (!inp || inp.type !== "range") return;
+  const out = inp.parentElement && inp.parentElement.querySelector("output");
+  if (out) out.textContent = rangeText(inp.value, inp.dataset.fmt);
 }
 
 export function fieldsHtml(prefix, spec, obj) {

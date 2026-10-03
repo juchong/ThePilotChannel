@@ -183,7 +183,8 @@ page and use the short code from its address, for example `pnw` (Pacific Northwe
 `1200x1200` frames suit a 1080p TV.
 
 **Radar overlay.** Shown on the regional view. Ten frames five minutes apart give a
-45-minute loop; the loop can reach back at most 55 minutes. Frames step every half second.
+45-minute loop; the loop can reach back at most 55 minutes. The opacity slider sets how
+strongly the radar shows over the map. Frames step every half second.
 "Cross-fade frames" dissolves them into each other instead; it is off by default because
 the fade is expensive on a Pi 4.
 
@@ -252,7 +253,7 @@ radar:
   label: NEXRAD Base Reflectivity
   frames: 10
   interval_min: 5            # multiple of 5; (frames - 1) x interval must be 55 or less
-  opacity: 0.75
+  opacity: 0.75              # 0 (invisible) to 1 (solid)
   product: n0q               # n0q (base reflectivity) | n0r
   crossfade: false           # dissolve between frames (expensive on a Pi 4)
 ```
