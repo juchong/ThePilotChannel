@@ -1,14 +1,18 @@
 <!doctype html><html><body><pre id="out"></pre><script type="module">
 import { check, done } from "./harness.js";
-import { nextStations, stationsFooter } from "../src/lib/stations.js";
-// The regional view keeps its last stations through a failing refresh (a home
-// router's DNS commonly fails for hours); only the footer dot changes.
+import { nextStations, sameStations, stationsFooter } from "../src/lib/stations.js";
+// The regional view keeps its last stations through a failing refresh; only
+// the footer dot changes, and an unchanged set is not redrawn.
 const A = [{ icao: "KSEA", lat: 47.4, lon: -122.3 }, { icao: "KBFI", lat: 47.5, lon: -122.3 }];
 const B = [{ icao: "KPAE", lat: 47.9, lon: -122.2 }];
 check("fresh stations replace the last set", nextStations(A, { stations: B }).map((s) => s.icao).join() === "KPAE");
 check("an empty answer during an outage keeps the last stations", nextStations(A, { stations: [], error: "no data yet" }) === A);
 check("stations without coordinates are dropped", nextStations(null, { stations: [{ icao: "X" }, ...B] }).length === 1);
 check("a first empty answer yields an empty list", nextStations(null, { stations: [] }).length === 0);
+const W = (speed) => ({ icao: "KSEA", lat: 47.4, lon: -122.3, obs_time: 1, flight_category: "VFR", category_color: "#22c55e", wind: { dir: 30, speed_kt: speed, calm: false } });
+check("an unchanged station set is not redrawn", sameStations([W(10)], [W(10)]) === true);
+check("a changed wind redraws", sameStations([W(10)], [W(12)]) === false);
+check("a different station count redraws", sameStations([W(10)], [W(10), W(10)]) === false && sameStations(null, [W(10)]) === false);
 let f = stationsFooter({ stations: B, age_s: 3, stale: false, error: null });
 check("a healthy fresh answer is green", f.healthy === true && f.stale === false);
 f = stationsFooter({ stations: A, age_s: 900, stale: true, error: "[Errno -3] Temporary failure in name resolution" });

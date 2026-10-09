@@ -11,6 +11,19 @@ export function nextStations(last, r) {
   return last && last.length ? last : fresh;
 }
 
+// True when two station sets draw the same barbs and list.
+export function sameStations(a, b) {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  return a.every((s, i) => stationKey(s) === stationKey(b[i]));
+}
+
+function stationKey(s) {
+  const w = s.wind || {};
+  return [s.icao, s.name, s.lat, s.lon, s.obs_time, s.raw, s.flight_category, s.category_color,
+    w.dir, w.speed_kt, w.gust_kt, w.variable, w.calm].join("|");
+}
+
 // Footer summary for a station response, or for a failed request (failure is
 // the error message). A failed request keeps whatever is shown and reports it
 // as stale and unhealthy.

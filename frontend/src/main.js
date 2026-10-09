@@ -2,7 +2,8 @@ import { api, subscribeEvents } from "./lib/api.js";
 import { AircraftStore } from "./lib/aircraft.js";
 import { el, esc, sleep } from "./lib/dom.js";
 import { ALT_STOPS, HangarMap } from "./lib/map.js";
-import { nextStations, stationsFooter } from "./lib/stations.js";
+import { radarStep } from "./lib/radarloop.js";
+import { nextStations, sameStations, stationsFooter } from "./lib/stations.js";
 import { windBarbSVG } from "./lib/windbarb.js";
 
 const CAT_FALLBACK = "#ffffff";
@@ -412,21 +413,29 @@ function startRadarOverlay(view) {
   animateRadar(view, radar.frames, radar.label);
 }
 
+// Steps through the frames; a frame whose tiles are still loading is waited
+// for (bounded) while the previous frame stays on screen.
 function animateRadar(view, frames, label) {
   let i = 0;
-  const FRAME_MS = 550; // dwell per frame; ~matches the cross-fade so steps dissolve smoothly
-  const HOLD_MS = 1800; // pause on the newest frame each loop
+  let waitedMs = 0;
   const step = () => {
     if (state.view !== view) return;
+    const last = i === frames.length - 1;
+    const { show, nextMs } = radarStep({ ready: state.map.radarFrameReady(i), waitedMs, last });
+    if (!show) {
+      waitedMs += nextMs;
+      state.satTimer = setTimeout(step, nextMs);
+      return;
+    }
+    waitedMs = 0;
     state.map.showRadarFrame(i);
     const f = frames[i];
     const t = new Date(Date.now() - (f.age_min || 0) * 60000);
     const hhmm = state.timeFmt.format(t); // configured display timezone, same as the header clock
     const age = f.age_min ? `-${f.age_min} min` : "now";
     el("radar-caption").innerHTML = `${esc(label)}<span class="frame-time">${esc(hhmm)} (${esc(age)})</span>`;
-    const last = i === frames.length - 1;
     i = (i + 1) % frames.length;
-    state.satTimer = setTimeout(step, last ? HOLD_MS : FRAME_MS);
+    state.satTimer = setTimeout(step, nextMs);
   };
   step();
 }
@@ -446,7 +455,7 @@ async function showRegionalWeather(view) {
     state.lastOk = Date.now();
     if (state.view !== view) return; // view changed while awaiting
     const stations = nextStations(state.lastStations, r);
-    if (stations !== state.lastStations) {
+    if (!sameStations(stations, state.lastStations)) {
       state.lastStations = stations;
       state.map.setAirportBarbs(stations.map((s) => ({ icao: s.icao, lat: s.lat, lon: s.lon, metar: s })));
       renderStationList(stations);

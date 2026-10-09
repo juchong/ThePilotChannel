@@ -1,0 +1,18 @@
+<!doctype html><html><body><pre id="out"></pre><script type="module">
+import { check, done } from "./harness.js";
+import { radarStep, RADAR_FRAME_MS, RADAR_HOLD_MS, RADAR_WAIT_MS, RADAR_WAIT_MAX_MS } from "../src/lib/radarloop.js";
+// A frame whose tiles are still loading is never shown; the loop waits on the
+// frame on screen, bounded, so a dead tile server cannot stall it.
+let s = radarStep({ ready: false, waitedMs: 0, last: false });
+check("a loading frame is not shown; the loop polls again soon", s.show === false && s.nextMs === RADAR_WAIT_MS);
+s = radarStep({ ready: false, waitedMs: RADAR_WAIT_MAX_MS - RADAR_WAIT_MS, last: false });
+check("still waiting just under the bound", s.show === false);
+s = radarStep({ ready: false, waitedMs: RADAR_WAIT_MAX_MS, last: false });
+check("after the bound the frame is shown anyway", s.show === true && s.nextMs === RADAR_FRAME_MS);
+s = radarStep({ ready: true, waitedMs: 0, last: false });
+check("a loaded frame is shown for one frame dwell", s.show === true && s.nextMs === RADAR_FRAME_MS);
+s = radarStep({ ready: true, waitedMs: 0, last: true });
+check("the newest frame holds longer", s.show === true && s.nextMs === RADAR_HOLD_MS && RADAR_HOLD_MS > RADAR_FRAME_MS);
+check("the wait bound covers a full frame load at a slow tile server", RADAR_WAIT_MAX_MS >= 5 * RADAR_FRAME_MS);
+done();
+</script></body></html>

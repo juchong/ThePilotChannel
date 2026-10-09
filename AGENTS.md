@@ -62,6 +62,7 @@ frontend/src/
   lib/aircraft.js   aircraft store, dead reckoning, drop timeout, importance sort
   lib/shapes.js     icon assignment (tar1090 methodology) and rendering
   lib/vendor/tar1090/markers.js, LICENSE   vendored tar1090 shapes and tables (GPL-2.0)
+  lib/radarloop.js  radar loop stepping: frame readiness, dwell, hold
   lib/stations.js   which station set the regional view shows, footer state
   lib/windbarb.js   wind barb SVG
   lib/geo.js        client geo helpers
@@ -83,9 +84,13 @@ Dockerfile, docker-compose.yml, data/config.yaml
   20 fps from `displayPosition()`, which blends a new fix in over about half a second and
   snaps when the correction exceeds half a mile. Do not key a CSS transition to poll
   timing: receivers report a position per aircraft about once a second, with jitter.
-- Radar frames are MapLibre raster layers built once per page session and animated by
-  toggling `visibility` and `raster-opacity`. Never add and remove raster sources per
-  view: the Pi does not reclaim removed raster textures. The cross-fade
+- Radar frames are MapLibre raster layers built once per page session, all kept
+  `visible`, and animated with `raster-opacity` alone: MapLibre does not draw a raster
+  layer at opacity 0, and a visible layer keeps its source's tiles loaded. A frame is
+  shown only once its tiles are loaded (`radarFrameReady()`, bounded by
+  `RADAR_WAIT_MAX_MS` in `lib/radarloop.js`); hiding a frame layer would drop its tiles
+  and the loop would show empty frames while they reload. Never add and remove raster
+  sources per view: the Pi does not reclaim removed raster textures. The cross-fade
   (`radar.crossfade`, default off) sets a `raster-opacity-transition`, which re-renders
   the whole map for the duration of every fade. Tile URLs carry a 5-minute bucket (`?v=`)
   and `refreshRadar()` re-points them with `setTiles` when the regional view starts.

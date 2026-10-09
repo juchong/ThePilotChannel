@@ -3,9 +3,9 @@
 <pre id="out"></pre><script type="module">
 import { check, done } from "./harness.js";
 import { renderAll, collect, applyAction, applyErrors, clearErrors, validateNative, syncRange } from "../src/lib/adminForm.js";
-// The admin form must never lose or mangle data: one delegated handler (the
-// old per-render binding deleted two rows per click), typed collection (a
-// name of "2024" stays a string), escaping, and server errors mapped to fields.
+// The admin form must never lose or mangle data: one delegated handler, typed
+// collection (a name of "2024" stays a string), escaping, and server errors
+// mapped to fields.
 const el = (id) => document.getElementById(id);
 const root = el("root");
 const roots = { airports: el("airports"), regions: el("regions"), cycle: el("cycle"), datasource: el("datasource"), display: el("display"), satellite: el("satellite"), radar: el("radar") };

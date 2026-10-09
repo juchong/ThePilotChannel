@@ -234,9 +234,11 @@ export class HangarMap {
   }
 
   // NEXRAD radar loop: one raster layer per time-lagged frame, BUILT ONCE per page
-  // session and reused. Animated by toggling the layout `visibility` property;
-  // hidden, never removed, when off the regional view: the Pi does not reclaim
-  // removed raster textures, so the set of textures must stay fixed. Layers
+  // session and reused, never removed: the Pi does not reclaim removed raster
+  // textures, so the set of textures must stay fixed. Every frame layer stays
+  // visible and is animated with raster-opacity alone: MapLibre does not draw a
+  // raster layer at opacity 0, and a visible layer keeps its source's tiles
+  // loaded, so a frame can be checked for readiness before it is shown. Layers
   // sit below the ring/markers so aircraft and barbs draw on top.
   // frames: [{ suffix, age_min }]; tileBase: IEM tile template prefix.
   ensureRadar(frames, { tileBase, opacity = 0.75, crossfade = false } = {}) {
@@ -266,8 +268,7 @@ export class HangarMap {
           id,
           type: "raster",
           source: id,
-          layout: { visibility: "none" },
-          // Frames cross-fade via raster-opacity transitions for smooth motion.
+          layout: { visibility: "visible" },
           paint: {
             "raster-opacity": 0,
             "raster-opacity-transition": { duration: fadeMs, delay: 0 },
@@ -301,30 +302,29 @@ export class HangarMap {
     });
   }
 
-  // Cross-fade to frame i: fade it in while fading the previous frame out, and
-  // stop rendering the frame two steps back (its fade has finished). At most two
-  // radar layers render at once, so memory stays bounded (no source churn).
+  // True once frame i's tiles for the current view are loaded or have failed.
+  radarFrameReady(i) {
+    const id = this._radarLayers[i];
+    if (!id || !this.map.getSource(id)) return true;
+    const cache = this.map.style && this.map.style.sourceCaches && this.map.style.sourceCaches[id];
+    if (!cache) return this.map.isSourceLoaded(id);
+    return cache.getRenderableIds().length > 0 && cache.loaded();
+  }
+
+  // Show frame i (fading with the previous one when cross-fade is on).
   showRadarFrame(i) {
     const L = this._radarLayers;
-    const n = L.length;
-    if (!n) return;
-    this.map.setLayoutProperty(L[i], "visibility", "visible");
+    if (!L.length) return;
+    if (this._radarCur >= 0 && this._radarCur !== i) this.map.setPaintProperty(L[this._radarCur], "raster-opacity", 0);
     this.map.setPaintProperty(L[i], "raster-opacity", this._radarOpacity);
-    const prev = (i - 1 + n) % n;
-    if (prev !== i) this.map.setPaintProperty(L[prev], "raster-opacity", 0);
-    const old = (i - 2 + n) % n; // two frames back: fade complete, stop rendering it
-    if (old !== i && old !== prev) this.map.setLayoutProperty(L[old], "visibility", "none");
     this._radarCur = i;
   }
 
-  // Hide the radar loop without tearing down the sources (called when leaving the
-  // regional view); the Pi does not reclaim removed raster textures.
+  // Blank the radar loop without touching the sources (called when leaving the
+  // regional view).
   hideRadar() {
     for (const id of this._radarLayers) {
-      if (this.map.getLayer(id)) {
-        this.map.setPaintProperty(id, "raster-opacity", 0);
-        this.map.setLayoutProperty(id, "visibility", "none");
-      }
+      if (this.map.getLayer(id)) this.map.setPaintProperty(id, "raster-opacity", 0);
     }
     this._radarCur = -1;
   }
