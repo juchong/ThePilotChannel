@@ -4,6 +4,7 @@ backed off and logged once; caches and warm-up stay bounded. Quality: flight
 categories, winds, and visibilities decode correctly.
 """
 import asyncio
+import io
 import logging
 import os
 import time
@@ -293,3 +294,85 @@ def test_explicit_cycle_order_and_local_view_cap():
     cfg.cycle.order = []
     cfg.cycle.interleave_regional = False
     assert [v["id"] for v in build_views(cfg)] == ["local:KSEA", "local:KBFI", "region:A"]  # cap applied
+
+
+# ---- radar ----------------------------------------------------------------------------------
+
+def _png(pixels):
+    from PIL import Image
+
+    im = Image.new("RGBA", (len(pixels), 1))
+    im.putdata(pixels)
+    buf = io.BytesIO()
+    im.save(buf, "PNG")
+    return buf.getvalue()
+
+
+def _alpha(png):
+    from PIL import Image
+
+    return list(Image.open(io.BytesIO(png)).convert("RGBA").getchannel("A").getdata())
+
+
+def test_radar_floor_hides_weak_returns_and_keeps_rain():
+    from app import radar
+
+    pal = radar.PALETTES["n0q"]
+    color = lambda dbz: tuple(pal[65 + int(dbz * 2)]) + (255,)  # noqa: E731
+    png = _png([color(-5), color(5), color(9.5), color(10), color(20), (0, 0, 0, 0), (1, 2, 3, 255)])
+    assert _alpha(radar.filter_tile(png, "n0q", 10)) == [0, 0, 0, 255, 255, 0, 255]
+    assert radar.filter_tile(png, "n0q", -32) == png  # nothing below the floor: untouched
+    n0r = radar.PALETTES["n0r"]
+    png = _png([tuple(n0r[7]) + (255,), tuple(n0r[10]) + (255,)])  # 5 and 20 dBZ
+    assert _alpha(radar.filter_tile(png, "n0r", 10)) == [0, 255]
+
+
+def test_radar_legend_uses_the_product_palette_from_the_floor_up():
+    from app import radar
+
+    lg = radar.legend("n0q", 10)
+    assert [d for d, _ in lg] == [15, 25, 35, 45, 55, 65, 75]
+    r, g, b = radar.PALETTES["n0q"][65 + 30]
+    assert lg[0][1] == f"#{r:02x}{g:02x}{b:02x}"
+    assert [d for d, _ in radar.legend("n0r", 0)][0] == 5
+
+
+def test_radar_tiles_are_proxied_filtered_and_cached_per_bucket(client, monkeypatch):
+    from app import radar
+
+    pal = radar.PALETTES["n0q"]
+    calls = []
+
+    async def upstream(product, lag, z, x, y):
+        calls.append((product, lag, z, x, y))
+        return _png([tuple(pal[75]) + (255,), tuple(pal[105]) + (255,)])  # 5 and 20 dBZ
+
+    monkeypatch.setattr(main_mod.manager.radar, "_fetch_upstream", upstream)
+    cfg = base_cfg()
+    cfg["radar"] = {"min_dbz": 10}
+    assert put(client, cfg).status_code == 200
+    views = client.get("/api/views").json()
+    view = next(v for v in (views["views"] if isinstance(views, dict) else views) if v["type"] == "regional")
+    assert view["radar"]["tile_base"] == "/radar/n0q" and view["radar"]["legend"][0][0] == 15
+    r = client.get("/radar/n0q-m05m/9/82/179.png", params={"v": 1})
+    assert r.status_code == 200 and r.headers["content-type"] == "image/png"
+    assert _alpha(r.content) == [0, 255]
+    assert calls == [("n0q", "-m05m", 9, 82, 179)]
+    client.get("/radar/n0q-m05m/9/82/179.png", params={"v": 1})
+    assert len(calls) == 1  # served from memory
+    client.get("/radar/n0q-m05m/9/82/179.png", params={"v": 2})
+    assert len(calls) == 2  # a new bucket is a new fetch
+    assert client.get("/radar/n0x/9/82/179.png").status_code == 404
+    assert client.get("/radar/n0q/30/0/0.png").status_code == 404
+
+
+def test_radar_tile_failures_answer_502_and_log_once(client, monkeypatch, caplog):
+    async def broken(product, lag, z, x, y):
+        raise httpx.ConnectError("boom")
+
+    monkeypatch.setattr(main_mod.manager.radar, "_fetch_upstream", broken)
+    main_mod.manager.radar._failing = False
+    caplog.set_level(logging.INFO, logger="hangar")
+    for x in (1, 2, 3):
+        assert client.get(f"/radar/n0q/9/{x}/179.png", params={"v": 9}).status_code == 502
+    assert len([r for r in caplog.records if "radar tiles unavailable" in r.getMessage()]) == 1

@@ -28,6 +28,7 @@ from .config import (
 )
 from .satellite import SatelliteSource
 from .sources.aggregator import AggregatorSource
+from .radar import RadarTiles
 from .tiles import TileCache
 from .sources.local import LocalReadsbSource
 from .views import build_views
@@ -73,6 +74,7 @@ class DataManager:
         self.metar = MetarSource(self.client)
         self.satellite = SatelliteSource(self.client)
         self.tiles = TileCache(self.client)
+        self.radar = RadarTiles(self.client)
         self._warm_task: Optional[asyncio.Task] = None
 
         self._traffic_cache: Dict[str, Dict] = {}   # view_id -> {ts, aircraft, source}

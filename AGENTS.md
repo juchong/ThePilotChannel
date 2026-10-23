@@ -47,6 +47,8 @@ backend/app/
   satellite.py     NOAA STAR CDN directory listing -> recent GOES frame URLs
   tiles.py         basemap tile cache/proxy and per-view warm-up (tile math mirrors
                    the display's fitBounds framing)
+  radar.py         IEM NEXRAD tile proxy: reflectivity floor by palette lookup, legend,
+                   memory cache per 5-minute bucket (palettes in data/radar_palettes.json)
   geo.py           haversine, unit conversion
   sources/         traffic adapters: local.py (tar1090/readsb), aggregator.py; base.py
                    normalizes records and adds type_desc/wtc from data/icao_aircraft_types.json
@@ -158,6 +160,13 @@ Dockerfile, docker-compose.yml, data/config.yaml
   `(frames - 1) * interval_min <= 55`. Radar sources are capped at `maxzoom: 9`: the data
   is about 1 km, and closer views overzoom z9 tiles instead of fetching finer ones per
   frame.
+- Radar tiles go through the backend (`GET /radar/{layer}/{z}/{x}/{y}.png?v=<bucket>`,
+  `radar.py`): each is fetched from IEM once per bucket, every pixel below `radar.min_dbz`
+  is made transparent by exact lookup in the product's palette
+  (`data/radar_palettes.json`, the palettes of IEM's composite images; N0Q index i is
+  (i - 65) / 2 dBZ, N0R index i is (i - 6) * 5 dBZ), and the result is cached in memory.
+  The composite's weak returns carry rectangular artifacts; the floor keeps them off the
+  screen. The legend in the view payload comes from the same palette, from the floor up.
 - Weather never blocks the display. `/api/weather/bbox` and `/area` are
   stale-while-revalidate (`manager.py`): a cached set is returned at once with `age_s`,
   `stale`, and the last `error` and refreshed in the background; only a never-fetched set
@@ -330,6 +339,9 @@ data (aircraft listed, stations listed, frames loaded) before keeping it.
 - `GET /api/status` source, health, uptime, weather, config, display, and tile cache state.
 - `GET /tiles/{z}/{x}/{y}.png` cached basemap tile (fetched upstream on a miss; a stale
   tile is served if upstream fails; 404 for invalid coordinates).
+- `GET /radar/{layer}/{z}/{x}/{y}.png?v=<bucket>` NEXRAD tile (`layer` is `n0q`, `n0r`, or
+  either with a `-mNNm` lag) with returns below `radar.min_dbz` removed; 502 when IEM
+  fails, 404 for an unknown layer or invalid coordinates.
 - `POST /api/test-source` tries a `data_source` block from the first enabled airport.
 - `GET /api/display`, `POST /api/display/blackout` (`{"seconds", "reason"}`, both
   optional), `POST /api/display/restore`.

@@ -64,6 +64,7 @@ export const FIELDS = {
     { k: "frames", label: "Frames", type: "number", attrs: num(1, 12, 1, { required: true }) },
     { k: "interval_min", label: "Interval (min)", type: "number", attrs: num(5, 55, 5, { required: true }), help: "IEM only serves lag layers up to 55 min: (frames - 1) x interval must be 55 or less." },
     { k: "opacity", label: "Opacity", type: "range", fmt: "percent", attrs: num(0, 1, 0.05), help: "How strongly the radar shows over the map." },
+    { k: "min_dbz", label: "Hide returns below (dBZ)", type: "range", attrs: num(0, 40, 5), help: "Weaker returns are not drawn. Below about 10 dBZ they are mostly not precipitation." },
     { k: "crossfade", label: "Cross-fade frames", type: "bool", help: "Dissolves between frames instead of stepping. Off by default: the fade re-renders the whole map and is expensive on a Pi." },
   ],
 };

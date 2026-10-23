@@ -22,9 +22,13 @@ def client(monkeypatch):
     async def fake_tile(z, x, y):
         return b"\x89PNG\r\n\x1a\n" + b"0" * 16
 
+    async def fake_radar(product, lag, z, x, y):
+        return b"\x89PNG\r\n\x1a\n" + b"0" * 16
+
     monkeypatch.setattr(main_mod.manager.metar, "fetch", fake_metar)
     monkeypatch.setattr(main_mod.manager, "_fetch_traffic", fake_traffic)
     # the lifespan warms the basemap tile cache for the configured views: never from OSM in tests
     monkeypatch.setattr(main_mod.manager.tiles, "_fetch_upstream", fake_tile)
+    monkeypatch.setattr(main_mod.manager.radar, "_fetch_upstream", fake_radar)
     with TestClient(main_mod.app) as c:
         yield c

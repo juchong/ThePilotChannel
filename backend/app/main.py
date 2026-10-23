@@ -18,6 +18,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .config import ICAO_RE, Config, mask_secrets, unknown_keys, unmask_secrets
 from .manager import DataManager, TooManySubscribers
+from .radar import LAYER_RE
 from .tiles import valid_tile
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -227,6 +228,17 @@ async def get_tile(z: int, x: int, y: int):
     if path is None:
         raise HTTPException(status_code=502, detail="tile unavailable")
     return FileResponse(path, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/radar/{layer}/{z}/{x}/{y}.png")
+async def get_radar_tile(layer: str, z: int, x: int, y: int, v: int = 0):
+    """NEXRAD tile from IEM with returns below radar.min_dbz removed, cached per bucket."""
+    if not LAYER_RE.match(layer) or not valid_tile(z, x, y):
+        raise HTTPException(status_code=404, detail="no such tile")
+    data = await manager.radar.get(layer, z, x, y, v, manager.get_config().radar.min_dbz)
+    if data is None:
+        raise HTTPException(status_code=502, detail="radar tile unavailable")
+    return Response(content=data, media_type="image/png", headers={"Cache-Control": "public, max-age=300"})
 
 
 @app.post("/api/test-source", dependencies=[Depends(require_admin)])

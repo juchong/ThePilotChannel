@@ -191,6 +191,9 @@ class Radar(BaseModel):
     # Dissolve between frames instead of stepping. Off by default: the fade
     # forces a full map re-render for its whole duration.
     crossfade: bool = False
+    # Returns weaker than this are not drawn (the composite's weak returns
+    # are mostly not precipitation).
+    min_dbz: float = Field(10, ge=-30, le=60)
 
     @field_validator("interval_min")
     @classmethod

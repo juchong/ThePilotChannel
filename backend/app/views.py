@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Dict, List
 
+from .radar import legend as radar_legend
 from .config import RADAR_MAX_AGE_MIN, Config
 from .geo import haversine_nm, miles_to_nm
 
@@ -98,8 +99,10 @@ def _radar_payload(cfg: Config) -> Dict:
         "opacity": r.opacity,
         "product": r.product,
         "crossfade": r.crossfade,
+        "min_dbz": r.min_dbz,
+        "legend": radar_legend(r.product, r.min_dbz),
         # Iowa Environmental Mesonet RIDGE II composite, Web Mercator (EPSG:3857).
-        "tile_base": f"https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-{r.product}-900913",
+        "tile_base": f"/radar/{r.product}",  # the backend proxies and filters the tiles
         "frames": frames,
     }
 

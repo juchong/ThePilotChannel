@@ -395,20 +395,16 @@ function animateSatellite(view, frames) {
 
 // ---- NEXRAD radar loop --------------------------------------------------
 // Standard NWS reflectivity color scale (dBZ -> color) for the legend.
-const RADAR_DBZ = [
-  [5, "#04e9e7"], [15, "#0300f4"], [25, "#02fd02"], [35, "#fdf802"],
-  [45, "#fd9500"], [55, "#fd0000"], [65, "#f800fd"], [75, "#fdfdfd"],
-];
-
 // NEXRAD precipitation overlay for the regional view. The radar raster sits below
 // the wind-barb markers (DOM markers always render above map layers), so barbs
 // stay legible on top of the precipitation.
 function startRadarOverlay(view) {
   const radar = view.radar;
   if (!radar || !(radar.frames || []).length) return;
-  state.map.ensureRadar(radar.frames, { tileBase: radar.tile_base, opacity: radar.opacity, crossfade: !!radar.crossfade });
+  const tileBase = radar.tile_base.startsWith("/") ? location.origin + radar.tile_base : radar.tile_base;
+  state.map.ensureRadar(radar.frames, { tileBase, opacity: radar.opacity, crossfade: !!radar.crossfade });
   state.map.refreshRadar(); // new 5-minute bucket -> reload the frames
-  renderRadarLegend();
+  renderRadarLegend(radar.legend || []);
   showRadarOverlays(true);
   animateRadar(view, radar.frames, radar.label);
 }
@@ -440,9 +436,11 @@ function animateRadar(view, frames, label) {
   step();
 }
 
-function renderRadarLegend() {
-  const swatches = RADAR_DBZ.map(([, c]) => `<i style="background:${c}"></i>`).join("");
-  const labels = RADAR_DBZ.map(([d]) => `<span>${d}</span>`).join("");
+// legend: [[dbz, "#rrggbb"], ...] from the backend, the product's own colors
+// from the configured floor up.
+function renderRadarLegend(legend) {
+  const swatches = legend.map(([, c]) => `<i style="background:${esc(c)}"></i>`).join("");
+  const labels = legend.map(([d]) => `<span>${esc(String(d))}</span>`).join("");
   el("radar-legend").innerHTML =
     `<h4>REFLECTIVITY (dBZ)</h4><div class="scale">${swatches}</div><div class="labels">${labels}</div>`;
 }
