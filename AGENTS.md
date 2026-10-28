@@ -173,9 +173,10 @@ Dockerfile, docker-compose.yml, data/config.yaml
   waits, bounded by `WEATHER_COLD_WAIT_S`. The METAR loop retries a failed refresh after
   `WEATHER_RETRY_S`; `weather.py` retries transient errors (DNS `EAI_AGAIN`, connect and
   read timeouts) once; the last good weather is persisted to `weather-cache.json` next to
-  the config and restored at start. `lib/stations.js` keeps the last non-empty station set
-  through a failing refresh and changes only the footer. Do not add public fallback
-  resolvers: the LAN receiver's name is known only to the router.
+  the config by a single coalescing writer task and restored at start. `lib/stations.js`
+  keeps the last non-empty station set through a failing refresh and changes only the
+  footer. Do not add public fallback resolvers: the LAN receiver's name is known only to
+  the router.
 - Satellite frame URLs come from parsing the NOAA STAR CDN directory listing
   (`satellite.py`), cached for 240 s per parameter set. Query parameters are validated
   before they reach a URL.

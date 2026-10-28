@@ -87,6 +87,9 @@ class DataManager:
         self._area_cache: Dict[str, Dict] = {}        # key -> {ts (wall), data, error}
         self._area_refreshing: Set[str] = set()
         self._sat_cache: Dict[str, Dict] = {}
+        self._store_dirty = False                       # a save of the weather store is pending
+        self._store_task: Optional[asyncio.Task] = None
+        self._store_failing = False
         self._load_weather_store()
 
         self._agg_lock = asyncio.Lock()
@@ -421,19 +424,37 @@ class DataManager:
             log.info("weather cache restored from %s (%d METARs, %d areas)", WEATHER_STORE, len(self._weather_cache), len(self._area_cache))
 
     def _save_weather_store(self) -> None:
-        store = {
-            "metars": self._weather_cache,
-            "metars_ts": self._weather_ts,
-            "areas": {k: {"ts": v["ts"], "data": v["data"]} for k, v in self._area_cache.items()},
-        }
+        """Queue a save of the weather caches. A single writer task runs until no
+        save is pending, so overlapping saves never share the temp file and the
+        file always ends with the latest state."""
+        self._store_dirty = True
+        if self._store_task is None or self._store_task.done():
+            self._store_task = self._spawn(self._write_weather_store(), name="weather-store")
 
-        def write():
+    async def _write_weather_store(self) -> None:
+        def write(store):
             tmp = WEATHER_STORE + ".tmp"
             with open(tmp, "w") as fh:
                 json.dump(store, fh, separators=(",", ":"))
             os.replace(tmp, WEATHER_STORE)
 
-        self._spawn(asyncio.to_thread(write), name="weather-store")
+        while self._store_dirty:
+            self._store_dirty = False
+            store = {
+                "metars": dict(self._weather_cache),
+                "metars_ts": self._weather_ts,
+                "areas": {k: {"ts": v["ts"], "data": v["data"]} for k, v in self._area_cache.items()},
+            }
+            try:
+                await asyncio.to_thread(write, store)
+            except OSError as exc:
+                if not self._store_failing:
+                    log.error("weather cache not saved to %s: %s", WEATHER_STORE, exc)
+                self._store_failing = True
+            else:
+                if self._store_failing:
+                    log.info("weather cache saved again")
+                self._store_failing = False
 
     def _with_age(self, m: Dict) -> Dict:
         obs = m.get("obs_time")

@@ -5,6 +5,7 @@ categories, winds, and visibilities decode correctly.
 """
 import asyncio
 import io
+import json
 import logging
 import os
 import time
@@ -233,6 +234,44 @@ def test_manager_can_be_started_twice():
             await m.stop()
 
     asyncio.run(run())
+
+
+def test_overlapping_weather_saves_serialise_and_keep_the_latest_state(monkeypatch):
+    """Saves requested while the weather store is being written wait for the
+    writer, are coalesced, and leave the latest caches on disk with no temp file."""
+    path = os.path.join(os.path.dirname(mg.WEATHER_STORE), "weather-race.json")
+    monkeypatch.setattr(mg, "WEATHER_STORE", path)
+    dumps = []
+
+    class SlowJson:
+        def __getattr__(self, name):
+            return getattr(json, name)
+
+        def dump(self, obj, fh, **kw):
+            dumps.append(sorted(obj["metars"]))
+            time.sleep(0.2)
+            json.dump(obj, fh, **kw)
+
+    monkeypatch.setattr(mg, "json", SlowJson())
+
+    async def run():
+        m = mg.DataManager()
+        try:
+            m._weather_cache = {"KSEA": {"icao": "KSEA"}}
+            m._save_weather_store()
+            await asyncio.sleep(0.05)  # the first write is now in progress
+            m._weather_cache = {"KSEA": {"icao": "KSEA"}, "KBFI": {"icao": "KBFI"}}
+            m._save_weather_store()
+            m._save_weather_store()
+            await asyncio.gather(*[t for t in m._tasks if t.get_name() == "weather-store"])
+        finally:
+            await m.client.aclose()
+        with open(path) as fh:
+            return json.load(fh)["metars"]
+
+    assert sorted(asyncio.run(run())) == ["KBFI", "KSEA"]
+    assert dumps == [["KSEA"], ["KBFI", "KSEA"]]
+    assert not os.path.exists(path + ".tmp")
 
 
 # ---- quality -----------------------------------------------------------------------------
