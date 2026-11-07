@@ -424,8 +424,9 @@ actions:
   `data/`, and run `docker compose restart`. The tile and weather caches rebuild on their
   own. The new Pi may get a different address: update any automation that points at it.
 - **Change the Wi-Fi network or password:** use `sudo nmtui` (Edit a connection), then run
-  `sudo ~/ThePilotChannel/deploy/harden-wifi.sh` so the backup copy matches. To forget a
-  network, delete it in `nmtui` and remove its `hardened-<uuid>.nmconnection` file from
+  `sudo ~/ThePilotChannel/deploy/harden-wifi.sh`: it moves the edited profile back out of
+  netplan and refreshes the backup copy. To forget a network, delete it in `nmtui` and
+  remove its `hardened-<uuid>.nmconnection` file from
   `/usr/lib/NetworkManager/system-connections`.
 - **Logs:** the app's log is `docker compose logs -f` (capped so it cannot fill the SD
   card); the kiosk browser's log is `/dev/shm/hangar-kiosk/hangar-kiosk.log`.

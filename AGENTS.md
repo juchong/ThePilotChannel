@@ -349,7 +349,9 @@ loaded) before keeping it.
   during boot can empty it (raspberrypi/trixie-feedback#99). `deploy/harden-wifi.sh`
   converts the cloud-init netplan profiles from Imager, disables cloud-init's network
   config, and verifies with `--check`; `--test-fallback` connects from the read-only
-  copies. Keep `/etc/netplan` empty. Ethernet needs no saved profile.
+  copies. It writes settings into the keyfiles and reloads: a change made through
+  NetworkManager's API (`nmcli`, `nmtui`) stores the profile as netplan again, which the
+  next run converts back. Keep `/etc/netplan` empty. Ethernet needs no saved profile.
 
 ## HTTP API
 

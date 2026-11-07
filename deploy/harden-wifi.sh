@@ -13,7 +13,9 @@
 #   - recreates Wi-Fi from the Imager settings in /boot/firmware/network-config when no
 #     Wi-Fi profile is left at all;
 #   - makes each Wi-Fi profile retry forever and keep the hardware MAC address, which
-#     DHCP reservations depend on;
+#     DHCP reservations depend on. The two settings are written into the keyfile and
+#     reloaded: a change made through NetworkManager's own API (nmcli, nmtui) stores the
+#     profile as netplan again on Raspberry Pi OS;
 #   - keeps a read-only copy of each Wi-Fi profile, same UUID, in
 #     /usr/lib/NetworkManager/system-connections. NetworkManager's service sandbox
 #     (ProtectSystem=yes) cannot write there, and NetworkManager serves the profile from
@@ -137,6 +139,38 @@ for nd in (wifis.values() if isinstance(wifis, dict) else []):
             print("\t".join(base64.b64encode(x.encode()).decode() for x in fields))
 PY
 
+# Prints the keyfile $1 with key $3 set to $4 in section [$2]; everything else verbatim.
+read -r -d '' KEYFILE_PY <<'PY' || true
+import sys
+
+path, section, key, value = sys.argv[1:5]
+with open(path, encoding="utf-8") as f:
+    lines = f.read().splitlines()
+out, in_section, seen, done = [], False, False, False
+for line in lines:
+    if line.startswith("["):
+        if in_section and not done:
+            at = len(out)
+            while at and not out[at - 1].strip():
+                at -= 1
+            out.insert(at, f"{key}={value}")
+            done = True
+        in_section = line.strip() == f"[{section}]"
+        seen = seen or in_section
+    elif in_section and not done and line.split("=", 1)[0].strip() == key:
+        line = f"{key}={value}"
+        done = True
+    out.append(line)
+if not done:
+    if not seen:
+        out.append(f"[{section}]")
+    at = len(out)
+    while at and seen and not out[at - 1].strip():
+        at -= 1
+    out.insert(at, f"{key}={value}")
+sys.stdout.write("\n".join(out) + "\n")
+PY
+
 # "uuid<TAB>type<TAB>file" for every profile NetworkManager knows.
 profiles() {
   local uuid kind file
@@ -174,6 +208,11 @@ write_file() {
   sync "$tmp"
   mv -f -- "$tmp" "$dst"
   sync "$dir"
+}
+
+# Set key $3 of section [$2] in keyfile $1 to $4, replacing the file atomically.
+set_key() {
+  python3 -c "$KEYFILE_PY" "$1" "$2" "$3" "$4" | write_file "$1"
 }
 
 convert_netplan() {
@@ -300,10 +339,15 @@ harden_profiles() {
       if dry; then
         info "would make \"$name\" retry forever and keep the hardware MAC address"
       else
-        nmcli connection modify "$uuid" connection.autoconnect yes \
-          connection.autoconnect-retries 0 802-11-wireless.cloned-mac-address permanent </dev/null
+        set_key "$file" connection autoconnect true
+        set_key "$file" connection autoconnect-retries 0
+        set_key "$file" wifi cloned-mac-address permanent
+        nmcli connection reload </dev/null
         file=$(served_from "$uuid")
         [[ $file == "$ETC_DIR"/* ]] || die "\"$name\" moved to '${file:-nowhere}' after the change; stopping"
+        [ "$(prop "$uuid" connection.autoconnect-retries)" = 0 ] &&
+          [ "$(prop "$uuid" 802-11-wireless.cloned-mac-address)" = permanent ] ||
+          die "NetworkManager did not take the keyfile settings of \"$name\"; stopping"
         info "\"$name\" now retries forever and keeps the hardware MAC address"
       fi
     fi
