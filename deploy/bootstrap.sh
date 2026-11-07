@@ -24,11 +24,12 @@
 #
 # What it sets up (see README.md "Install on the Raspberry Pi"):
 #   system update; kiosk packages (cage, chromium, wlrctl, seatd, grim, imagemagick); the
-#   grim wrapper that adds jpeg/webp/avif/gif screenshots; Wi-Fi settings that survive
-#   power cuts (deploy/harden-wifi.sh); Docker CE in rootless mode as this user (rootful
-#   daemon disabled); the GPU/KMS overlay; seatd and the video/render/input groups;
-#   automatic login on tty1 that launches the kiosk; Wi-Fi power saving off; a persistent
-#   system log; the optional admin password; and the app stack itself.
+#   Chromium build with hardware HEVC decoding for the camera view (Pi 5, held); the grim
+#   wrapper that adds jpeg/webp/avif/gif screenshots; Wi-Fi settings that survive power
+#   cuts (deploy/harden-wifi.sh); Docker CE in rootless mode as this user (rootful daemon
+#   disabled); the GPU/KMS overlay; seatd and the video/render/input groups; automatic
+#   login on tty1 that launches the kiosk; Wi-Fi power saving off; a persistent system
+#   log; the optional admin password; and the app stack itself.
 set -euo pipefail
 
 REPO_URL="https://github.com/juchong/ThePilotChannel.git"
@@ -76,8 +77,9 @@ run() {
 sudo_run() { run sudo "$@"; }
 applying() { [ "$MODE" != check ]; }
 
-pkg_installed() { [ "$(dpkg-query -W -f='${Status}' "$1" 2>/dev/null)" = "install ok installed" ]; }
+pkg_installed() { case "$(dpkg-query -W -f='${Status}' "$1" 2>/dev/null)" in *" ok installed") true ;; *) false ;; esac; }  # installed, held or not
 line_present() { grep -qxF "$2" "$1" 2>/dev/null; }  # exact, uncommented line
+overlay_present() { grep -qE "^$2(,|\$)" "$1" 2>/dev/null; }  # the overlay line, with or without parameters
 have() { command -v "$1" >/dev/null 2>&1; }
 
 USER_NAME="$(id -un)"
@@ -131,6 +133,48 @@ if applying && [ ${#missing_pkgs[@]} -gt 0 ]; then
 fi
 if ! have chromium && have chromium-browser; then
   applying && sudo_run ln -sf "$(command -v chromium-browser)" /usr/local/bin/chromium
+fi
+
+# ---- 2b. Chromium with hardware HEVC decoding (Pi 5) ---------------------------------
+# The camera view plays H.265 streams, which Raspberry Pi OS's Chromium decodes only in
+# software. On a Pi 5 the build from sslivins/chromium-rpi-hevc (the same package
+# version, patched for the Pi's V4L2 HEVC decoder) replaces it, verified by checksum, and
+# the packages are held so an OS upgrade does not put the stock build back. To move to a
+# newer release, change the release name and the checksums here.
+HEVC_RELEASE="chromium-156.0.8078.79-1-rpt1-hevc1"
+HEVC_BASE_URL="https://github.com/sslivins/chromium-rpi-hevc/releases/download/$HEVC_RELEASE"
+HEVC_DEBS=(
+  "chromium_156.0.8078.79-1.deb13u1+rpt1_arm64.deb 18cabcd5112469256ae5ceafed989e735f62d0691a75c0d5387ed758598edf1d"
+  "chromium-common_156.0.8078.79-1.deb13u1+rpt1_arm64.deb 462cc6d18c80f5fd6d1181df4db005ed1363394a58bd7309761a204e2316f8af"
+  "chromium-l10n_156.0.8078.79-1.deb13u1+rpt1_all.deb 3bee119040cb99963ce397d7eac4a159ccec5537bf2ac10cb022880ff3f628d8"
+  "chromium-sandbox_156.0.8078.79-1.deb13u1+rpt1_arm64.deb 038cd0322fcdd7ac2db9b05dda62fc13d82e88b9044fbee6be1efdd5e4eb7211"
+)
+HEVC_BINARY_SHA256="c73eedca86fa2f2a8fd3ad3fe303c777620bf1d1fd98a47e6189ba9e5a1c13fc"  # /usr/lib/chromium/chromium of that release
+HEVC_PACKAGES=(chromium chromium-common chromium-l10n chromium-sandbox)
+log "Chromium with hardware HEVC decoding (camera view, Pi 5)"
+if grep -q "Raspberry Pi 5" /proc/device-tree/model 2>/dev/null; then
+  if [ "$(sha256sum /usr/lib/chromium/chromium 2>/dev/null | cut -c1-64)" = "$HEVC_BINARY_SHA256" ]; then ok "patched build $HEVC_RELEASE installed"; else
+    miss "patched build $HEVC_RELEASE installed"
+    if applying; then
+      if [ "$MODE" = dry-run ]; then info "+ download $HEVC_RELEASE, verify checksums, apt-get install --reinstall"; else
+        hevc_tmp="$(mktemp -d)"
+        for entry in "${HEVC_DEBS[@]}"; do
+          file="${entry%% *}"; sum="${entry##* }"
+          curl -fsSL -o "$hevc_tmp/$file" "$HEVC_BASE_URL/${file//+/%2B}"
+          echo "$sum  $hevc_tmp/$file" | sha256sum -c --quiet || die "checksum mismatch for $file"
+        done
+        export DEBIAN_FRONTEND=noninteractive
+        sudo apt-get install -y -q --reinstall --allow-downgrades "$hevc_tmp"/*.deb
+        rm -rf "$hevc_tmp"
+      fi
+    fi
+  fi
+  held="$(apt-mark showhold 2>/dev/null || true)"
+  for p in "${HEVC_PACKAGES[@]}"; do
+    if grep -qx "$p" <<<"$held"; then ok "$p held at the patched build"; else miss "$p held at the patched build"; applying && sudo_run apt-mark hold "$p"; fi
+  done
+else
+  info "not a Pi 5: the stock Chromium stays (the camera view needs the Pi 5's HEVC decoder)"
 fi
 
 # ---- 3. the repository ----------------------------------------------------------------
@@ -264,9 +308,8 @@ log "GPU overlay for the kiosk (KMS)"
 BOOTCFG=/boot/firmware/config.txt
 [ -f "$BOOTCFG" ] || BOOTCFG=/boot/config.txt
 boot_missing=()
-for line in "dtoverlay=vc4-kms-v3d" "max_framebuffers=2"; do
-  line_present "$BOOTCFG" "$line" && ok "$line" || { miss "$line"; boot_missing+=("$line"); }
-done
+overlay_present "$BOOTCFG" "dtoverlay=vc4-kms-v3d" && ok "dtoverlay=vc4-kms-v3d" || { miss "dtoverlay=vc4-kms-v3d"; boot_missing+=("dtoverlay=vc4-kms-v3d"); }
+line_present "$BOOTCFG" "max_framebuffers=2" && ok "max_framebuffers=2" || { miss "max_framebuffers=2"; boot_missing+=("max_framebuffers=2"); }
 if applying && [ ${#boot_missing[@]} -gt 0 ]; then
   if [ "$MODE" = dry-run ]; then
     info "+ append [all] ${boot_missing[*]} to $BOOTCFG"

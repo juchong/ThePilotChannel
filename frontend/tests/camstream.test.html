@@ -1,0 +1,110 @@
+<!doctype html><html><body><pre id="out"></pre><script type="module">
+import { check, done } from "./harness.js";
+import { CamStream, supportedCodecs, BUFFER_KEEP_S } from "../src/lib/camstream.js";
+// A camera tile must offer video codecs only, keep its buffer short, stay at the
+// live edge, survive a dropped relay with backoff, and release everything on stop.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+class FakeWS {
+  static all = [];
+  constructor(url) { this.url = url; this.readyState = 0; this.sent = []; FakeWS.all.push(this); }
+  send(d) { this.sent.push(d); }
+  close() { this.readyState = 3; this.closed = true; }
+  open() { this.readyState = 1; this.onopen && this.onopen(); }
+  message(d) { this.onmessage && this.onmessage({ data: d }); }
+  drop() { this.readyState = 3; this.onclose && this.onclose(); }
+}
+class FakeSB {
+  constructor() { this.updating = false; this.appended = []; this.removed = []; this.on = {}; this.buffered = { length: 0, start: () => 0, end: () => 0 }; }
+  addEventListener(t, f) { this.on[t] = f; }
+  appendBuffer(d) { this.updating = true; this.appended.push(d.byteLength); }
+  remove(a, b) { this.updating = true; this.removed.push([a, b]); }
+  endUpdate() { this.updating = false; this.on.updateend && this.on.updateend(); }
+}
+class FakeMS {
+  static isTypeSupported(t) { return t.includes("hvc1") || t.includes("avc1.640029"); }
+  constructor() { this.readyState = "closed"; this.on = {}; this.sb = null; }
+  addEventListener(t, f) { this.on[t] = f; }
+  addSourceBuffer(mime) { if (mime.includes("bad")) throw new Error("NotSupportedError"); this.mime = mime; return (this.sb = new FakeSB()); }
+  open() { this.readyState = "open"; this.on.sourceopen && this.on.sourceopen(); }
+}
+function fakeVideo() {
+  return { currentTime: 0, paused: true, playbackRate: 1, src: "", plays: 0, loads: 0, on: {},
+    addEventListener(t, f) { this.on[t] = f; }, removeEventListener(t) { delete this.on[t]; },
+    removeAttribute() { this.src = ""; }, load() { this.loads++; }, play() { this.paused = false; this.plays++; return Promise.resolve(); } };
+}
+let now = 1000;
+const revoked = [];
+const states = [];
+const video = fakeVideo();
+const cam = new CamStream(video, "ws://relay/api/cameras/ws?stream=cam1", {
+  WebSocketImpl: FakeWS, MediaSourceImpl: FakeMS, now: () => now,
+  createObjectURL: () => "blob:fake", revokeObjectURL: (u) => revoked.push(u),
+  signalTimeoutMs: 500, reconnectMinMs: 20, reconnectMaxMs: 80,
+  onState: (s) => states.push(s),
+});
+check("only video codecs the browser supports are offered", supportedCodecs(FakeMS.isTypeSupported).join() === "hvc1.1.6.L153.B0,avc1.640029");
+cam.start();
+const ws1 = FakeWS.all[0];
+check("start opens the relay socket", FakeWS.all.length === 1 && ws1.url.endsWith("stream=cam1") && ws1.binaryType === "arraybuffer" && cam.state === "connecting");
+ws1.open();
+check("the media source is attached to the video on open", video.src === "blob:fake" && cam.ms instanceof FakeMS);
+cam.ms.open();
+check("the codec offer is sent once the source is open", ws1.sent.length === 1 && JSON.parse(ws1.sent[0]).type === "mse" && JSON.parse(ws1.sent[0]).value === "hvc1.1.6.L153.B0,avc1.640029");
+ws1.message(JSON.stringify({ type: "mse", value: 'video/mp4; codecs="hvc1.1.6.L153.B0"' }));
+const sb = cam.ms.sb;
+check("the source buffer takes the relay's MIME type in segments mode", !!sb && cam.ms.mime.includes("hvc1") && sb.mode === "segments");
+ws1.message(new ArrayBuffer(100));
+check("the first segment is appended and the tile goes live", sb.appended.length === 1 && sb.appended[0] === 100 && cam.state === "live");
+ws1.message(new ArrayBuffer(30));
+ws1.message(new ArrayBuffer(20));
+check("segments arriving during an update are queued, not dropped", sb.appended.length === 1 && cam.queue.length === 2);
+sb.endUpdate();
+check("the queue is appended as one buffer after the update", sb.appended.length === 2 && sb.appended[1] === 50);
+sb.buffered = { length: 1, start: () => 0, end: () => 20 };
+video.currentTime = 19;
+sb.endUpdate();
+check("played video beyond the keep window is trimmed and playback starts", sb.removed.length === 1 && sb.removed[0][0] === 0 && Math.abs(sb.removed[0][1] - (19 - BUFFER_KEEP_S)) < 1e-9 && video.plays === 1 && !video.paused);
+sb.updating = false;
+video.currentTime = 10;
+sb.endUpdate();
+check("far behind the live edge the playhead jumps to it", Math.abs(video.currentTime - 19.5) < 1e-9);
+sb.updating = false;
+video.currentTime = 18.5;
+sb.endUpdate();
+check("slightly behind, playback runs a little faster", video.playbackRate === 1.1);
+sb.updating = false;
+video.currentTime = 19.8;
+sb.endUpdate();
+check("at the live edge playback runs at normal speed", video.playbackRate === 1);
+ws1.drop();
+check("a dropped relay puts the tile in waiting and releases the media source", cam.state === "waiting" && revoked.length === 1 && ws1.closed && cam.sb === null);
+await sleep(40);
+check("the tile reconnects after the backoff", FakeWS.all.length === 2 && cam.state === "connecting");
+const ws2 = FakeWS.all[1];
+ws2.open(); cam.ms.open();
+ws2.message(JSON.stringify({ type: "mse", value: 'video/mp4; codecs="bad"' }));
+check("an unplayable stream type is a failure, not a hang", cam.state === "waiting");
+check("the backoff grows with each failure", cam.reconnectMs === 80);
+await sleep(100);
+const ws3 = FakeWS.all[2];
+check("the backoff is capped", FakeWS.all.length === 3 && cam.reconnectMs === 80);
+ws3.open(); cam.ms.open();
+ws3.message(JSON.stringify({ type: "mse", value: 'video/mp4; codecs="hvc1.1.6.L153.B0"' }));
+ws3.message(new ArrayBuffer(10));
+check("live again after a good segment", cam.state === "live");
+now += 600;
+cam.watch();
+check("no data within the signal timeout means no signal", cam.state === "waiting" && cam.lastReason === "no data");
+await sleep(100);
+const ws4 = FakeWS.all[3];
+ws4.open(); cam.ms.open();
+ws4.message(JSON.stringify({ type: "mse", value: 'video/mp4; codecs="hvc1.1.6.L153.B0"' }));
+ws4.message(new ArrayBuffer(10));
+cam.stop();
+check("stop closes the relay socket, drops the source and reloads the video", cam.state === "stopped" && ws4.closed && video.src === "" && video.loads === 1 && revoked.length === 4 && !video.on.error);
+ws4.drop();
+await sleep(150);
+check("nothing reconnects after stop", FakeWS.all.length === 4 && cam.state === "stopped");
+check("state changes were reported in order", states.join() === "connecting,live,waiting,connecting,waiting,connecting,live,waiting,connecting,live,stopped");
+done();
+</script></body></html>

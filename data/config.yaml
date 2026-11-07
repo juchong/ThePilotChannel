@@ -59,3 +59,23 @@ radar:
   opacity: 0.75
   product: n0q
   crossfade: false
+cameras:
+  enabled: true
+  label: Airport Cameras
+  dwell_s: 30
+  tiles:
+  - name: A6 Gate
+    stream: cam1
+    cols: 2
+  - name: Runway North
+    stream: cam3
+    cols: 2
+  - name: Runway South
+    stream: cam4
+    cols: 2
+  - name: Tiedowns South
+    stream: cam5
+    cols: 4
+  - name: Entry Door
+    stream: cam2
+    cols: 2

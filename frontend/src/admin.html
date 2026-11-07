@@ -22,12 +22,12 @@
       <p id="backend-status" class="hint"></p>
 
       <section class="card" data-section="airports">
-        <h2>Airports <button type="button" class="btn sm" data-add="airport">+ add</button></h2>
+        <h2>Airports <button type="button" class="btn sm" data-add="airports">+ add</button></h2>
         <div id="airports"></div>
       </section>
 
       <section class="card" data-section="regions">
-        <h2>Regions <button type="button" class="btn sm" data-add="region">+ add</button></h2>
+        <h2>Regions <button type="button" class="btn sm" data-add="regions">+ add</button></h2>
         <div id="regions"></div>
       </section>
 
@@ -59,6 +59,14 @@
       <section class="card" data-section="radar">
         <h2>NEXRAD radar overlay (on regional view)</h2>
         <div id="radar"></div>
+      </section>
+
+      <section class="card" data-section="cameras">
+        <h2>Cameras (live video) <button type="button" class="btn sm" data-add="cameras.tiles">+ add tile</button></h2>
+        <p class="hint" style="margin-top:0">A view of live camera streams. Each tile plays a stream by the name it has in
+          <code>data/go2rtc/go2rtc.yaml</code> on the Pi, which holds the camera URLs (see the README). Tiles fill
+          rows of six columns; a two-column tile is 16:9 and a four-column tile 32:9.</p>
+        <div id="cameras"></div>
       </section>
 
       <section class="card" data-section="screen">

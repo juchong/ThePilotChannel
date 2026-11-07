@@ -13,6 +13,9 @@ services:
       # (HTTP Basic auth, any username). Put it in a .env file next to this
       # compose file: HANGAR_ADMIN_PASSWORD=...
       HANGAR_ADMIN_PASSWORD: ${HANGAR_ADMIN_PASSWORD:-}
+      # The camera stream relay (the go2rtc service below), reached over the
+      # compose network only.
+      HANGAR_GO2RTC: http://go2rtc:1984
     volumes:
       # bind-mount the data DIRECTORY (not a single file) so atomic writes work
       - ./data:/data
@@ -38,6 +41,42 @@ services:
         max-file: "3"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/healthz').status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Camera stream relay for the camera view. It pulls the RTSPS streams listed in
+  # data/go2rtc/go2rtc.yaml (kept out of git: the URLs carry access tokens) and
+  # serves them to the app's /api/cameras/ws relay as fragmented MP4 without
+  # re-encoding. It publishes no port and its RTSP, WebRTC and SRTP listeners are
+  # off: only the app container reaches it, through the API on 1984.
+  go2rtc:
+    image: alexxit/go2rtc:1.9.15
+    container_name: hangar-go2rtc
+    restart: unless-stopped
+    command:
+      - go2rtc
+      - -config
+      - /config/go2rtc.yaml
+      - -config
+      - '{"rtsp":{"listen":""},"webrtc":{"listen":""},"srtp":{"listen":""}}'
+    volumes:
+      - ./data/go2rtc:/config:ro
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:1984/api"]
       interval: 30s
       timeout: 5s
       retries: 3

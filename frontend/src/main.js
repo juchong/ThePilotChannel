@@ -1,5 +1,6 @@
 import { api, subscribeEvents } from "./lib/api.js";
 import { AircraftStore } from "./lib/aircraft.js";
+import { CamStream } from "./lib/camstream.js";
 import { navTarget, wrapIndex } from "./lib/cycle.js";
 import { el, esc, sleep } from "./lib/dom.js";
 import { ALT_STOPS, HangarMap } from "./lib/map.js";
@@ -40,6 +41,7 @@ const state = {
   motionRaf: null,
   dwellTimer: null,
   satTimer: null,
+  cams: [], // CamStream instances of the camera view on screen
   blackoutTimer: null, // local safety timer for a timed remote blackout
   navSeq: null, // last remote navigation request seen (applied or adopted)
   map: null,
@@ -220,6 +222,7 @@ function switchView(idx) {
   stopPolling();
   stopMotion();
   if (state.satTimer) clearTimeout(state.satTimer);
+  stopCameras();
   if (!state.views.length) {
     showOverlay("No views configured. Open /admin to add airports.");
     return FALLBACK_DWELL_S;
@@ -237,6 +240,9 @@ function switchView(idx) {
   if (state.view.type === "satellite") {
     showStage("sat");
     setSatelliteView(state.view);
+  } else if (state.view.type === "cameras") {
+    showStage("cams");
+    startCameras(state.view);
   } else if (state.view.type === "local") {
     showStage("map");
     state.map.resize();
@@ -269,13 +275,16 @@ function switchView(idx) {
   return state.view.dwell_s;
 }
 
-// Toggle the stage between "map" (map + side panel) and "sat" (fullscreen
-// satellite loop). The satellite view is an overlay: the map container keeps
-// its size underneath. Hiding the map with display:none shrinks it to 0x0 and
-// MapLibre then trims its tile cache to a handful of tiles.
+// Toggle the stage between "map" (map + side panel), "sat" (fullscreen
+// satellite loop) and "cams" (camera grid). The satellite and camera views are
+// overlays: the map container keeps its size underneath. Hiding the map with
+// display:none shrinks it to 0x0 and MapLibre then trims its tile cache to a
+// handful of tiles.
 function showStage(mode) {
   el("stage").classList.toggle("stage-sat", mode === "sat");
+  el("stage").classList.toggle("stage-cams", mode === "cams");
   el("sat").classList.toggle("active", mode === "sat");
+  el("cams").classList.toggle("active", mode === "cams");
 }
 
 function showRadarOverlays(on) {
@@ -414,6 +423,54 @@ function animateSatellite(view, frames) {
     state.satTimer = setTimeout(step, last ? SAT_HOLD_MS : SAT_FRAME_MS);
   };
   step();
+}
+
+// ---- camera grid --------------------------------------------------------
+// One <video> per tile, fed by the backend's relay of go2rtc's MSE stream. The
+// tiles are built when the view starts and torn down when it ends, so the
+// hardware decoders are held only while the cameras are on screen.
+function camStreamUrl(stream) {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  return `${proto}//${location.host}/api/cameras/ws?stream=${encodeURIComponent(stream)}`;
+}
+
+function startCameras(view) {
+  const grid = el("cams-grid");
+  grid.innerHTML = (view.tiles || [])
+    .map(
+      (t) => `<div class="cam-tile waiting" style="--cols:${Number(t.cols) || 2}">
+        <video muted autoplay playsinline></video>
+        <div class="cam-caption">${esc(t.name || t.stream)}</div>
+        <div class="cam-nosignal">NO SIGNAL</div>
+      </div>`
+    )
+    .join("");
+  const tiles = [...grid.querySelectorAll(".cam-tile")];
+  state.cams = (view.tiles || []).map((t, i) => {
+    const tile = tiles[i];
+    const cam = new CamStream(tile.querySelector("video"), camStreamUrl(t.stream), {
+      onState: (s) => {
+        tile.classList.toggle("waiting", s !== "live");
+        updateCameraFooter(view);
+      },
+    });
+    cam.start();
+    return cam;
+  });
+  updateCameraFooter(view);
+}
+
+function stopCameras() {
+  for (const cam of state.cams) cam.stop();
+  state.cams = [];
+  el("cams-grid").innerHTML = "";
+}
+
+function updateCameraFooter(view) {
+  if (state.view !== view) return;
+  const n = state.cams.length;
+  const live = state.cams.filter((c) => c.state === "live").length;
+  updateFooter({ source: "cameras", healthy: live > 0, stale: live > 0 && live < n }, live, `of ${n} cameras live`);
 }
 
 // ---- NEXRAD radar loop --------------------------------------------------

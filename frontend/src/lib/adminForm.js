@@ -67,7 +67,21 @@ export const FIELDS = {
     { k: "min_dbz", label: "Hide returns below (dBZ)", type: "range", attrs: num(0, 40, 5), help: "Weaker returns are not drawn. Below about 10 dBZ they are mostly not precipitation." },
     { k: "crossfade", label: "Cross-fade frames", type: "bool", help: "Dissolves between frames instead of stepping. Off by default: the fade re-renders the whole map and is expensive on a Pi." },
   ],
+  cameras: [
+    { k: "enabled", label: "Enabled", type: "bool" },
+    { k: "label", label: "Label", type: "text", attrs: { maxlength: 80 } },
+    { k: "dwell_s", label: "Dwell (s)", type: "number", attrs: num(5, 3600, 1, { required: true }) },
+  ],
+  camera_tile: [
+    { k: "name", label: "Caption", type: "text", span: 4, attrs: { maxlength: 40 } },
+    { k: "stream", label: "Stream (its name in go2rtc.yaml)", type: "text", span: 4, attrs: { maxlength: 64, pattern: "[A-Za-z0-9_.-]+", required: true, spellcheck: "false", placeholder: "cam1" } },
+    { k: "cols", label: "Columns (of 6)", type: "number", span: 2, attrs: num(1, 6, 1, { required: true }) },
+  ],
 };
+
+// Collections the add / delete / move buttons act on, by dotted config path,
+// each with the factory for a new item.
+const COLLECTIONS = { airports: newAirport, regions: newRegion, "cameras.tiles": newTile };
 
 export function inputHtml(path, f, value) {
   const id = "f-" + path.replace(/[^A-Za-z0-9_-]/g, "-");
@@ -143,6 +157,18 @@ export function regionRowHtml(r, i, count) {
     </div>`;
 }
 
+export function tileRowHtml(t, i, count) {
+  return `
+    <div class="row" data-i="${i}">
+      ${fieldsHtml(`cameras.tiles.${i}`, FIELDS.camera_tile, t)}
+      <div class="row-actions">
+        <button type="button" class="btn sm" data-move="cameras.tiles.${i}.-1" ${i === 0 ? "disabled" : ""} title="move up">↑</button>
+        <button type="button" class="btn sm" data-move="cameras.tiles.${i}.1" ${i === count - 1 ? "disabled" : ""} title="move down">↓</button>
+        <button type="button" class="btn sm danger" data-del="cameras.tiles.${i}">delete</button>
+      </div>
+    </div>`;
+}
+
 // Render every section of the form into the given roots.
 export function renderAll(cfg, roots) {
   const airports = cfg.airports || [];
@@ -157,6 +183,10 @@ export function renderAll(cfg, roots) {
     `<div class="fields">${fieldsHtml("display", FIELDS.display, cfg.display)}${fieldsHtml("weather", FIELDS.weather, cfg.weather)}</div>`;
   roots.satellite.innerHTML = `<div class="fields">${fieldsHtml("satellite", FIELDS.satellite, cfg.satellite)}</div>`;
   roots.radar.innerHTML = `<div class="fields">${fieldsHtml("radar", FIELDS.radar, cfg.radar)}</div>`;
+  const tiles = (cfg.cameras && cfg.cameras.tiles) || [];
+  roots.cameras.innerHTML =
+    `<div class="fields">${fieldsHtml("cameras", FIELDS.cameras, cfg.cameras)}</div>` +
+    `<div class="tiles">${tiles.map((t, i) => tileRowHtml(t, i, tiles.length)).join("") || `<div class="empty">No tiles yet.</div>`}</div>`;
 }
 
 // Pull current form values back into cfg using data-f="path.to.field" and the
@@ -191,26 +221,43 @@ export function newRegion() {
   return { name: "", center_lat: null, center_lon: null, radius_mi: 30, enabled: true };
 }
 
-// Apply a button action (data-add / data-del / data-move) to cfg. Returns true
-// if cfg changed.
+export function newTile() {
+  return { name: "", stream: "", cols: 2 };
+}
+
+// The array at a dotted config path (created if missing).
+function collectionAt(cfg, path) {
+  const keys = path.split(".");
+  let obj = cfg;
+  for (let i = 0; i < keys.length - 1; i++) obj = obj[keys[i]] = obj[keys[i]] || {};
+  const last = keys[keys.length - 1];
+  return (obj[last] = obj[last] || []);
+}
+
+// Apply a button action to cfg: data-add="<collection>", data-del="<collection>.<i>",
+// data-move="<collection>.<i>.<-1|1>", where <collection> is a dotted path in
+// COLLECTIONS. Returns true if cfg changed.
 export function applyAction(cfg, btn) {
   if (btn.dataset.add) {
-    const coll = btn.dataset.add === "airport" ? "airports" : "regions";
-    cfg[coll] = cfg[coll] || [];
-    cfg[coll].push(btn.dataset.add === "airport" ? newAirport() : newRegion());
+    const make = COLLECTIONS[btn.dataset.add];
+    if (!make) return false;
+    collectionAt(cfg, btn.dataset.add).push(make());
     return true;
   }
   if (btn.dataset.del) {
-    const [coll, i] = btn.dataset.del.split(".");
-    if (!cfg[coll] || +i >= cfg[coll].length) return false;
-    cfg[coll].splice(+i, 1);
+    const parts = btn.dataset.del.split(".");
+    const i = +parts.pop();
+    const arr = collectionAt(cfg, parts.join("."));
+    if (!(i < arr.length)) return false;
+    arr.splice(i, 1);
     return true;
   }
   if (btn.dataset.move) {
-    const [coll, i, dir] = btn.dataset.move.split(".");
-    const arr = cfg[coll] || [];
-    const from = +i;
-    const to = from + +dir;
+    const parts = btn.dataset.move.split(".");
+    const dir = +parts.pop();
+    const from = +parts.pop();
+    const arr = collectionAt(cfg, parts.join("."));
+    const to = from + dir;
     if (to < 0 || to >= arr.length) return false;
     [arr[from], arr[to]] = [arr[to], arr[from]];
     return true;

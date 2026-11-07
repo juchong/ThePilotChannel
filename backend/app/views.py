@@ -79,6 +79,19 @@ def build_views(cfg: Config) -> List[Dict]:
                 "frames": cfg.satellite.frames,
             }
         )
+    if cfg.cameras.enabled and cfg.cameras.tiles:
+        views.append(
+            {
+                "id": "cameras",
+                "type": "cameras",
+                "label": cfg.cameras.label,
+                "dwell_s": cfg.cameras.dwell_s,
+                "tiles": [
+                    {"name": t.name or t.stream, "stream": t.stream, "cols": t.cols}
+                    for t in cfg.cameras.tiles
+                ],
+            }
+        )
     return views
 
 

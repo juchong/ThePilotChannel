@@ -9,13 +9,14 @@ import secrets
 from contextlib import asynccontextmanager
 from typing import List, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, WebSocket
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from . import cameras
 from .config import ICAO_RE, Config, mask_secrets, unknown_keys, unmask_secrets
 from .manager import DataManager, TooManySubscribers, UnknownView
 from .radar import LAYER_RE
@@ -216,7 +217,25 @@ async def get_satellite(
 
 @app.get("/api/status")
 async def get_status():
-    return manager.status()
+    data = manager.status()
+    cams = manager.get_config().cameras
+    data["cameras"] = (
+        {"enabled": True, **(await cameras.status([t.stream for t in cams.tiles]))}
+        if cams.enabled
+        else {"enabled": False}
+    )
+    return data
+
+
+@app.websocket("/api/cameras/ws")
+async def cameras_ws(ws: WebSocket, stream: str = Query(..., max_length=64)):
+    """Relay one tile's MSE stream from go2rtc. Open like the read endpoints (the
+    kiosk has no credentials); only streams configured as tiles are relayed."""
+    if stream not in {t.stream for t in manager.get_config().cameras.tiles}:
+        await ws.close(code=1008)
+        return
+    await ws.accept()
+    await cameras.proxy(ws, stream)
 
 
 @app.get("/tiles/{z}/{x}/{y}.png")

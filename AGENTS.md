@@ -8,7 +8,8 @@ changelog; `git log` holds the history. README.md is for people deploying the di
 
 A wall-mounted hangar display: a Raspberry Pi (5 or 4) drives an HDMI TV through Chromium in
 kiosk mode and cycles through live ADS-B traffic, METAR weather with wind barbs, a NEXRAD
-radar loop, and a NOAA GOES satellite loop. It runs unattended from an SD card, so
+radar loop, a NOAA GOES satellite loop, and live camera video (UniFi Protect H.265 streams
+relayed by go2rtc to the Pi 5's hardware decoder). It runs unattended from an SD card, so
 robustness and low resource use come before features.
 
 ## Architecture
@@ -24,6 +25,11 @@ robustness and low resource use come before features.
   autologin shell and starts cage (Wayland compositor) plus Chromium; `harden-wifi.sh`,
   run by the bootstrap, keeps Wi-Fi in NetworkManager keyfiles. The kiosk is not in Docker
   because it needs the GPU and HDMI output directly.
+- `go2rtc`, the second compose service (image pinned), pulls the camera RTSPS streams listed
+  in `data/go2rtc/go2rtc.yaml` (gitignored: the URLs carry access tokens) and serves them
+  as fragmented MP4 without re-encoding. It publishes no port. The backend relays its MSE
+  WebSocket per tile (`backend/app/cameras.py`, `WS /api/cameras/ws?stream=`), for streams
+  configured as tiles only, and the display plays each tile with `lib/camstream.js`.
 - `data/config.yaml` is the single source of truth for configuration, validated by the
   pydantic model in `backend/app/config.py`. It is bind-mounted as a directory
   (`./data:/data`) so atomic renames and backup rotation work.
@@ -42,7 +48,8 @@ backend/app/
   config.py        pydantic models + constraints, secret masking, durable load/save
   manager.py       DataManager: sources, caches, rate limit, traffic/weather loops,
                    circuit breaker, blackout state, SSE subscribers
-  views.py         config -> ordered list of views (local, regional, satellite)
+  views.py         config -> ordered list of views (local, regional, satellite, cameras)
+  cameras.py       go2rtc relay: WebSocket pump per tile, relay state for /api/status
   weather.py       aviationweather.gov METAR fetch, decode, flight category
   satellite.py     NOAA STAR CDN directory listing -> recent GOES frame URLs
   tiles.py         basemap tile cache/proxy and per-view warm-up (tile math mirrors
@@ -52,7 +59,8 @@ backend/app/
   geo.py           haversine, unit conversion
   sources/         traffic adapters: local.py (tar1090/readsb), aggregator.py; base.py
                    normalizes records and adds type_desc/wtc from data/icao_aircraft_types.json
-backend/tests/    support.py (env), conftest.py (client fixture), test_api.py, test_behaviour.py
+backend/tests/    support.py (env), conftest.py (client fixture), test_api.py, test_behaviour.py,
+                  test_cameras.py
 frontend/tests/   headless module tests (*.test.html), harness.js, run.sh
 frontend/src/
   index.html, main.js, styles.css    the display and its cycle
@@ -66,6 +74,8 @@ frontend/src/
   lib/vendor/tar1090/markers.js, LICENSE   vendored tar1090 shapes and tables (GPL-2.0)
   lib/radarloop.js  radar loop stepping: frame readiness, dwell, hold
   lib/cycle.js      cycle index wrapping; which view a remote navigation request selects
+  lib/camstream.js  one camera tile: go2rtc MSE protocol, buffer trim, live-edge chase,
+                    reconnect with backoff, live/waiting state
   lib/stations.js   which station set the regional view shows, footer state
   lib/windbarb.js   wind barb SVG
   lib/geo.js        client geo helpers
@@ -73,7 +83,7 @@ deploy/bootstrap.sh   idempotent OS provisioning for a fresh Pi (also --check / 
 deploy/harden-wifi.sh   Wi-Fi as NetworkManager keyfiles with read-only copies (also --check)
 deploy/grim-web-wrapper.sh   installed as /usr/local/bin/grim: web image formats via ImageMagick
 deploy/kiosk-launch.sh, getty-autologin.conf
-Dockerfile, docker-compose.yml, data/config.yaml
+Dockerfile, docker-compose.yml (app + go2rtc), data/config.yaml, data/go2rtc/ (ignored)
 ```
 
 ## Invariants
@@ -100,9 +110,23 @@ Dockerfile, docker-compose.yml, data/config.yaml
 - The style declares `transition: {duration: 0}` and `_initLayers` zeroes it for vector
   styles. MapLibre's default global transition applies to every style change, including
   the style's light, and re-renders the whole map for its duration on each radar step.
-- The map container is never hidden with `display: none`; the satellite view is an overlay
-  (`#sat` over the stage, map and side panel `visibility: hidden`). A 0x0 map shrinks
-  MapLibre's tile cache to a few tiles.
+- The map container is never hidden with `display: none`; the satellite and camera views
+  are overlays (`#sat` and `#cams` over the stage, map and side panel `visibility: hidden`).
+  A 0x0 map shrinks MapLibre's tile cache to a few tiles.
+- Camera tiles (one `<video muted autoplay playsinline>` each) are created when the view
+  starts and removed when it ends, so hardware decoders are held only while the cameras are
+  on screen: `fuser /dev/video19` names Chromium's GPU process during the view and nothing
+  after it. The grid is `CAMERA_GRID_COLS` (six) columns; a tile spans its `cols` and every
+  row is as tall as a 16:9 two-column cell (`grid-auto-rows` from the container width), so
+  a two-column tile shows a 16:9 stream at the cell's full size and a four-column tile a
+  32:9 one; other shapes are letterboxed in their cell.
+- `CamStream` offers go2rtc video codecs only, so no audio is relayed. Segments are
+  appended as they arrive and queued while the source buffer updates; played video beyond
+  `BUFFER_KEEP_S` is trimmed; more than `CATCH_UP_S` behind the live edge plays at 1.1x and
+  more than `JUMP_S` behind jumps to it. No data for `SIGNAL_TIMEOUT_MS`, a closed socket, a
+  decode error or an unplayable MIME type is a failure: the tile shows NO SIGNAL and
+  reconnects with backoff between `RECONNECT_MIN_MS` and `RECONNECT_MAX_MS`. The footer
+  counts live tiles.
 - The satellite loop is parallel `<img>` preloading followed by `src` swapping. Do not
   pre-decode frames into ImageBitmaps or draw them on a canvas (the frames exceed the Pi's
   GPU memory, a CMA pool shared with map textures), and do not load them one at a time.
@@ -183,6 +207,13 @@ Dockerfile, docker-compose.yml, data/config.yaml
 - Satellite frame URLs come from parsing the NOAA STAR CDN directory listing
   (`satellite.py`), cached for 240 s per parameter set. Query parameters are validated
   before they reach a URL.
+- Camera stream URLs live only in `data/go2rtc/go2rtc.yaml`; `config.yaml` and the API
+  carry stream names. go2rtc's RTSP, WebRTC and SRTP listeners are off and it publishes no
+  port; the backend reaches it at `HANGAR_GO2RTC` over the compose network. `/api/status`
+  probes it (`cameras.status`, cached for `STATUS_TTL_S`) and returns only stream names,
+  never go2rtc's stream list, which holds the URLs. UniFi Protect links are used without
+  their `?enableSrtp` suffix: go2rtc does not implement SRTP (AlexxIT/go2rtc#81) and would
+  relay encrypted payloads behind valid headers; `rtsps://` over TCP is inside TLS already.
 
 ### Safety and robustness
 
@@ -190,8 +221,11 @@ Dockerfile, docker-compose.yml, data/config.yaml
   strings, METAR text, station names, and config labels are untrusted input.
 - The admin page renders from the field schema in `lib/adminForm.js`: typed inputs carry
   `data-f` (config path) and `data-t` (type), values are parsed by declared type, and all
-  add/delete/move buttons are handled by one delegated click listener on the root. Do not
-  add per-render `addEventListener` calls and do not infer a field's type from its text.
+  add/delete/move buttons are handled by one delegated click listener on the root. A
+  button names its collection by dotted config path (`data-add="cameras.tiles"`,
+  `data-del="airports.2"`, `data-move="regions.0.1"`), resolved through `COLLECTIONS` in
+  `applyAction()`. Do not add per-render `addEventListener` calls and do not infer a
+  field's type from its text.
 - Config loading never raises at import time. `load_config()` falls back to the newest
   readable `.bak.N`, then to defaults, and reports the problem through `/healthz` and the
   admin banner. Saves are atomic with fsync and rotate three backups.
@@ -203,6 +237,9 @@ Dockerfile, docker-compose.yml, data/config.yaml
   display's report of the view it shows: the kiosk has no credentials and the report only
   names a view. Read endpoints the display uses stay open.
   `admin.html` is only reachable through `/admin` (`AppStatic` blocks the direct path).
+  `WS /api/cameras/ws` is open like the read endpoints and relays only streams named by
+  configured tiles: an unknown name is closed with 1008 before accept, an unreachable relay
+  with 1011.
 - The display never calls `location.reload()` while the backend is unreachable (Chromium's
   error page has no script to recover); use `safeReload()`. Boot retries with backoff,
   `nextView()` always schedules the next view even if a view throws, an invalid timezone
@@ -272,7 +309,9 @@ Dockerfile, docker-compose.yml, data/config.yaml
   cache, admin password) before `app.main` is imported; `tests/conftest.py` provides the
   `client` fixture with every upstream stubbed, including tile warm-up. `test_api.py`
   covers the API surface; `test_behaviour.py` covers speed, reliability, and decoding
-  properties. Name each test for the failure it prevents. The manager is a module
+  properties; `test_cameras.py` covers tile validation, the camera view descriptor, and
+  the relay (an upstream stub stands in for go2rtc; `HANGAR_GO2RTC` points at a closed
+  port). Name each test for the failure it prevents. The manager is a module
   singleton whose loops keep refreshing views polled by earlier tests, so apply config
   before installing a failing stub. Assert on background work by polling for the condition
   with `wait_until` (`test_api.py`) inside a deadline, never after a fixed sleep. The SSE
@@ -281,7 +320,7 @@ Dockerfile, docker-compose.yml, data/config.yaml
 - Frontend module tests: `frontend/tests/*.test.html` run headlessly with
   `frontend/tests/run.sh` (needs a chromium binary, no npm packages) and cover the aircraft
   store, icon assignment, station selection, wind barbs, the admin form, cycle navigation,
-  and per-frame cost bounds. `harness.js` prints the PASS/FAIL lines the runner parses. Run
+  the camera stream client (fake WebSocket and MediaSource), and per-frame cost bounds. `harness.js` prints the PASS/FAIL lines the runner parses. Run
   it after any change under `frontend/src/lib`.
 - Try a build beside production: `docker build -t hangar-display:test .` then
   `docker run -d -p 8001:8000 -v "$PWD/data:/data" hangar-display:test`.
@@ -305,7 +344,15 @@ Dockerfile, docker-compose.yml, data/config.yaml
   with its websocket URL. The host has no websocket client; Python's standard library
   (`socket` plus the websocket handshake and framing) is enough to send `Runtime.evaluate`.
   `window.__tpcMap` is the MapLibre instance. Measure any performance change there before
-  calling it an improvement; the regional radar view is the heaviest view.
+  calling it an improvement; the regional radar view is the heaviest map view.
+- Verify the camera view on the kiosk: `fuser /dev/video19` names Chromium's GPU process
+  while the view is on screen and nothing afterwards; `getVideoPlaybackQuality()` on each
+  tile's video (over DevTools) gives frame and drop counts, and
+  `navigator.mediaCapabilities.decodingInfo` for `hvc1` reports `powerEfficient` on the
+  patched build. Chromium release builds compile out `DVLOG`, so the HEVC parser never says
+  why it rejects a stream; `--vmodule=*/media/gpu/*=3` on the launcher traces the V4L2 path
+  only. Check a go2rtc stream by decoding its `/api/stream.mp4?src=` output with the ffmpeg
+  in its image (`docker compose exec go2rtc ffmpeg ...`), not by container structure.
 - Dev servers: backend `uvicorn app.main:app --reload --port 8000` with `HANGAR_CONFIG` and
   `HANGAR_STATIC` set; frontend `npm run dev` proxies `/api` to port 8000 and serves the
   admin page at `/admin.html`.
@@ -318,17 +365,17 @@ Dockerfile, docker-compose.yml, data/config.yaml
 which gives 1920x1080 from the 3840x2160 mode; the current frames are 1920x1012 because
 the Pi 4 negotiated 4096x2160, scale 0.46875) once each view is fully rendered: the KSEA
 local view a few seconds in, the regional view with the radar loop and barbs loaded, and the
-satellite view once its loop is animating. `docs/admin.png` is headless Chromium against the
-running backend at 1120 px wide. Time the captures to a view start through the DevTools
+satellite view once its loop is animating, and the camera view with every tile live.
+`docs/admin.png` is headless Chromium against the running backend at 1120 px wide. Time the captures to a view start through the DevTools
 port, and check that the frame shows real data (aircraft listed, stations listed, frames
 loaded) before keeping it.
 
 ## Runtime environment
 
 - Environment variables: `HANGAR_CONFIG` (default `/data/config.yaml`), `HANGAR_STATIC`
-  (default `/app/static`), `HANGAR_TILE_CACHE` (default `/data/tiles`),
-  `HANGAR_ADMIN_PASSWORD` (optional; compose reads it from `.env`; `ADMIN_PASSWORD` is
-  accepted as a fallback name).
+  (default `/app/static`), `HANGAR_TILE_CACHE` (default `/data/tiles`), `HANGAR_GO2RTC`
+  (default `http://go2rtc:1984`), `HANGAR_ADMIN_PASSWORD` (optional; compose reads it from
+  `.env`; `ADMIN_PASSWORD` is accepted as a fallback name).
 - Docker runs rootless as the kiosk user (Docker CE from Docker's apt repo, user
   `docker.service`, linger enabled, CLI on the `rootless` context; the rootful daemon is
   disabled by the bootstrap). A drop-in on the user unit waits up to 60 s for a nameserver
@@ -346,7 +393,15 @@ loaded) before keeping it.
   `/dev/shm/hangar-kiosk` and are recreated at boot. The launcher opens a holding page that
   probes `/healthz` and navigates to the display when the backend is up. The Chromium flags
   in `kiosk-launch.sh` disable background services (sync, component updates, push
-  connections) that a kiosk never needs.
+  connections) that a kiosk never needs, and select the hardware HEVC decoder path
+  (`PlatformHEVCDecoderSupport` on, `UseChromeOSDirectVideoDecoder` off,
+  `--disable-zero-copy`, `--disable-gpu-memory-buffer-video-frames`) with autoplay allowed
+  without a gesture.
+- On a Pi 5 the kiosk browser is the chromium-rpi-hevc build of Raspberry Pi OS's Chromium:
+  the same package version, patched for the Pi's V4L2 HEVC decoder. Bootstrap step 2b
+  installs it from a pinned release with sha256 checks and holds the four packages; `--check`
+  compares the installed binary's checksum. Stock Chromium decodes HEVC in software only, on
+  either board.
 - Network: Wi-Fi profiles are NetworkManager keyfiles in
   `/etc/NetworkManager/system-connections` with read-only copies of the same UUID in
   `/usr/lib/NetworkManager/system-connections`, never netplan: Raspberry Pi's
@@ -367,7 +422,10 @@ loaded) before keeping it.
 - `GET /healthz` liveness, `boot_id`, source status, config load state.
 - `GET /api/config` config with secrets masked plus `version` (also the `ETag`).
   `PUT /api/config` validates and writes; optional `If-Match`; 422 with `[{loc, msg}]`.
-- `GET /api/views` ordered view descriptors the display cycles through.
+- `GET /api/views` ordered view descriptors the display cycles through; the camera view is
+  `{id: "cameras", type: "cameras", label, dwell_s, tiles: [{name, stream, cols}]}`.
+- `WS /api/cameras/ws?stream=<name>` relays go2rtc's MSE WebSocket for a configured tile
+  stream (text frames both ways, binary segments to the browser; no auth).
 - `GET /api/traffic?view=<id>` snapshot with `aircraft`, `ts`, `age_s`, `stale`,
   `healthy`, `error`, and `pending` while a newly active view has no fresh data; 404 for
   an unknown view.
@@ -375,7 +433,8 @@ loaded) before keeping it.
   (at most 20 by 30 degrees), `GET /api/weather/area?lat=&lon=&radius_nm=`; the last two
   return `{stations, age_s, stale, error}`.
 - `GET /api/satellite?sat=&sector=&band=&size=&frames=` recent frame URLs.
-- `GET /api/status` source, health, uptime, weather, config, display, and tile cache state.
+- `GET /api/status` source, health, uptime, weather, config, display, and tile cache state,
+  plus `cameras` (`enabled`, `tiles`, `relay` ok or down, `error`, `unknown_streams`).
 - `GET /tiles/{z}/{x}/{y}.png` cached basemap tile (fetched upstream on a miss; a stale
   tile is served if upstream fails; 404 for invalid coordinates).
 - `GET /radar/{layer}/{z}/{x}/{y}.png?v=<bucket>` NEXRAD tile (`layer` is `n0q`, `n0r`, or
@@ -394,9 +453,10 @@ loaded) before keeping it.
 ## Configuration model
 
 `Config` in `config.py` has sections `airports`, `regions`, `cycle`, `data_source`,
-`display`, `weather`, `satellite`, and `radar`. Every numeric field has bounds, ICAO
-identifiers match `^[A-Z0-9]{3,4}$`, airport ICAOs and region names are unique, the
+`display`, `weather`, `satellite`, `radar`, and `cameras`. Every numeric field has bounds,
+ICAO identifiers match `^[A-Z0-9]{3,4}$`, airport ICAOs and region names are unique, the
 timezone must be a valid IANA name, `local_url` and `tile_url` must be http(s) and not
-link-local, satellite `sector`/`band`/`size` are constrained to safe characters, and the
-radar loop span is capped at 55 minutes. Add new settings to the model with constraints,
+link-local, satellite `sector`/`band`/`size` are constrained to safe characters, the radar
+loop span is capped at 55 minutes, and camera tiles (at most `CAMERA_MAX_TILES`) name a
+stream matching `^[A-Za-z0-9_.-]{1,64}$` and span 1 to `CAMERA_GRID_COLS` columns. Add new settings to the model with constraints,
 to the admin field schema in `lib/adminForm.js`, and to the config reference in README.md.

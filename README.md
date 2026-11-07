@@ -3,8 +3,8 @@
 A wall-mounted information display for an airplane hangar. A Raspberry Pi 5 or 4 drives an
 HDMI TV that cycles through live ADS-B air traffic around your airports, METAR weather with
 flight-category wind barbs, an animated NEXRAD precipitation radar loop, a NOAA GOES
-satellite loop, and local and UTC clocks. Everything is configured from a phone or laptop
-on the hangar Wi-Fi.
+satellite loop, live video from your security cameras, and local and UTC clocks. Everything
+is configured from a phone or laptop on the hangar Wi-Fi.
 
 Local airport view (live traffic, METAR, and wind barb):
 
@@ -17,6 +17,10 @@ Regional weather view (wind barbs for every reporting airport in view, over the 
 Satellite loop view (animated NOAA GOES imagery):
 
 ![Satellite loop view](docs/display-satellite.jpg)
+
+Camera view (live video from UniFi Protect cameras):
+
+![Camera view](docs/display-cameras.jpg)
 
 Admin page (remote configuration):
 
@@ -41,6 +45,11 @@ time left on the current view.
   conditions first.
 - **Satellite loop (optional).** A full-screen NOAA GOES animation for your part of the
   country, for example GOES-West, Pacific Northwest sector, GeoColor.
+- **Cameras (optional).** Live video from your security cameras on a grid you arrange: each
+  tile plays one stream at the camera's own shape, so a panoramic camera gets a wide tile and
+  a portrait camera a tall one. Built for UniFi Protect cameras, whose H.265 streams the Pi 5
+  decodes in hardware; the streams are read by go2rtc, so other RTSP cameras it supports can
+  be used the same way.
 
 No API keys are needed. Weather comes from the US National Weather Service Aviation Weather
 Center, radar from the Iowa Environmental Mesonet, satellite imagery from NOAA STAR, and map
@@ -57,6 +66,9 @@ from a free public aggregator (adsb.fi, adsb.lol, or airplanes.live).
   and satellite imagery, and for traffic unless you run your own receiver.
 - Optional: a tar1090, readsb, or dump1090 receiver on your network for local traffic with
   no rate limits.
+- Optional, for the camera view: a Raspberry Pi 5 (the view uses its hardware H.265
+  decoder) and cameras with RTSP streams, for example UniFi Protect cameras with RTSP
+  turned on.
 - A phone or laptop on the same network to configure it.
 
 ## Install on the Raspberry Pi
@@ -93,7 +105,11 @@ What the bootstrap does, in order, each step only if it is not already done:
 - Installs the kiosk browser and its compositor (`chromium`, `cage`, `wlrctl`, `seatd`),
   `grim` and ImageMagick for screenshots, `git`, `curl`, and the two packages rootless
   Docker needs (`uidmap`, `dbus-user-session`). The browser is Raspberry Pi's own build of
-  Chromium from the Raspberry Pi OS archive, and it updates with the OS.
+  Chromium from the Raspberry Pi OS archive; on a Pi 4 it updates with the OS.
+- On a Pi 5, replaces that Chromium with the same version patched for the Pi's hardware
+  H.265 decoder (the [chromium-rpi-hevc](https://github.com/sslivins/chromium-rpi-hevc)
+  build, downloaded from its release and checked against the published checksums) and holds
+  the packages so OS updates keep it. The camera view needs it; nothing else does.
 - Clones this repository to `~/ThePilotChannel` (or uses the clone it is run from).
 - Installs a small wrapper from the clone so `grim` can write `jpeg`, `webp`, `avif`, and
   `gif` screenshots (the stock Debian build only writes `png`);
@@ -196,6 +212,31 @@ sees. Frames step every half second.
 "Cross-fade frames" dissolves them into each other instead; it is off by default because
 the fade is expensive on a Pi 4.
 
+**Cameras.** Live video from your security cameras. The stream links are not entered on the
+admin page: they carry access tokens, so they live in a file on the Pi that is never
+committed, `data/go2rtc/go2rtc.yaml`, read by the go2rtc relay that runs beside the app.
+One line per camera, with the name you will refer to it by:
+
+```yaml
+streams:
+  gate: rtsps://192.168.1.1:7441/AbCdEfGhIjKlMnOp
+  runway: rtsps://192.168.1.1:7441/QrStUvWxYz012345
+```
+
+For UniFi Protect, open the camera's settings, Advanced, turn on RTSP for the quality you
+want and copy the link. Use the medium quality: a tile is at most 1280 pixels wide on a 4K
+TV, and several cameras' full-resolution streams are more than the Pi's decoder is rated
+for. Leave off the `?enableSrtp` that Protect appends to the link: go2rtc does not decrypt
+SRTP, and the link is already carried inside TLS without it. After editing the file run
+`docker compose restart go2rtc`.
+
+Then enable the view on the admin page and add a tile per camera: a caption, the stream's
+name from the file, and how many of the six grid columns it spans. Every row is as tall as a
+16:9 two-column tile, so two columns suit a normal camera and four a panoramic one; a
+portrait camera is centered in its tile. Tiles fill the rows in order. The status line at
+the top of the admin page says whether the relay is up and names tiles whose stream it does
+not know.
+
 **Screen.** Buttons to step the display to the previous or next view or jump to one, and
 to black out and restore the picture: the same things an automation can do (see below).
 
@@ -265,6 +306,15 @@ radar:
   min_dbz: 10                # hide returns weaker than this (dBZ)
   product: n0q               # n0q (base reflectivity) | n0r
   crossfade: false           # dissolve between frames (expensive on a Pi 4)
+
+cameras:
+  enabled: false
+  label: Cameras
+  dwell_s: 30
+  tiles:                     # streams by their name in data/go2rtc/go2rtc.yaml
+    - name: Gate             # caption; the stream name when empty
+      stream: gate
+      cols: 2                # of 6 grid columns: 2 is a 16:9 tile, 4 a 32:9 tile
 ```
 
 ## Control the screen from an automation
@@ -288,7 +338,7 @@ curl -X POST http://<pi-ip>:8000/api/display/previous
 ```
 
 ```bash
-# jump to a view by id; GET /api/views lists them (local:KSEA, region:Puget Sound, satellite)
+# jump to a view by id; GET /api/views lists them (local:KSEA, region:Puget Sound, satellite, cameras)
 curl -X POST -H 'content-type: application/json' \
   -d '{"view": "satellite"}' http://<pi-ip>:8000/api/display/view
 ```
@@ -359,6 +409,19 @@ actions:
       view: satellite
 ```
 
+A dashboard button that brings up the cameras:
+
+```yaml
+type: button
+name: Cameras
+icon: mdi:cctv
+tap_action:
+  action: perform-action
+  perform_action: rest_command.hangar_display_view
+  data:
+    view: cameras
+```
+
 ### Black out the picture
 
 The TV picture can be blacked out for a while and brought back, for example while a movie
@@ -419,7 +482,11 @@ actions:
 
   The display notices the new version and reloads on its own.
 - **Update the OS:** `sudo apt full-upgrade` and reboot, or run the bootstrap again (it
-  upgrades the system and re-checks every other step). The kiosk browser updates with the OS.
+  upgrades the system and re-checks every other step). On a Pi 4 the kiosk browser updates
+  with the OS; on a Pi 5 it is held at the patched build, and a newer patched release is
+  taken up by changing the release named in `deploy/bootstrap.sh` and running it again.
+- **Add or change a camera:** edit `data/go2rtc/go2rtc.yaml` and run
+  `docker compose restart go2rtc`; the tiles are arranged on the admin page.
 - **Restart the display browser:** `pkill -x cage`. It comes straight back.
 - **Reboot the Pi:** everything starts again automatically, including after a power cut.
 - **Move to a new Pi:** your settings are the file `data/config.yaml` in the clone (the admin
@@ -433,7 +500,8 @@ actions:
   remove its `hardened-<uuid>.nmconnection` file from
   `/usr/lib/NetworkManager/system-connections`.
 - **Logs:** the app's log is `docker compose logs -f` (capped so it cannot fill the SD
-  card); the kiosk browser's log is `/dev/shm/hangar-kiosk/hangar-kiosk.log`.
+  card), the camera relay's `docker compose logs go2rtc`; the kiosk browser's log is
+  `/dev/shm/hangar-kiosk/hangar-kiosk.log`.
 - **Undo a bad config change:** copy `data/config.yaml.bak.1` over `data/config.yaml` and
   run `docker compose restart`.
 - **Map looks out of date or oddly cached:** delete the `data/tiles` folder; it is rebuilt
@@ -481,6 +549,14 @@ actions:
 - **The footer dot is amber or red.** Amber means the last traffic snapshot is more than
   ten seconds old; red means the source is failing. Hover over it in a browser, or check
   `/api/status`, for the reason.
+- **A camera tile says NO SIGNAL.** The relay is not getting that stream. The admin page's
+  status line says whether the relay is up and lists tile streams it does not know (the
+  name must match one in `data/go2rtc/go2rtc.yaml`), and `docker compose logs go2rtc` shows
+  why a camera does not connect. A Protect link must be used without its `?enableSrtp`
+  suffix, and the camera's RTSP output must be turned on.
+- **Camera video is choppy, or the tiles stay black on a Pi 4.** The camera view needs the
+  Pi 5's hardware decoder. On a Pi 5, `deploy/bootstrap.sh --check` confirms that the
+  patched browser is installed and held.
 
 ## Credits and licenses
 
@@ -491,6 +567,10 @@ actions:
   from [tar1090-db](https://github.com/wiedehopf/tar1090-db).
 - Map data © OpenStreetMap contributors. Weather from the NWS Aviation Weather Center,
   radar from the Iowa Environmental Mesonet, satellite imagery from NOAA STAR.
+- Camera streams are relayed by [go2rtc](https://github.com/AlexxIT/go2rtc) (MIT), run as
+  its own container. Hardware H.265 decoding in the kiosk browser comes from the
+  [chromium-rpi-hevc](https://github.com/sslivins/chromium-rpi-hevc) build of Raspberry Pi
+  OS's Chromium.
 
 ## License
 

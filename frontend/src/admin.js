@@ -26,6 +26,7 @@ async function boot() {
     display: el("display"),
     satellite: el("satellite"),
     radar: el("radar"),
+    cameras: el("cameras"),
   };
   fillTimezones();
   await load();
@@ -124,8 +125,18 @@ async function showStatusPanel() {
     el("backend-status").innerHTML =
       `backend up ${esc(fmtUptime(s.uptime_s))} · traffic source: ${src}` +
       (s.last_error ? ` · last error: <code>${esc(s.last_error)}</code>` : "") +
-      (s.weather && s.weather.error ? ` · weather: <code>${esc(s.weather.error)}</code>` : "");
+      (s.weather && s.weather.error ? ` · weather: <code>${esc(s.weather.error)}</code>` : "") +
+      cameraStatus(s.cameras);
   } catch (_) {}
+}
+
+// The camera relay's state for the status line: whether go2rtc answers and
+// which tile streams it does not know.
+function cameraStatus(c) {
+  if (!c || !c.enabled) return "";
+  const unknown = (c.unknown_streams || []).length ? ` (unknown streams: ${esc(c.unknown_streams.join(", "))})` : "";
+  const err = c.error ? ` <code>${esc(c.error)}</code>` : "";
+  return ` · cameras: relay ${esc(c.relay)}${unknown}${err}`;
 }
 
 function fmtUptime(s) {

@@ -18,6 +18,7 @@ os.environ["HANGAR_CONFIG"] = CFG
 os.environ["HANGAR_STATIC"] = STATIC
 os.environ["HANGAR_ADMIN_PASSWORD"] = "hunter2"
 os.environ["HANGAR_TILE_CACHE"] = os.path.join(TMP, "tiles")
+os.environ["HANGAR_GO2RTC"] = "http://127.0.0.1:9"  # a closed port: the relay is unreachable in tests
 
 AUTH = ("admin", "hunter2")
 

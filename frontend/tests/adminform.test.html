@@ -1,5 +1,5 @@
 <!doctype html><html><body>
-<div id="root"><div id="airports"></div><div id="regions"></div><div id="cycle"></div><div id="datasource"></div><div id="display"></div><div id="satellite"></div><div id="radar" data-section="radar"></div></div>
+<div id="root"><div id="airports"></div><div id="regions"></div><div id="cycle"></div><div id="datasource"></div><div id="display"></div><div id="satellite"></div><div id="radar" data-section="radar"></div><div id="cameras" data-section="cameras"></div></div>
 <pre id="out"></pre><script type="module">
 import { check, done } from "./harness.js";
 import { renderAll, collect, applyAction, applyErrors, clearErrors, validateNative, syncRange } from "../src/lib/adminForm.js";
@@ -8,7 +8,7 @@ import { renderAll, collect, applyAction, applyErrors, clearErrors, validateNati
 // mapped to fields.
 const el = (id) => document.getElementById(id);
 const root = el("root");
-const roots = { airports: el("airports"), regions: el("regions"), cycle: el("cycle"), datasource: el("datasource"), display: el("display"), satellite: el("satellite"), radar: el("radar") };
+const roots = { airports: el("airports"), regions: el("regions"), cycle: el("cycle"), datasource: el("datasource"), display: el("display"), satellite: el("satellite"), radar: el("radar"), cameras: el("cameras") };
 let cfg = {
   airports: [{ icao: "KS50", name: "Auburn", lat: 47.3, lon: -122.2, local_radius_mi: 5, enabled: true }, { icao: "KBFI", name: "Boeing", lat: 47.5, lon: -122.3, local_radius_mi: 5, enabled: true }, { icao: "KSEA", name: "Seattle", lat: 47.4, lon: -122.3, local_radius_mi: 5, enabled: true }, { icao: "KPAE", name: "Paine", lat: 47.9, lon: -122.2, local_radius_mi: 5, enabled: false }],
   regions: [{ name: "Puget Sound", center_lat: 47.4, center_lon: -122.3, radius_mi: 30, enabled: true }],
@@ -18,6 +18,7 @@ let cfg = {
   weather: { refresh_s: 300, stale_after_s: 4500 },
   satellite: { enabled: true, sat: "G18", sector: "pnw", band: "GEOCOLOR", frames: 24, size: "1200x1200", dwell_s: 25, label: "GOES <b>West</b>" },
   radar: { enabled: true, label: "NEXRAD", frames: 10, interval_min: 5, opacity: 0.75, product: "n0q", crossfade: false },
+  cameras: { enabled: true, label: "Cameras", dwell_s: 30, tiles: [{ name: "Gate", stream: "cam1", cols: 2 }, { name: "Runway", stream: "cam3", cols: 4 }] },
 };
 renderAll(cfg, roots);
 root.addEventListener("click", (ev) => { const btn = ev.target.closest("[data-add],[data-del],[data-move]"); if (!btn || btn.disabled) return; collect(root, cfg); if (applyAction(cfg, btn)) renderAll(cfg, roots); });
@@ -50,8 +51,17 @@ clearErrors(root);
 check("clearErrors removes the markers", root.querySelectorAll(".field-error,.invalid").length === 0);
 const rest = applyErrors(root, [{ loc: ["body", "airports", "0", "icao"], msg: "bad icao" }, { loc: ["radar"], msg: "loop too long" }, { loc: [], msg: "duplicate airport KSEA" }]);
 check("server errors attach to fields and sections; the rest is returned", root.querySelector('[data-f="airports.0.icao"]').classList.contains("invalid") && !!root.querySelector('[data-section="radar"] .field-error') && rest.length === 1);
-root.insertAdjacentHTML("beforeend", '<button data-add="region">add</button>');
-root.querySelector('[data-add="region"]').click();
+root.insertAdjacentHTML("beforeend", '<button data-add="regions">add</button><button data-add="cameras.tiles">add tile</button>');
+root.querySelector('[data-add="regions"]').click();
 check("add region appends one row", cfg.regions.length === 2 && root.querySelectorAll("#regions .row").length === 2);
+root.querySelector('[data-f="cameras.tiles.0.name"]').value = "Gate EDITED";
+root.querySelector('[data-move="cameras.tiles.0.1"]').click();
+check("a nested collection moves exactly once and keeps edits", cfg.cameras.tiles.map((t) => t.stream).join() === "cam3,cam1" && cfg.cameras.tiles[1].name === "Gate EDITED");
+root.querySelector('[data-add="cameras.tiles"]').click();
+check("add tile appends one tile with the default span", cfg.cameras.tiles.length === 3 && cfg.cameras.tiles[2].cols === 2 && root.querySelectorAll("#cameras .row").length === 3);
+root.querySelector('[data-del="cameras.tiles.2"]').click();
+root.querySelector('[data-f="cameras.tiles.0.cols"]').value = "4";
+collect(root, cfg);
+check("delete removes one tile and columns collect as a number", cfg.cameras.tiles.length === 2 && cfg.cameras.tiles[0].cols === 4);
 done();
 </script></body></html>

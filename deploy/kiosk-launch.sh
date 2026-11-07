@@ -79,6 +79,10 @@ echo "starting cage + chromium ($CHROME_BIN)"
 # sync, Google push connections, component updates) that a kiosk never needs and
 # that otherwise cost CPU and network on the Pi. The DevTools port is bound to
 # localhost only, for inspecting the live display from a shell on the Pi.
+# The camera view plays H.265 video, which only decodes in hardware with the
+# Chromium build patched for the Pi's V4L2 HEVC decoder (installed by the
+# bootstrap); the HEVC and video-frame flags select that decoder path, and
+# autoplay must not wait for a user gesture because the kiosk has no input.
 exec cage -- "$CHROME_BIN" \
   --kiosk \
   --ozone-platform=wayland \
@@ -90,7 +94,11 @@ exec cage -- "$CHROME_BIN" \
   --no-first-run \
   --no-default-browser-check \
   --disable-translate \
-  --disable-features=TranslateUI,MediaRouter,OptimizationHints \
+  --disable-features=TranslateUI,MediaRouter,OptimizationHints,UseChromeOSDirectVideoDecoder \
+  --enable-features=PlatformHEVCDecoderSupport \
+  --disable-zero-copy \
+  --disable-gpu-memory-buffer-video-frames \
+  --autoplay-policy=no-user-gesture-required \
   --disable-background-networking \
   --disable-component-update \
   --disable-sync \

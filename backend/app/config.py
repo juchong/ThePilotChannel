@@ -39,6 +39,11 @@ RADAR_MAX_AGE_MIN = 55
 ICAO_RE = re.compile(r"^[A-Z0-9]{3,4}$")
 CODE_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
 SIZE_RE = re.compile(r"^\d{3,4}x\d{3,4}$")
+STREAM_RE = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
+
+# The camera view lays its tiles out on a grid this many columns wide.
+CAMERA_GRID_COLS = 6
+CAMERA_MAX_TILES = 12
 
 
 def validate_source_url(url: str) -> str:
@@ -212,6 +217,42 @@ class Radar(BaseModel):
         return self
 
 
+class CameraTile(BaseModel):
+    """One tile of the camera grid: a go2rtc stream name and the number of grid
+    columns it spans. The tile shows the stream at its own aspect ratio inside a
+    cell whose height is that of a 16:9 two-column cell."""
+    name: str = Field("", max_length=40)
+    stream: str = Field(min_length=1, max_length=64)
+    cols: int = Field(2, ge=1, le=CAMERA_GRID_COLS)
+
+    @field_validator("stream")
+    @classmethod
+    def _stream(cls, v: str) -> str:
+        v = v.strip()
+        if not STREAM_RE.match(v):
+            raise ValueError("stream name may use letters, digits, '.', '_' and '-' only")
+        return v
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, v: str) -> str:
+        return v.strip()
+
+
+class Cameras(BaseModel):
+    """Live camera view: a grid of tiles playing go2rtc streams. The stream URLs
+    (with their access tokens) live in go2rtc's own config file, never here."""
+    enabled: bool = False
+    label: str = Field("Cameras", max_length=80)
+    dwell_s: int = Field(30, ge=5, le=3600)
+    tiles: List[CameraTile] = Field(default_factory=list, max_length=CAMERA_MAX_TILES)
+
+    @field_validator("label")
+    @classmethod
+    def _label(cls, v: str) -> str:
+        return v.strip() or "Cameras"
+
+
 class Config(BaseModel):
     airports: List[Airport] = Field(default_factory=list)
     regions: List[Region] = Field(default_factory=list)
@@ -221,6 +262,7 @@ class Config(BaseModel):
     weather: Weather = Field(default_factory=Weather)
     satellite: Satellite = Field(default_factory=Satellite)
     radar: Radar = Field(default_factory=Radar)
+    cameras: Cameras = Field(default_factory=Cameras)
 
     @model_validator(mode="after")
     def _unique(self):
