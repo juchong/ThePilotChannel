@@ -371,7 +371,7 @@ elif [ "$MODE" = check ]; then
   miss "backend answering on port 8000"
 elif [ "$DO_START" = 1 ]; then
   if [ "$MODE" = dry-run ]; then info "+ (cd $REPO_DIR && docker compose up -d --build)"; else
-    info "building the image and starting the stack (several minutes on a Pi 4)"
+    info "building the image and starting the stack (several minutes)"
     (cd "$REPO_DIR" && docker compose up -d --build)
     for _ in $(seq 1 120); do curl -fs --max-time 3 http://localhost:8000/healthz >/dev/null 2>&1 && break; sleep 5; done
     curl -fs --max-time 3 http://localhost:8000/healthz >/dev/null 2>&1 && ok "backend answering on port 8000" || miss "backend answering on port 8000 (see: docker compose logs)"

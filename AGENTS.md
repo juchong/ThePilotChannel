@@ -6,7 +6,7 @@ changelog; `git log` holds the history. README.md is for people deploying the di
 
 ## What this is
 
-A wall-mounted hangar display: a Raspberry Pi 4 drives an HDMI TV through Chromium in
+A wall-mounted hangar display: a Raspberry Pi (5 or 4) drives an HDMI TV through Chromium in
 kiosk mode and cycles through live ADS-B traffic, METAR weather with wind barbs, a NEXRAD
 radar loop, and a NOAA GOES satellite loop. It runs unattended from an SD card, so
 robustness and low resource use come before features.
@@ -292,8 +292,9 @@ Dockerfile, docker-compose.yml, data/config.yaml
   stream open, so `--dump-dom` does not return. Drive it over the DevTools protocol
   (`--remote-debugging-port`) when you need page state.
 - Verify the display on the real kiosk: screenshots with
-  `WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/run/user/1000 grim -t jpeg -q 88 -s 0.46875 out.jpg`
-  (`-s` scales the 4096x2160 panel to 1920 wide), per-process CPU from `top`, and GPU
+  `WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/run/user/1000 grim -t jpeg -q 88 -s 0.5 out.jpg`
+  (`-s` scales the TV's 3840x2160 mode to 1920 wide; a board that negotiates 4096x2160
+  needs 0.46875), per-process CPU from `top`, and GPU
   memory from `CmaFree` in `/proc/meminfo`. Debian's grim writes only png/ppm; the
   bootstrap installs `deploy/grim-web-wrapper.sh` as `/usr/local/bin/grim`, which adds
   jpeg, webp, avif, gif, tiff, bmp, and heic through ImageMagick, either with `-t webp` or
@@ -313,8 +314,9 @@ Dockerfile, docker-compose.yml, data/config.yaml
 
 ## Documentation screenshots
 
-`docs/display-*.jpg` are captured from the live kiosk with grim (`-t jpeg -q 88 -s 0.46875`,
-which gives 1920x1012 from the 4096x2160 panel) once each view is fully rendered: the KSEA
+`docs/display-*.jpg` are captured from the live kiosk with grim (`-t jpeg -q 88 -s 0.5`,
+which gives 1920x1080 from the 3840x2160 mode; the current frames are 1920x1012 because
+the Pi 4 negotiated 4096x2160, scale 0.46875) once each view is fully rendered: the KSEA
 local view a few seconds in, the regional view with the radar loop and barbs loaded, and the
 satellite view once its loop is animating. `docs/admin.png` is headless Chromium against the
 running backend at 1120 px wide. Time the captures to a view start through the DevTools

@@ -1,6 +1,6 @@
 # The Pilot Channel
 
-A wall-mounted information display for an airplane hangar. A Raspberry Pi 4 drives an
+A wall-mounted information display for an airplane hangar. A Raspberry Pi 5 or 4 drives an
 HDMI TV that cycles through live ADS-B air traffic around your airports, METAR weather with
 flight-category wind barbs, an animated NEXRAD precipitation radar loop, a NOAA GOES
 satellite loop, and local and UTC clocks. Everything is configured from a phone or laptop
@@ -49,8 +49,9 @@ from a free public aggregator (adsb.fi, adsb.lol, or airplanes.live).
 
 ## What you need
 
-- A Raspberry Pi 4 (the 4 GB model is what this was built on) with a microSD card of 8 GB
-  or more, a power supply, and an HDMI cable to the TV (use the HDMI0 port).
+- A Raspberry Pi 5 or Pi 4 with 4 GB of memory (it was built on the Pi 4 and runs on the
+  Pi 5), a microSD card of 8 GB or more, a power supply, and an HDMI cable to the TV (use
+  the HDMI0 port).
 - Raspberry Pi OS Lite, 64-bit (the current Debian 13 based release).
 - Network access, wired or Wi-Fi. The Pi needs the internet for map tiles, weather, radar,
   and satellite imagery, and for traffic unless you run your own receiver.
@@ -77,7 +78,7 @@ and `--check` reports what is and is not set up without changing anything.
      | bash -s -- --admin-password 'choose-a-password' --reboot
    ```
 
-   It takes ten to twenty minutes on a Pi 4, most of it the system update and the first
+   It takes ten to twenty minutes, most of it the system update and the first
    build of the app. With `--reboot` the Pi restarts by itself when done; otherwise run
    `sudo reboot`. The TV shows a "The Pilot Channel" holding screen while the app starts,
    then the display.
