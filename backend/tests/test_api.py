@@ -12,6 +12,14 @@ from app.config import SECRET_MASK, Config, load_config, save_config
 from app.views import build_views
 
 
+def wait_until(cond, timeout: float) -> bool:
+    """Poll `cond` every 100 ms until it holds or `timeout` seconds pass."""
+    deadline = time.time() + timeout
+    while not cond() and time.time() < deadline:
+        time.sleep(0.1)
+    return cond()
+
+
 # ---- config validation ---------------------------------------------------------
 
 def test_defaults_file_written():
@@ -134,34 +142,47 @@ def test_first_poll_waits_for_a_fresh_snapshot(client):
 
 
 def test_leftover_snapshot_is_not_served_as_data(client, monkeypatch):
+    """A view that just became active answers `pending` within the bounded first-poll
+    wait rather than with the snapshot of its previous visit; while refreshes fail,
+    that snapshot is served frozen and flagged."""
     import asyncio
 
-    assert put(client, base_cfg()).status_code == 200
-    assert client.get("/api/traffic", params={"view": "local:KSEA"}).json()["count"] == 1
     m = main_mod.manager
-    m._traffic_cache["local:KSEA"]["ts"] -= 120          # pretend the view was last visited two minutes ago
-    m._polled.pop("local:KSEA", None)
+    view = "local:KSEA"
 
-    async def slow(lat, lon, nm):                         # the refresh takes longer than the first-poll wait
+    def refresh_done():
+        task = m._refresh_tasks.get(view)
+        return task is None or task.done()
+
+    def settle():
+        m._polled.pop(view, None)                          # the loop stops refreshing a view nobody polls
+        assert wait_until(refresh_done, 8)                 # and the refresh in flight, if any, lands first
+
+    assert put(client, base_cfg()).status_code == 200
+    settle()
+    assert client.get("/api/traffic", params={"view": view}).json()["count"] == 1
+    settle()
+    m._traffic_cache[view]["ts"] -= 120                    # pretend the view was last visited two minutes ago
+
+    async def slow(lat, lon, nm):                          # the refresh takes longer than the first-poll wait
         await asyncio.sleep(3)
         return [{"hex": "a1", "lat": lat, "lon": lon, "seen_pos": 1}]
 
     monkeypatch.setattr(m, "_fetch_traffic", slow)
     t0 = time.time()
-    r = client.get("/api/traffic", params={"view": "local:KSEA"}).json()
+    r = client.get("/api/traffic", params={"view": view}).json()
     assert time.time() - t0 < 2.5                          # bounded wait
-    assert r["pending"] is True and r["aircraft"] == [] and r["stale"] is True and r["age_s"] >= 120
+    assert r.get("pending") is True and r["aircraft"] == [] and r["stale"] is True and r["age_s"] >= 120
 
     # but when refreshes are failing, the last known aircraft are shown (frozen, flagged)
-    m._polled.pop("local:KSEA", None)                      # deactivate the view so the loop stops refreshing it
-    time.sleep(3.5)                                        # and let the slow refresh above finish
-    m._traffic_cache["local:KSEA"]["ts"] -= 120
+    settle()
+    m._traffic_cache[view]["ts"] -= 120
 
     async def broken(lat, lon, nm):
         raise RuntimeError("receiver down")
 
     monkeypatch.setattr(m, "_fetch_traffic", broken)
-    r = client.get("/api/traffic", params={"view": "local:KSEA"}).json()
+    r = client.get("/api/traffic", params={"view": view}).json()
     assert r["count"] == 1 and r["healthy"] is False and r["stale"] is True and r["error"] == "receiver down"
 
 
@@ -481,6 +502,8 @@ def test_normalize_aircraft_fix_time():
 # ---- weather resilience ------------------------------------------------------------------
 
 def test_bbox_weather_is_stale_while_revalidate(client, monkeypatch):
+    """An expired station set is answered at once from cache, flagged stale, and
+    refreshed in the background."""
     import asyncio
 
     calls = []
@@ -502,7 +525,8 @@ def test_bbox_weather_is_stale_while_revalidate(client, monkeypatch):
     t0 = time.time()
     r = client.get("/api/weather/bbox", params=box).json()
     assert time.time() - t0 < 1.0 and [s["icao"] for s in r["stations"]] == ["KSEA"] and r["stale"] is True
-    assert len(calls) == 2  # background refresh started
+    wait_until(lambda: len(calls) >= 2, 3)
+    assert len(calls) == 2  # the background refresh started
 
 
 def test_bbox_weather_keeps_last_data_when_upstream_fails(client, monkeypatch):
