@@ -90,11 +90,13 @@ What the bootstrap does, in order, each step only if it is not already done:
 
 - Updates the system (`apt-get full-upgrade`; skip with `--no-upgrade`).
 - Installs the kiosk browser and its compositor (`chromium`, `cage`, `wlrctl`, `seatd`),
-  `grim` for screenshots, `git`, `curl`, and the two packages rootless Docker needs
-  (`uidmap`, `dbus-user-session`). It also installs ImageMagick and a small wrapper so
-  `grim` can write `jpeg`, `webp`, `avif`, and `gif` screenshots (the stock Debian build
-  only writes `png`); `sudo rm /usr/local/bin/grim` reverts to the stock grim.
+  `grim` and ImageMagick for screenshots, `git`, `curl`, and the two packages rootless
+  Docker needs (`uidmap`, `dbus-user-session`). The browser is Raspberry Pi's own build of
+  Chromium from the Raspberry Pi OS archive, and it updates with the OS.
 - Clones this repository to `~/ThePilotChannel` (or uses the clone it is run from).
+- Installs a small wrapper from the clone so `grim` can write `jpeg`, `webp`, `avif`, and
+  `gif` screenshots (the stock Debian build only writes `png`);
+  `sudo rm /usr/local/bin/grim` reverts to the stock grim.
 - Protects the Wi-Fi settings from power cuts (`deploy/harden-wifi.sh`). Raspberry Pi OS
   keeps the Wi-Fi details from Imager in files it rewrites at every boot, and a power cut
   during boot can leave them empty. The bootstrap moves them into a regular NetworkManager
@@ -412,8 +414,15 @@ actions:
   ```
 
   The display notices the new version and reloads on its own.
+- **Update the OS:** `sudo apt full-upgrade` and reboot, or run the bootstrap again (it
+  upgrades the system and re-checks every other step). The kiosk browser updates with the OS.
 - **Restart the display browser:** `pkill -x cage`. It comes straight back.
 - **Reboot the Pi:** everything starts again automatically, including after a power cut.
+- **Move to a new Pi:** your settings are the file `data/config.yaml` in the clone (the admin
+  page writes them there), so copy it off the old Pi, or commit it in your clone, before
+  retiring it. Flash and bootstrap the new Pi as in the install steps, put the file back under
+  `data/`, and run `docker compose restart`. The tile and weather caches rebuild on their
+  own. The new Pi may get a different address: update any automation that points at it.
 - **Change the Wi-Fi network or password:** use `sudo nmtui` (Edit a connection), then run
   `sudo ~/ThePilotChannel/deploy/harden-wifi.sh` so the backup copy matches. To forget a
   network, delete it in `nmtui` and remove its `hardened-<uuid>.nmconnection` file from
@@ -448,10 +457,11 @@ actions:
 - **No aircraft.** Open `http://<pi-ip>:8000/api/status` or press Test connection on the
   admin page. For a local receiver, the URL must be its LAN address, not `localhost`.
 - **No weather or wind barbs.** Check that the Pi can reach `aviationweather.gov` and that
-  the identifier is right; some small fields have no weather station. The display keeps the
-  last weather it fetched, also across restarts, and turns the footer dot amber when it is
-  getting old and red when refreshes are failing. `docker compose logs` shows the error;
-  a name-resolution error means the router's DNS is not answering.
+  the identifier is right; some small fields have no weather station, and a newly installed
+  AWOS shows up only once aviationweather.gov lists it. The display keeps the last weather
+  it fetched, also across restarts, and turns the footer dot amber when it is getting old
+  and red when refreshes are failing. `docker compose logs` shows the error; a
+  name-resolution error means the router's DNS is not answering.
 - **Map tiles do not load.** The Pi cannot reach OpenStreetMap. Check connectivity; tiles
   already in `data/tiles` keep working meanwhile. Or point `tile_url` at your own tile
   server.

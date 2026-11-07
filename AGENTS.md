@@ -246,13 +246,20 @@ Dockerfile, docker-compose.yml, data/config.yaml
   frontend is compiled into the image. The display reloads itself when it sees the new
   backend boot id. To restart the kiosk browser by hand: `pkill -x cage` (autologin
   respawns it through `deploy/kiosk-launch.sh`).
+- Confirm the kiosk loaded the new bundle after every deploy: the hashed script in the
+  image (`docker exec hangar-display grep -o 'main-[^"]*\.js' /app/static/index.html`) must
+  be the one the page runs (`document.scripts[0].src`, evaluated over the DevTools protocol,
+  below). `/api/status` carries the backend `boot_id`, which changes on every deploy, and
+  `/api/display` reports `showing` only once a running display has switched a view. The
+  container writes no HTTP access log, so bundle fetches cannot be read from the logs.
 - Backend tests (no network needed):
 
   ```bash
   cd backend && python -m pytest -q tests
   ```
 
-  or inside the image, without touching the running container:
+  or inside the image, without touching the running container (the kiosk host has no
+  Python packages installed, so this is the form that runs there):
 
   ```bash
   docker run --rm -v "$PWD/backend/tests:/app/tests:ro" -w /app hangar-display:latest \
@@ -269,9 +276,9 @@ Dockerfile, docker-compose.yml, data/config.yaml
   Starlette's TestClient; exercise it with `curl -N`.
 - Frontend module tests: `frontend/tests/*.test.html` run headlessly with
   `frontend/tests/run.sh` (needs a chromium binary, no npm packages) and cover the aircraft
-  store, icon assignment, station selection, wind barbs, the admin form, cycle
-  navigation, and per-frame cost bounds. `harness.js` prints the PASS/FAIL lines the runner parses. Run it after any
-  change under `frontend/src/lib`.
+  store, icon assignment, station selection, wind barbs, the admin form, cycle navigation,
+  and per-frame cost bounds. `harness.js` prints the PASS/FAIL lines the runner parses. Run
+  it after any change under `frontend/src/lib`.
 - Try a build beside production: `docker build -t hangar-display:test .` then
   `docker run -d -p 8001:8000 -v "$PWD/data:/data" hangar-display:test`.
 - Frontend checks: `node --check` on each module. Headless Chromium
@@ -281,16 +288,19 @@ Dockerfile, docker-compose.yml, data/config.yaml
   stream open, so `--dump-dom` does not return. Drive it over the DevTools protocol
   (`--remote-debugging-port`) when you need page state.
 - Verify the display on the real kiosk: screenshots with
-  `WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/run/user/1000 grim -t jpeg -q 88 -s 0.47 out.jpg`
-  (`-s` scales the 4K panel), per-process CPU from `top`, and GPU memory from `CmaFree` in
-  `/proc/meminfo`. Debian's grim writes only png/ppm; the bootstrap installs
-  `deploy/grim-web-wrapper.sh` as `/usr/local/bin/grim`, which adds jpeg, webp, avif, gif,
-  tiff, bmp, and heic through ImageMagick, either with `-t webp` or inferred from the file
-  name; png/ppm and unknown options pass through to the real grim unchanged.
+  `WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/run/user/1000 grim -t jpeg -q 88 -s 0.46875 out.jpg`
+  (`-s` scales the 4096x2160 panel to 1920 wide), per-process CPU from `top`, and GPU
+  memory from `CmaFree` in `/proc/meminfo`. Debian's grim writes only png/ppm; the
+  bootstrap installs `deploy/grim-web-wrapper.sh` as `/usr/local/bin/grim`, which adds
+  jpeg, webp, avif, gif, tiff, bmp, and heic through ImageMagick, either with `-t webp` or
+  inferred from the file name; png/ppm and unknown options pass through to the real grim
+  unchanged.
   `sudo rm /usr/local/bin/grim` reverts. The kiosk Chromium exposes the DevTools protocol
-  on `127.0.0.1:9222` (localhost only): `curl -s 127.0.0.1:9222/json` lists the page target,
-  and `window.__tpcMap` is the MapLibre instance. Measure any performance change there
-  before calling it an improvement; the regional radar view is the heaviest view.
+  on `127.0.0.1:9222` (localhost only): `curl -s 127.0.0.1:9222/json` lists the page target
+  with its websocket URL. The host has no websocket client; Python's standard library
+  (`socket` plus the websocket handshake and framing) is enough to send `Runtime.evaluate`.
+  `window.__tpcMap` is the MapLibre instance. Measure any performance change there before
+  calling it an improvement; the regional radar view is the heaviest view.
 - Dev servers: backend `uvicorn app.main:app --reload --port 8000` with `HANGAR_CONFIG` and
   `HANGAR_STATIC` set; frontend `npm run dev` proxies `/api` to port 8000 and serves the
   admin page at `/admin.html`.
@@ -299,18 +309,20 @@ Dockerfile, docker-compose.yml, data/config.yaml
 
 ## Documentation screenshots
 
-`docs/display-*.jpg` are captured from the live kiosk with grim at 1920 wide (JPEG, quality
-88) once each view is fully rendered: the KSEA local view a few seconds in, the regional view
-with the radar loop and barbs loaded, and the satellite view once its loop is animating.
-`docs/admin.png` is headless Chromium against the running backend at 1120 px wide. Time the
-captures to a view start through the DevTools port, and check that the frame shows real
-data (aircraft listed, stations listed, frames loaded) before keeping it.
+`docs/display-*.jpg` are captured from the live kiosk with grim (`-t jpeg -q 88 -s 0.46875`,
+which gives 1920x1012 from the 4096x2160 panel) once each view is fully rendered: the KSEA
+local view a few seconds in, the regional view with the radar loop and barbs loaded, and the
+satellite view once its loop is animating. `docs/admin.png` is headless Chromium against the
+running backend at 1120 px wide. Time the captures to a view start through the DevTools
+port, and check that the frame shows real data (aircraft listed, stations listed, frames
+loaded) before keeping it.
 
 ## Runtime environment
 
 - Environment variables: `HANGAR_CONFIG` (default `/data/config.yaml`), `HANGAR_STATIC`
   (default `/app/static`), `HANGAR_TILE_CACHE` (default `/data/tiles`),
-  `HANGAR_ADMIN_PASSWORD` (optional; compose reads it from `.env`).
+  `HANGAR_ADMIN_PASSWORD` (optional; compose reads it from `.env`; `ADMIN_PASSWORD` is
+  accepted as a fallback name).
 - Docker runs rootless as the kiosk user (Docker CE from Docker's apt repo, user
   `docker.service`, linger enabled, CLI on the `rootless` context; the rootful daemon is
   disabled by the bootstrap). Keep OS-level requirements in `deploy/bootstrap.sh` and verify
