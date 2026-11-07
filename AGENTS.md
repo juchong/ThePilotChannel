@@ -171,10 +171,12 @@ Dockerfile, docker-compose.yml, data/config.yaml
 - Weather never blocks the display. `/api/weather/bbox` and `/area` are
   stale-while-revalidate (`manager.py`): a cached set is returned at once with `age_s`,
   `stale`, and the last `error` and refreshed in the background; only a never-fetched set
-  waits, bounded by `WEATHER_COLD_WAIT_S`. The METAR loop retries a failed refresh after
-  `WEATHER_RETRY_S`; `weather.py` retries transient errors (DNS `EAI_AGAIN`, connect and
-  read timeouts) once; the last good weather is persisted to `weather-cache.json` next to
-  the config by a single coalescing writer task and restored at start. `lib/stations.js`
+  waits, bounded by `WEATHER_COLD_WAIT_S`. The bbox query sends its coordinates rounded to
+  `BBOX_DECIMALS` (three decimals, about 100 m): aviationweather.gov answers 400 to
+  full-precision floats. The METAR loop retries a failed refresh after `WEATHER_RETRY_S`;
+  `weather.py` retries transient errors (DNS `EAI_AGAIN`, connect and read timeouts) once;
+  the last good weather is persisted to `weather-cache.json` next to the config by a single
+  coalescing writer task and restored at start. `lib/stations.js`
   keeps the last non-empty station set through a failing refresh and changes only the
   footer. Do not add public fallback resolvers: the LAN receiver's name is known only to
   the router.
@@ -272,8 +274,10 @@ Dockerfile, docker-compose.yml, data/config.yaml
   covers the API surface; `test_behaviour.py` covers speed, reliability, and decoding
   properties. Name each test for the failure it prevents. The manager is a module
   singleton whose loops keep refreshing views polled by earlier tests, so apply config
-  before installing a failing stub. The SSE endpoint is an endless stream and hangs
-  Starlette's TestClient; exercise it with `curl -N`.
+  before installing a failing stub. Assert on background work by polling for the condition
+  with `wait_until` (`test_api.py`) inside a deadline, never after a fixed sleep. The SSE
+  endpoint is an endless stream and hangs Starlette's TestClient; exercise it with
+  `curl -N`.
 - Frontend module tests: `frontend/tests/*.test.html` run headlessly with
   `frontend/tests/run.sh` (needs a chromium binary, no npm packages) and cover the aircraft
   store, icon assignment, station selection, wind barbs, the admin form, cycle navigation,
