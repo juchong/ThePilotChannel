@@ -357,6 +357,10 @@ loaded) before keeping it.
   copies. It writes settings into the keyfiles and reloads: a change made through
   NetworkManager's API (`nmcli`, `nmtui`) stores the profile as netplan again, which the
   next run converts back. Keep `/etc/netplan` empty. Ethernet needs no saved profile.
+- Logs: the system journal is persistent and capped at 64 MB
+  (`/etc/systemd/journald.conf.d/tpc-persistent.conf`), so `journalctl -b -1` reads the
+  boot before a crash or a dropped link. The kiosk browser's log is on the RAM disk and
+  does not survive a reboot, and neither does anything under `/tmp`.
 
 ## HTTP API
 

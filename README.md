@@ -112,6 +112,8 @@ What the bootstrap does, in order, each step only if it is not already done:
 - Configures automatic login on the TV console (tty1) and adds a hook to your login shell
   that starts the kiosk there and nowhere else (not over SSH).
 - Turns Wi-Fi power saving off, which otherwise drops connections on an unattended Pi.
+- Keeps the system log across reboots, capped at 64 MB, so a crash or a dropped network
+  link leaves evidence (`journalctl -b -1` shows the previous boot).
 - Writes the admin password to `.env` if you gave one.
 - Builds the app image and starts it, waiting until it answers.
 

@@ -27,8 +27,8 @@
 #   grim wrapper that adds jpeg/webp/avif/gif screenshots; Wi-Fi settings that survive
 #   power cuts (deploy/harden-wifi.sh); Docker CE in rootless mode as this user (rootful
 #   daemon disabled); the GPU/KMS overlay; seatd and the video/render/input groups;
-#   automatic login on tty1 that launches the kiosk; Wi-Fi power saving off; the optional
-#   admin password; and the app stack itself.
+#   automatic login on tty1 that launches the kiosk; Wi-Fi power saving off; a persistent
+#   system log; the optional admin password; and the app stack itself.
 set -euo pipefail
 
 REPO_URL="https://github.com/juchong/ThePilotChannel.git"
@@ -344,7 +344,26 @@ else
   info "NetworkManager not present; skipped"
 fi
 
-# ---- 10. admin password ---------------------------------------------------------------
+# ---- 10. persistent system log (bounded; a crash or a dropped link leaves evidence) ------
+log "Persistent system log"
+JOURNAL_CONF=/etc/systemd/journald.conf.d/tpc-persistent.conf
+WANT_JOURNAL="[Journal]
+Storage=persistent
+SystemMaxUse=64M"
+if [ -f "$JOURNAL_CONF" ] && [ "$(cat "$JOURNAL_CONF")" = "$WANT_JOURNAL" ] && [ -d /var/log/journal ]; then ok "journal kept across reboots, capped at 64 MB"; else
+  miss "journal kept across reboots, capped at 64 MB"
+  if applying; then
+    if [ "$MODE" = dry-run ]; then info "+ write $JOURNAL_CONF"; else
+      sudo mkdir -p /etc/systemd/journald.conf.d /var/log/journal
+      printf '%s\n' "$WANT_JOURNAL" | sudo tee "$JOURNAL_CONF" >/dev/null
+      sudo systemd-tmpfiles --create --prefix /var/log/journal
+      sudo systemctl restart systemd-journald
+      sudo journalctl --flush
+    fi
+  fi
+fi
+
+# ---- 11. admin password ---------------------------------------------------------------
 log "Admin password (.env)"
 ENV_FILE="$REPO_DIR/.env"
 if [ -n "$ADMIN_PASSWORD" ]; then
@@ -363,7 +382,7 @@ else
   info "no password (pass --admin-password to protect the admin page; anyone on the LAN can change settings without it)"
 fi
 
-# ---- 11. the app stack ------------------------------------------------------------------
+# ---- 12. the app stack ------------------------------------------------------------------
 log "App stack (docker compose)"
 if curl -fs --max-time 3 http://localhost:8000/healthz >/dev/null 2>&1; then
   ok "backend answering on port 8000"
