@@ -224,6 +224,22 @@ else
     run dockerd-rootless-setuptool.sh install --skip-iptables
   fi
 fi
+# Containers copy the resolver list when they start, and at boot the daemon can be up
+# before Wi-Fi has delivered one; wait (bounded) for a nameserver before starting it.
+DOCKER_DROPIN_DIR="$HOME/.config/systemd/user/docker.service.d"
+DOCKER_DROPIN="$DOCKER_DROPIN_DIR/wait-for-dns.conf"
+WANT_DOCKER_DROPIN="[Service]
+ExecStartPre=-/usr/bin/timeout 60 /bin/sh -c 'until grep -qs \"^nameserver\" /etc/resolv.conf; do sleep 1; done'"
+if [ -f "$DOCKER_DROPIN" ] && [ "$(cat "$DOCKER_DROPIN")" = "$WANT_DOCKER_DROPIN" ]; then ok "rootless daemon waits for a nameserver before starting"; else
+  miss "rootless daemon waits for a nameserver before starting"
+  if applying; then
+    if [ "$MODE" = dry-run ]; then info "+ write $DOCKER_DROPIN"; else
+      mkdir -p "$DOCKER_DROPIN_DIR"
+      printf '%s\n' "$WANT_DOCKER_DROPIN" > "$DOCKER_DROPIN"
+      systemctl --user daemon-reload
+    fi
+  fi
+fi
 if [ "$(systemctl --user is-enabled docker 2>/dev/null || true)" = enabled ] && systemctl --user is-active --quiet docker 2>/dev/null; then
   ok "rootless daemon enabled and running"
 else

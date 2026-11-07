@@ -102,8 +102,9 @@ What the bootstrap does, in order, each step only if it is not already done:
   during boot can leave them empty. The bootstrap moves them into a regular NetworkManager
   profile with a read-only backup copy and stops cloud-init from restoring the old files.
 - Installs Docker CE with Docker's own installer, then switches it to rootless mode for
-  your user: the daemon runs as you, not root, starts at boot without a login, and the
-  root-level daemon is disabled so it does not waste memory.
+  your user: the daemon runs as you, not root, starts at boot without a login (waiting for
+  the network's DNS first), and the root-level daemon is disabled so it does not waste
+  memory.
 - Enables the GPU overlay (`dtoverlay=vc4-kms-v3d`, `max_framebuffers=2`) the kiosk needs.
 - Enables `seatd` and puts your user in the `video`, `render`, and `input` groups so the
   kiosk can drive the HDMI output directly.
@@ -455,6 +456,11 @@ actions:
 - **`docker` commands fail or say the daemon is not running.** Docker runs in rootless
   mode as your user: run `docker` commands as that user without `sudo`, and check
   `systemctl --user status docker`. `deploy/bootstrap.sh --check` reports what is wrong.
+- **Every view waits for data after a reboot, and the weather is missing.** The app
+  container started before the Wi-Fi link had a DNS server and cannot resolve names;
+  `/api/status` shows "Temporary failure in name resolution". Run
+  `systemctl --user restart docker` and it recovers at once. The bootstrap makes the daemon
+  wait for DNS at boot; `deploy/bootstrap.sh --check` confirms that is in place.
 - **No aircraft.** Open `http://<pi-ip>:8000/api/status` or press Test connection on the
   admin page. For a local receiver, the URL must be its LAN address, not `localhost`.
 - **No weather or wind barbs.** Check that the Pi can reach `aviationweather.gov` and that

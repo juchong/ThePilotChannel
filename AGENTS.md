@@ -329,8 +329,11 @@ loaded) before keeping it.
   accepted as a fallback name).
 - Docker runs rootless as the kiosk user (Docker CE from Docker's apt repo, user
   `docker.service`, linger enabled, CLI on the `rootless` context; the rootful daemon is
-  disabled by the bootstrap). Keep OS-level requirements in `deploy/bootstrap.sh` and verify
-  a Pi with `bootstrap.sh --check` rather than by hand.
+  disabled by the bootstrap). A drop-in on the user unit waits up to 60 s for a nameserver
+  in `/etc/resolv.conf` before the daemon starts: containers copy the resolver list when
+  they start, and at boot the daemon can be up before Wi-Fi has delivered one, after which
+  nothing in the container resolves until the daemon restarts. Keep OS-level requirements
+  in `deploy/bootstrap.sh` and verify a Pi with `bootstrap.sh --check` rather than by hand.
 - Container: the process is root inside the container on purpose. Under rootless Docker
   that is the unprivileged host user, and a non-root container user could not write the
   bind-mounted `data/` directory. Compensating controls in `docker-compose.yml`: all
