@@ -215,6 +215,34 @@ def test_metar_age_is_computed_when_read_not_when_fetched(client):
     assert r["age_s"] >= 7190 and r["stale"] is True
 
 
+def test_bbox_query_sends_coordinates_rounded_to_three_decimals():
+    """The upstream METAR bounding box carries coordinates rounded to three
+    decimals (about 100 m): aviationweather.gov rejects full-precision floats."""
+    from app import weather as w
+
+    seen = {}
+
+    class FakeClient:
+        async def get(self, url, params=None, timeout=None):
+            seen.update(params)
+
+            class R:
+                def raise_for_status(self):
+                    pass
+
+                def json(self):
+                    return []
+
+            return R()
+
+    asyncio.run(
+        w.MetarSource(FakeClient()).fetch_bbox(
+            46.986854621397555, -123.42363722956226, 47.89283348519825, -121.11636277043802, 4500
+        )
+    )
+    assert seen["bbox"] == "46.987,-123.424,47.893,-121.116"
+
+
 def test_manager_can_be_started_twice():
     """Each lifespan (and each test client) gets fresh loop-bound primitives."""
     async def run():

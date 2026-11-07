@@ -112,6 +112,7 @@ def normalize_metar(raw: Dict, stale_after_s: int) -> Dict:
 
 TRANSIENT = (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout, httpx.RemoteProtocolError)
 RETRY_DELAY_S = 1.5
+BBOX_DECIMALS = 3  # about 100 m; the API rejects full-precision coordinates
 
 
 class MetarSource:
@@ -144,8 +145,9 @@ class MetarSource:
 
     async def fetch_bbox(self, min_lat, min_lon, max_lat, max_lon, stale_after_s: int) -> List[Dict]:
         """All reporting stations within a bounding box (every airport with a
-        METAR, not just configured ones)."""
-        bbox = f"{min_lat},{min_lon},{max_lat},{max_lon}"
+        METAR, not just configured ones). Coordinates are rounded to
+        BBOX_DECIMALS before they reach the URL."""
+        bbox = ",".join(f"{v:.{BBOX_DECIMALS}f}" for v in (min_lat, min_lon, max_lat, max_lon))
         resp = await self._get({"bbox": bbox, "format": "json"}, 10.0)
         records = resp.json() or []
         return [normalize_metar(r, stale_after_s) for r in records if r.get("icaoId")]
