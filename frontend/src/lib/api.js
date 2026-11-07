@@ -61,6 +61,11 @@ export const api = {
   getDisplay: () => j("/api/display"),
   blackout: (body) => j("/api/display/blackout", json("POST", body || {})),
   restoreDisplay: () => j("/api/display/restore", { method: "POST" }),
+  nextView: () => j("/api/display/next", { method: "POST" }),
+  previousView: () => j("/api/display/previous", { method: "POST" }),
+  showView: (viewId) => j("/api/display/view", json("POST", { view: viewId })),
+  // the display's own report of the view it has switched to
+  reportShowing: (body) => j("/api/display/showing", json("POST", body), 4000),
   testSource: (payload) => j("/api/test-source", json("POST", payload), 30000),
 };
 

@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field, ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .config import ICAO_RE, Config, mask_secrets, unknown_keys, unmask_secrets
-from .manager import DataManager, TooManySubscribers
+from .manager import DataManager, TooManySubscribers, UnknownView
 from .radar import LAYER_RE
 from .tiles import valid_tile
 
@@ -274,6 +274,46 @@ async def display_restore():
     return manager.restore_display()
 
 
+class NavigateRequest(BaseModel):
+    view: str = Field(..., max_length=100)  # a view id from /api/views
+
+
+class ShowingReport(BaseModel):
+    view: str = Field(..., max_length=100)
+    index: Optional[int] = Field(None, ge=0)
+
+
+@app.post("/api/display/next", dependencies=[Depends(require_admin)])
+async def display_next():
+    """Move the display on to the next view in its cycle."""
+    return manager.navigate("next")
+
+
+@app.post("/api/display/previous", dependencies=[Depends(require_admin)])
+async def display_previous():
+    """Move the display back to the previous view in its cycle."""
+    return manager.navigate("previous")
+
+
+@app.post("/api/display/view", dependencies=[Depends(require_admin)])
+async def display_view(req: NavigateRequest):
+    """Jump the display to a view by id (see /api/views)."""
+    try:
+        return manager.navigate("view", req.view)
+    except UnknownView:
+        raise HTTPException(status_code=404, detail="unknown view")
+
+
+@app.post("/api/display/showing")
+async def display_showing(req: ShowingReport):
+    """The display reports the view it has just switched to. Open like the read
+    endpoints: the kiosk has no credentials, and the report only names a view."""
+    try:
+        return manager.report_showing(req.view, req.index)
+    except UnknownView:
+        raise HTTPException(status_code=404, detail="unknown view")
+
+
 def _sse(msg: dict) -> str:
     return f"data: {json.dumps(msg)}\n\n"
 
@@ -281,7 +321,7 @@ def _sse(msg: dict) -> str:
 @app.get("/api/stream")
 async def stream(request: Request):
     """SSE: config_changed / weather_updated / display so the kiosk hot-reloads
-    and obeys remote blackouts. The `connected` event carries the backend boot
+    and obeys remote blackouts and navigation. The `connected` event carries the backend boot
     id (so a client can tell when the backend was rebuilt and reload itself)
     and the current display state (so a reconnecting kiosk stays in sync)."""
     try:

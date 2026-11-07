@@ -63,10 +63,16 @@
 
       <section class="card" data-section="screen">
         <h2>Screen</h2>
-        <p class="hint" style="margin-top:0">Black out the picture from an automation (for example Home Assistant) with
-          <code>POST /api/display/blackout</code> and <code>POST /api/display/restore</code>; see the README for a ready-made
-          <code>rest_command</code>. These buttons call the same endpoints.</p>
+        <p class="hint" style="margin-top:0">Step the display through its views or black out the picture, from here or from an
+          automation (for example Home Assistant): <code>POST /api/display/next</code>, <code>/previous</code>, <code>/view</code>,
+          <code>/blackout</code>, and <code>/restore</code>; see the README for ready-made <code>rest_command</code>s. These
+          controls call the same endpoints.</p>
         <div class="row-actions" style="justify-content:flex-start">
+          <button id="screen-previous" type="button" class="btn sm">&#9664; Previous view</button>
+          <button id="screen-next" type="button" class="btn sm">Next view &#9654;</button>
+          <select id="screen-view" style="width:auto"><option value="">Jump to view…</option></select>
+        </div>
+        <div class="row-actions" style="justify-content:flex-start;margin-top:8px">
           <button id="blackout-10" type="button" class="btn sm">Black out for 10 s</button>
           <button id="blackout-hold" type="button" class="btn sm">Black out until restored</button>
           <button id="screen-restore" type="button" class="btn sm primary">Restore</button>

@@ -1,5 +1,5 @@
 """API tests: configuration validation, auth, secrets, traffic snapshots, views,
-config durability, tiles, blackout, and weather resilience. Environment and the
+config durability, tiles, blackout, navigation, and weather resilience. Environment and the
 `client` fixture come from support.py and conftest.py."""
 import os
 import time
@@ -313,6 +313,73 @@ def test_sse_connected_event_carries_display_state(client):
     line = _sse({"event": "connected", "display": main_mod.manager.display_state()})
     assert '"active": true' in line
     client.post("/api/display/restore", auth=AUTH)
+
+
+# ---- remote display control (navigation) -----------------------------------------------
+
+def test_navigation_requires_auth_and_the_display_report_does_not(client):
+    put(client, base_cfg())
+    assert client.post("/api/display/next").status_code == 401
+    assert client.post("/api/display/previous").status_code == 401
+    assert client.post("/api/display/view", json={"view": "local:KSEA"}).status_code == 401
+    assert client.post("/api/display/showing", json={"view": "local:KSEA", "index": 0}).status_code == 200
+
+
+def test_navigation_requests_are_numbered_and_broadcast(client):
+    """Each request gets a higher sequence number and reaches the event stream, so the display applies it once."""
+    m = main_mod.manager
+    before = client.get("/api/display").json()["nav"]["seq"]
+    q = m.subscribe()
+    try:
+        r = client.post("/api/display/next", auth=AUTH)
+        assert r.status_code == 200, r.text
+        nav = r.json()["nav"]
+        assert nav["seq"] == before + 1 and nav["action"] == "next" and nav["view"] is None
+        assert nav["age_s"] is not None and nav["age_s"] < 5
+        evt = q.get_nowait()
+        assert evt["event"] == "display" and evt["nav"]["seq"] == before + 1 and "active" in evt
+        r = client.post("/api/display/previous", auth=AUTH)
+        assert r.json()["nav"]["seq"] == before + 2 and r.json()["nav"]["action"] == "previous"
+    finally:
+        m.unsubscribe(q)
+    assert client.get("/api/display").json()["nav"]["seq"] == before + 2
+    assert client.get("/healthz").json()["status"]["display"]["nav"]["seq"] == before + 2
+
+
+def test_navigate_to_a_view_checks_the_id(client):
+    put(client, base_cfg())
+    assert client.post("/api/display/view", json={"view": "local:KZZZ"}, auth=AUTH).status_code == 404
+    assert client.post("/api/display/view", json={}, auth=AUTH).status_code == 422
+    r = client.post("/api/display/view", json={"view": "local:KSEA"}, auth=AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json()["nav"]["action"] == "view" and r.json()["nav"]["view"] == "local:KSEA"
+    r = client.post("/api/display/next", auth=AUTH)
+    assert r.json()["nav"]["view"] is None  # a step carries no view id
+
+
+def test_display_report_is_exposed_with_its_label_and_place(client):
+    put(client, base_cfg())
+    r = client.post("/api/display/showing", json={"view": "region:Puget Sound", "index": 1})
+    assert r.status_code == 200, r.text
+    s = client.get("/api/display").json()["showing"]
+    assert s["view"] == "region:Puget Sound" and s["index"] == 1
+    assert s["label"].startswith("Region: Puget Sound") and s["count"] >= 2 and s["age_s"] is not None
+    assert client.post("/api/display/showing", json={"view": "nope"}).status_code == 404
+    assert client.post("/api/display/showing", json={"view": "local:KSEA", "index": -1}).status_code == 422
+    s = client.post("/api/display/showing", json={"view": "local:KSEA", "index": 99}).json()["showing"]
+    assert s["view"] == "local:KSEA" and s["index"] is None  # an index outside the cycle is not trusted
+
+
+def test_config_change_forgets_the_reported_view(client):
+    """After a config change the display reloads, so the old report must not name a view that may be gone."""
+    put(client, base_cfg())
+    client.post("/api/display/showing", json={"view": "local:KSEA", "index": 0})
+    assert client.get("/api/display").json()["showing"]["view"] == "local:KSEA"
+    body = base_cfg()
+    body["cycle"] = {"local_dwell_s": 21}
+    assert put(client, body).status_code == 200
+    s = client.get("/api/display").json()["showing"]
+    assert s["view"] is None and s["label"] is None
 
 
 # ---- aircraft type lookup (for tar1090-style icons) -------------------------------------

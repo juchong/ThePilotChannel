@@ -1,0 +1,36 @@
+<!doctype html><html><body><pre id="out"></pre><script type="module">
+import { check, done } from "./harness.js";
+import { navTarget, wrapIndex, NAV_MAX_AGE_S } from "../src/lib/cycle.js";
+// The cycle can list a view more than once (a region interleaved between airports).
+const views = [{ id: "local:A" }, { id: "region:R" }, { id: "local:B" }, { id: "region:R" }, { id: "satellite" }];
+check("wrapIndex wraps backwards past the first view", wrapIndex(-1, 5) === 4);
+check("wrapIndex wraps forwards past the last view", wrapIndex(5, 5) === 0 && wrapIndex(7, 5) === 2);
+check("wrapIndex is 0 for an empty cycle", wrapIndex(3, 0) === 0);
+let t = navTarget({ seq: 1, action: "next", age_s: 0 }, { idx: 4, views, lastSeq: 0 });
+check("next from the last view wraps to the first", t === 0);
+t = navTarget({ seq: 1, action: "previous", age_s: 0 }, { idx: 0, views, lastSeq: 0 });
+check("previous from the first view wraps to the last", t === 4);
+t = navTarget({ seq: 1, action: "next", age_s: 0 }, { idx: 1, views, lastSeq: 1 });
+check("a request already applied is ignored", t === null);
+t = navTarget({ seq: 2, action: "next", age_s: NAV_MAX_AGE_S + 1 }, { idx: 1, views, lastSeq: 1 });
+check("a request older than the window is ignored", t === null);
+t = navTarget({ seq: 2, action: "next", age_s: NAV_MAX_AGE_S }, { idx: 1, views, lastSeq: 1 });
+check("a request at the edge of the window is applied", t === 2);
+t = navTarget({ seq: 2, action: "view", view: "region:R", age_s: 0 }, { idx: 2, views, lastSeq: 1 });
+check("a repeated view id resolves to its next occurrence in the cycle", t === 3);
+t = navTarget({ seq: 2, action: "view", view: "region:R", age_s: 0 }, { idx: 4, views, lastSeq: 1 });
+check("a repeated view id wraps around to its first occurrence", t === 1);
+t = navTarget({ seq: 2, action: "view", view: "local:A", age_s: 0 }, { idx: 0, views, lastSeq: 1 });
+check("selecting the view on screen keeps it and restarts its dwell", t === 0);
+t = navTarget({ seq: 2, action: "view", view: "local:Z", age_s: 0 }, { idx: 0, views, lastSeq: 1 });
+check("an unknown view id is ignored", t === null);
+t = navTarget({ seq: 2, action: "hold", age_s: 0 }, { idx: 0, views, lastSeq: 1 });
+check("an unknown action is ignored", t === null);
+t = navTarget({ seq: 2, action: "next", age_s: 0 }, { idx: 0, views: [], lastSeq: 1 });
+check("nothing to do with no views", t === null);
+t = navTarget({ seq: 5, action: "next", age_s: 0 }, { idx: 0, views, lastSeq: null });
+check("the first request seen is applied when it is fresh", t === 1);
+t = navTarget(null, { idx: 0, views, lastSeq: null });
+check("no request, no target", t === null);
+done();
+</script></body></html>

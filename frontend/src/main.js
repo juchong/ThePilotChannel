@@ -1,5 +1,6 @@
 import { api, subscribeEvents } from "./lib/api.js";
 import { AircraftStore } from "./lib/aircraft.js";
+import { navTarget, wrapIndex } from "./lib/cycle.js";
 import { el, esc, sleep } from "./lib/dom.js";
 import { ALT_STOPS, HangarMap } from "./lib/map.js";
 import { radarStep } from "./lib/radarloop.js";
@@ -40,6 +41,7 @@ const state = {
   dwellTimer: null,
   satTimer: null,
   blackoutTimer: null, // local safety timer for a timed remote blackout
+  navSeq: null, // last remote navigation request seen (applied or adopted)
   map: null,
   es: null,
   clocksStarted: false,
@@ -131,9 +133,13 @@ function onServerEvent(msg) {
     if (state.bootId && msg.boot_id && msg.boot_id !== state.bootId) return safeReload("backend restarted");
     if (state.cfgVersion && msg.version && msg.version !== state.cfgVersion) return safeReload("config changed");
     state.bootId = msg.boot_id || state.bootId;
-    if (msg.display) applyDisplayState(msg.display); // stay in sync with a blackout that started while disconnected
+    if (msg.display) {
+      applyDisplayState(msg.display); // stay in sync with a blackout that started while disconnected
+      applyNavigation(msg.display.nav);
+    }
   } else if (msg.event === "display") {
     applyDisplayState(msg);
+    applyNavigation(msg.nav);
   } else if (msg.event === "config_changed") {
     safeReload("config changed");
   } else if (msg.event === "weather_updated") {
@@ -166,6 +172,22 @@ function applyDisplayState(s) {
   }
 }
 
+// Remote navigation (/api/display/next, /previous, /view): the backend numbers
+// each request; the display applies a request once and only while cycling, so
+// a request found on connect after a reload is adopted, not replayed.
+function applyNavigation(nav) {
+  if (!nav || typeof nav.seq !== "number") return;
+  const target = state.view ? navTarget(nav, { idx: state.idx, views: state.views, lastSeq: state.navSeq }) : null;
+  state.navSeq = state.navSeq == null ? nav.seq : Math.max(state.navSeq, nav.seq);
+  if (target != null) nextView(target);
+}
+
+// Tell the backend which view is on screen, so /api/display can report it.
+function reportShowing() {
+  if (!state.view) return;
+  api.reportShowing({ view: state.view.id, index: state.idx }).catch(() => {});
+}
+
 function startWatchdog() {
   setInterval(() => {
     if (Date.now() - state.lastOk > WATCHDOG_STALL_MS) safeReload("no successful API call for 5 minutes");
@@ -189,6 +211,7 @@ function nextView(idx) {
     console.error("view switch failed", e);
     el("view-label").textContent = "View error";
   }
+  reportShowing();
   animateCountdown(dwell);
   state.dwellTimer = setTimeout(() => nextView(state.idx + 1), dwell * 1000);
 }
@@ -201,7 +224,7 @@ function switchView(idx) {
     showOverlay("No views configured. Open /admin to add airports.");
     return FALLBACK_DWELL_S;
   }
-  state.idx = idx % state.views.length;
+  state.idx = wrapIndex(idx, state.views.length);
   state.view = state.views[state.idx];
   state.store.clear();
   state.lastListHtml = null;

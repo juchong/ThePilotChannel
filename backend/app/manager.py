@@ -56,6 +56,14 @@ class TooManySubscribers(RuntimeError):
     pass
 
 
+class UnknownView(ValueError):
+    pass
+
+
+def _age(ts: Optional[float]) -> Optional[float]:
+    return round(time.time() - ts, 1) if ts else None
+
+
 class DataManager:
     def __init__(self):
         loaded = load_config()
@@ -105,6 +113,10 @@ class DataManager:
         # Home Assistant through /api/display/*.
         self._blackout: Dict[str, Any] = {"active": False, "until": None, "reason": None}
         self._blackout_task: Optional[asyncio.Task] = None
+        # Remote navigation: the latest request to move the cycle, numbered so the
+        # display applies each one once, and the view the display last reported.
+        self._nav: Dict[str, Any] = {"seq": 0, "action": None, "view": None, "ts": None}
+        self._showing: Dict[str, Any] = {"view": None, "index": None, "since": None}
         self._weather_wake = asyncio.Event()
         self._loops: List[asyncio.Task] = []
 
@@ -163,6 +175,7 @@ class DataManager:
         self._traffic_health.clear()
         self._area_cache.clear()
         self._local_state = None  # let a changed local_url be tried right away
+        self._showing = {"view": None, "index": None, "since": None}  # the display reloads and reports again
         self._weather_wake.set()  # refresh METARs for any new airports now
         self.warm_tiles(delay_s=5.0)  # cache basemap tiles for any new or moved views
         self._broadcast({"event": "config_changed", "version": self.config_version})
@@ -609,7 +622,7 @@ class DataManager:
         ok = any(r["ok"] for r in results.values())
         return {"ok": ok, "point": {"lat": lat, "lon": lon}, "results": results}
 
-    # ---- display control (remote blackout) ---------------------------------
+    # ---- display control (remote blackout and navigation) -------------------
     def display_state(self) -> Dict:
         b = self._blackout
         if b["active"] and b["until"] is not None and time.time() >= b["until"]:
@@ -618,6 +631,15 @@ class DataManager:
         out["remaining_s"] = (
             max(0, round(out["until"] - time.time(), 1)) if out["active"] and out["until"] else None
         )
+        out["nav"] = {**self._nav, "age_s": _age(self._nav["ts"])}
+        views = self.views()
+        labels = {v["id"]: v["label"] for v in views}
+        out["showing"] = {
+            **self._showing,
+            "label": labels.get(self._showing["view"]),
+            "count": len(views),
+            "age_s": _age(self._showing["since"]),
+        }
         return out
 
     def _display_event(self) -> Dict:
@@ -654,6 +676,31 @@ class DataManager:
         self._blackout_task = None
         log.info("display blackout off (timer)")
         self._broadcast(self._display_event())
+
+    def navigate(self, action: str, view_id: Optional[str] = None) -> Dict:
+        """Ask the display to move its cycle: "next", "previous", or "view" (to view_id).
+        The display owns the cycle; this records a numbered request for it to apply."""
+        if action == "view" and view_id not in {v["id"] for v in self.views()}:
+            raise UnknownView(view_id)
+        self._nav = {
+            "seq": self._nav["seq"] + 1,
+            "action": action,
+            "view": view_id if action == "view" else None,
+            "ts": time.time(),
+        }
+        log.info("display navigate: %s%s", action, f" {view_id}" if action == "view" else "")
+        self._broadcast(self._display_event())
+        return self.display_state()
+
+    def report_showing(self, view_id: str, index: Optional[int] = None) -> Dict:
+        """Record the view the display reports it has switched to."""
+        views = self.views()
+        if view_id not in {v["id"] for v in views}:
+            raise UnknownView(view_id)
+        if index is not None and not 0 <= index < len(views):
+            index = None
+        self._showing = {"view": view_id, "index": index, "since": time.time()}
+        return self.display_state()
 
     # ---- status / SSE ----------------------------------------------------
     def status(self) -> Dict:

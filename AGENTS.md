@@ -65,6 +65,7 @@ frontend/src/
   lib/shapes.js     icon assignment (tar1090 methodology) and rendering
   lib/vendor/tar1090/markers.js, LICENSE   vendored tar1090 shapes and tables (GPL-2.0)
   lib/radarloop.js  radar loop stepping: frame readiness, dwell, hold
+  lib/cycle.js      cycle index wrapping; which view a remote navigation request selects
   lib/stations.js   which station set the regional view shows, footer state
   lib/windbarb.js   wind barb SVG
   lib/geo.js        client geo helpers
@@ -196,7 +197,9 @@ Dockerfile, docker-compose.yml, data/config.yaml
   sends the mask keeps the stored value and an empty string clears it. `PUT /api/config`
   rejects unknown keys and honors `If-Match` against the config version (409 on mismatch).
 - `HANGAR_ADMIN_PASSWORD` gates `/admin`, `PUT /api/config`, `POST /api/test-source`, and
-  `POST /api/display/*` with HTTP Basic auth. Read endpoints the display uses stay open.
+  `POST /api/display/*` with HTTP Basic auth, except `POST /api/display/showing`, the
+  display's report of the view it shows: the kiosk has no credentials and the report only
+  names a view. Read endpoints the display uses stay open.
   `admin.html` is only reachable through `/admin` (`AppStatic` blocks the direct path).
 - The display never calls `location.reload()` while the backend is unreachable (Chromium's
   error page has no script to recover); use `safeReload()`. Boot retries with backoff,
@@ -214,6 +217,14 @@ Dockerfile, docker-compose.yml, data/config.yaml
   (`#blackout`), not a stop: the cycle and polling keep running underneath so restore is
   instant. A timed blackout auto-restores server-side and the display arms its own
   fallback timer.
+- Remote navigation (`POST /api/display/next`, `/previous`, `/view`) does not move the
+  cycle to the server: the display keeps its own dwell timer and the backend records a
+  numbered request (`nav` in the display state, broadcast as a `display` event). The
+  display applies a request once (`navTarget()` in `lib/cycle.js`), also from `connected`
+  after a reconnect while the request is younger than `NAV_MAX_AGE_S`, and adopts without
+  replaying whatever request it finds on a fresh load. After every switch it reports the
+  view with `POST /api/display/showing`; `GET /api/display` exposes `nav` and `showing`
+  for automations and the admin page.
 
 ### Style
 
@@ -258,8 +269,8 @@ Dockerfile, docker-compose.yml, data/config.yaml
   Starlette's TestClient; exercise it with `curl -N`.
 - Frontend module tests: `frontend/tests/*.test.html` run headlessly with
   `frontend/tests/run.sh` (needs a chromium binary, no npm packages) and cover the aircraft
-  store, icon assignment, station selection, wind barbs, the admin form, and per-frame
-  cost bounds. `harness.js` prints the PASS/FAIL lines the runner parses. Run it after any
+  store, icon assignment, station selection, wind barbs, the admin form, cycle
+  navigation, and per-frame cost bounds. `harness.js` prints the PASS/FAIL lines the runner parses. Run it after any
   change under `frontend/src/lib`.
 - Try a build beside production: `docker build -t hangar-display:test .` then
   `docker run -d -p 8001:8000 -v "$PWD/data:/data" hangar-display:test`.
@@ -344,8 +355,13 @@ data (aircraft listed, stations listed, frames loaded) before keeping it.
   either with a `-mNNm` lag) with returns below `radar.min_dbz` removed; 502 when IEM
   fails, 404 for an unknown layer or invalid coordinates.
 - `POST /api/test-source` tries a `data_source` block from the first enabled airport.
-- `GET /api/display`, `POST /api/display/blackout` (`{"seconds", "reason"}`, both
-  optional), `POST /api/display/restore`.
+- `GET /api/display` blackout state plus `nav` (the last navigation request: `seq`,
+  `action`, `view`, `age_s`) and `showing` (the display's reported view: `view`, `index`,
+  `label`, `count`, `age_s`). `POST /api/display/blackout` (`{"seconds", "reason"}`, both
+  optional), `POST /api/display/restore`, `POST /api/display/next`,
+  `POST /api/display/previous`, `POST /api/display/view` (`{"view": id}`; 404 for an
+  unknown id), `POST /api/display/showing` (`{"view", "index"}`, sent by the display, no
+  auth).
 - `GET /api/stream` SSE: `connected`, `config_changed`, `weather_updated`, `display`.
 
 ## Configuration model

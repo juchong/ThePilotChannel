@@ -190,8 +190,8 @@ sees. Frames step every half second.
 "Cross-fade frames" dissolves them into each other instead; it is off by default because
 the fade is expensive on a Pi 4.
 
-**Screen.** Buttons to black out and restore the picture, the same thing an automation
-can do (see below).
+**Screen.** Buttons to step the display to the previous or next view or jump to one, and
+to black out and restore the picture: the same things an automation can do (see below).
 
 ### Editing the file directly
 
@@ -261,11 +261,103 @@ radar:
   crossfade: false           # dissolve between frames (expensive on a Pi 4)
 ```
 
-## Black out the screen from an automation
+## Control the screen from an automation
 
-Home Assistant or any other system can black out the TV picture for a while and bring it
-back, for example while a movie plays or when a doorbell rings. The display keeps running
-underneath, so the picture returns instantly.
+Home Assistant or any other system on the network can step the display through its views,
+jump to a view, and black out the picture. The admin page's Screen section has buttons for
+the same things.
+
+### Change the view
+
+The display keeps cycling on its own; these calls move it on, back, or straight to a view,
+which then stays up for its usual time before the cycle continues. Add `-u any:<password>`
+if you set an admin password.
+
+```bash
+curl -X POST http://<pi-ip>:8000/api/display/next
+```
+
+```bash
+curl -X POST http://<pi-ip>:8000/api/display/previous
+```
+
+```bash
+# jump to a view by id; GET /api/views lists them (local:KSEA, region:Puget Sound, satellite)
+curl -X POST -H 'content-type: application/json' \
+  -d '{"view": "satellite"}' http://<pi-ip>:8000/api/display/view
+```
+
+`GET /api/display` reports what is on screen: `showing.label`, and its place in the cycle as
+`showing.index` of `showing.count`. Reading it needs no password.
+
+Home Assistant, in `configuration.yaml` (drop the `username` and `password` lines if there
+is no admin password): commands for the buttons and for jumping to a view, and a sensor
+that shows the current view.
+
+```yaml
+rest_command:
+  hangar_display_next:
+    url: "http://<pi-ip>:8000/api/display/next"
+    method: post
+    username: hass
+    password: !secret hangar_admin_password
+  hangar_display_previous:
+    url: "http://<pi-ip>:8000/api/display/previous"
+    method: post
+    username: hass
+    password: !secret hangar_admin_password
+  hangar_display_view:
+    url: "http://<pi-ip>:8000/api/display/view"
+    method: post
+    content_type: "application/json"
+    username: hass
+    password: !secret hangar_admin_password
+    payload: '{"view": "{{ view }}"}'
+
+rest:
+  - resource: "http://<pi-ip>:8000/api/display"
+    scan_interval: 5
+    sensor:
+      - name: Hangar display view
+        value_template: "{{ value_json.showing.label or 'unknown' }}"
+```
+
+On a dashboard, previous and next buttons around the current view:
+
+```yaml
+type: horizontal-stack
+cards:
+  - type: button
+    name: Previous
+    icon: mdi:skip-previous
+    tap_action:
+      action: perform-action
+      perform_action: rest_command.hangar_display_previous
+  - type: entity
+    entity: sensor.hangar_display_view
+    name: Showing
+  - type: button
+    name: Next
+    icon: mdi:skip-next
+    tap_action:
+      action: perform-action
+      perform_action: rest_command.hangar_display_next
+```
+
+To jump to a view from an automation or a script, pass its id:
+
+```yaml
+actions:
+  - action: rest_command.hangar_display_view
+    data:
+      view: satellite
+```
+
+### Black out the picture
+
+The TV picture can be blacked out for a while and brought back, for example while a movie
+plays or when a doorbell rings. The display keeps running underneath, so the picture
+returns instantly.
 
 ```bash
 # black out for 30 seconds

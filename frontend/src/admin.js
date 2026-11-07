@@ -35,6 +35,13 @@ async function boot() {
   el("blackout-10").addEventListener("click", () => screenAction(() => api.blackout({ seconds: 10, reason: "admin page" })));
   el("blackout-hold").addEventListener("click", () => screenAction(() => api.blackout({ reason: "admin page" })));
   el("screen-restore").addEventListener("click", () => screenAction(() => api.restoreDisplay()));
+  el("screen-previous").addEventListener("click", () => screenAction(() => api.previousView()));
+  el("screen-next").addEventListener("click", () => screenAction(() => api.nextView()));
+  el("screen-view").addEventListener("change", (ev) => {
+    const id = ev.target.value;
+    ev.target.value = "";
+    if (id) screenAction(() => api.showView(id));
+  });
   refreshScreenState();
   setInterval(refreshScreenState, 5000);
 
@@ -69,6 +76,19 @@ async function load() {
   delete cfg.version;
   renderAll(cfg, roots);
   dirty = false;
+  fillViews();
+}
+
+// The cycle can show a view more than once; the jump list names each view once.
+async function fillViews() {
+  try {
+    const { views } = await api.getViews();
+    const seen = new Set();
+    const once = (views || []).filter((v) => !seen.has(v.id) && seen.add(v.id));
+    el("screen-view").innerHTML =
+      `<option value="">Jump to view…</option>` +
+      once.map((v) => `<option value="${esc(v.id)}">${esc(v.label)}</option>`).join("");
+  } catch (_) {}
 }
 
 function markDirty() {
@@ -170,6 +190,7 @@ async function testSource() {
 async function screenAction(fn) {
   try {
     showScreenState(await fn());
+    setTimeout(refreshScreenState, 1500); // the display reports its new view once it has switched
   } catch (e) {
     setStatus("screen-state", e.status === 401 ? "not authorized: reload and enter the admin password" : "error: " + e.message, "err");
   }
@@ -182,7 +203,10 @@ async function refreshScreenState() {
 }
 
 function showScreenState(s) {
-  if (!s.active) return setStatus("screen-state", "screen is showing", "ok");
+  const v = s.showing || {};
+  const place = v.index != null && v.count ? ` (${v.index + 1} of ${v.count})` : "";
+  const where = v.label ? ` ${v.label}${place}` : "";
+  if (!s.active) return setStatus("screen-state", `screen is showing${where}`, "ok");
   const left = s.remaining_s != null ? `${Math.round(s.remaining_s)} s left` : "until restored";
   setStatus("screen-state", `blacked out, ${left}${s.reason ? ` (${s.reason})` : ""}`, "err");
 }
