@@ -11,7 +11,8 @@ services:
     environment:
       # Optional. When set, /admin and config writes require this password
       # (HTTP Basic auth, any username). Put it in a .env file next to this
-      # compose file: HANGAR_ADMIN_PASSWORD=...
+      # compose file: HANGAR_ADMIN_PASSWORD=... (the camera URLs live in the
+      # same file, see the go2rtc service below).
       HANGAR_ADMIN_PASSWORD: ${HANGAR_ADMIN_PASSWORD:-}
       # The camera stream relay (the go2rtc service below), reached over the
       # compose network only.
@@ -46,23 +47,33 @@ services:
       retries: 3
       start_period: 10s
 
-  # Camera stream relay for the camera view. It pulls the RTSPS streams listed in
-  # data/go2rtc/go2rtc.yaml (kept out of git: the URLs carry access tokens) and
+  # Camera stream relay for the camera view. It pulls the cameras' RTSPS streams and
   # serves them to the app's /api/cameras/ws relay as fragmented MP4 without
-  # re-encoding. It publishes no port and its RTSP, WebRTC and SRTP listeners are
-  # off: only the app container reaches it, through the API on 1984.
+  # re-encoding. The stream URLs carry access tokens, so they are in neither this file
+  # nor deploy/go2rtc.yaml: each stream slot there (cam1 to cam12) expands its URL from
+  # the environment below, which compose fills from .env (HANGAR_CAM1 to HANGAR_CAM12).
+  # It publishes no port and its RTSP, WebRTC and SRTP listeners are off: only the app
+  # container reaches it, through the API on 1984.
   go2rtc:
     image: alexxit/go2rtc:1.9.15
     container_name: hangar-go2rtc
     restart: unless-stopped
-    command:
-      - go2rtc
-      - -config
-      - /config/go2rtc.yaml
-      - -config
-      - '{"rtsp":{"listen":""},"webrtc":{"listen":""},"srtp":{"listen":""}}'
+    command: [go2rtc, -config, /config/go2rtc.yaml]
+    environment:
+      HANGAR_CAM1: ${HANGAR_CAM1:-}
+      HANGAR_CAM2: ${HANGAR_CAM2:-}
+      HANGAR_CAM3: ${HANGAR_CAM3:-}
+      HANGAR_CAM4: ${HANGAR_CAM4:-}
+      HANGAR_CAM5: ${HANGAR_CAM5:-}
+      HANGAR_CAM6: ${HANGAR_CAM6:-}
+      HANGAR_CAM7: ${HANGAR_CAM7:-}
+      HANGAR_CAM8: ${HANGAR_CAM8:-}
+      HANGAR_CAM9: ${HANGAR_CAM9:-}
+      HANGAR_CAM10: ${HANGAR_CAM10:-}
+      HANGAR_CAM11: ${HANGAR_CAM11:-}
+      HANGAR_CAM12: ${HANGAR_CAM12:-}
     volumes:
-      - ./data/go2rtc:/config:ro
+      - ./deploy/go2rtc.yaml:/config/go2rtc.yaml:ro
     cap_drop:
       - ALL
     security_opt:

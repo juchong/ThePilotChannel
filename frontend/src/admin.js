@@ -130,13 +130,14 @@ async function showStatusPanel() {
   } catch (_) {}
 }
 
-// The camera relay's state for the status line: whether go2rtc answers and
-// which tile streams it does not know.
+// The camera relay's state for the status line: whether go2rtc answers, which tile
+// streams it does not know, and which have no camera URL in .env.
 function cameraStatus(c) {
   if (!c || !c.enabled) return "";
   const unknown = (c.unknown_streams || []).length ? ` (unknown streams: ${esc(c.unknown_streams.join(", "))})` : "";
+  const empty = (c.empty_streams || []).length ? ` (no URL in .env: ${esc(c.empty_streams.join(", "))})` : "";
   const err = c.error ? ` <code>${esc(c.error)}</code>` : "";
-  return ` · cameras: relay ${esc(c.relay)}${unknown}${err}`;
+  return ` · cameras: relay ${esc(c.relay)}${unknown}${empty}${err}`;
 }
 
 function fmtUptime(s) {

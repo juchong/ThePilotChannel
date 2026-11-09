@@ -1,0 +1,22 @@
+# go2rtc, the camera stream relay (see the go2rtc service in docker-compose.yml). The
+# twelve stream slots take their camera URLs from .env (HANGAR_CAM1 to HANGAR_CAM12); a
+# slot whose variable is unset stays empty. The API is the only listener.
+rtsp:
+  listen: ""
+webrtc:
+  listen: ""
+srtp:
+  listen: ""
+streams:
+  cam1: ${HANGAR_CAM1:}
+  cam2: ${HANGAR_CAM2:}
+  cam3: ${HANGAR_CAM3:}
+  cam4: ${HANGAR_CAM4:}
+  cam5: ${HANGAR_CAM5:}
+  cam6: ${HANGAR_CAM6:}
+  cam7: ${HANGAR_CAM7:}
+  cam8: ${HANGAR_CAM8:}
+  cam9: ${HANGAR_CAM9:}
+  cam10: ${HANGAR_CAM10:}
+  cam11: ${HANGAR_CAM11:}
+  cam12: ${HANGAR_CAM12:}

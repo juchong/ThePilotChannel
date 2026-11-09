@@ -213,29 +213,30 @@ sees. Frames step every half second.
 the fade is expensive on a Pi 4.
 
 **Cameras.** Live video from your security cameras. The stream links are not entered on the
-admin page: they carry access tokens, so they live in a file on the Pi that is never
-committed, `data/go2rtc/go2rtc.yaml`, read by the go2rtc relay that runs beside the app.
-One line per camera, with the name you will refer to it by:
+admin page: they carry access tokens, so they live in `.env` next to `docker-compose.yml`
+on the Pi, the file that also holds the admin password and is never committed. One line
+per camera, in one of the twelve slots `HANGAR_CAM1` to `HANGAR_CAM12`:
 
-```yaml
-streams:
-  gate: rtsps://192.168.1.1:7441/AbCdEfGhIjKlMnOp
-  runway: rtsps://192.168.1.1:7441/QrStUvWxYz012345
+```
+HANGAR_CAM1=rtsps://192.168.1.1:7441/AbCdEfGhIjKlMnOp
+HANGAR_CAM2=rtsps://192.168.1.1:7441/QrStUvWxYz012345
 ```
 
-For UniFi Protect, open the camera's settings, Advanced, turn on RTSP for the quality you
-want and copy the link. Use the medium quality: a tile is at most 1280 pixels wide on a 4K
-TV, and several cameras' full-resolution streams are more than the Pi's decoder is rated
-for. Leave off the `?enableSrtp` that Protect appends to the link: go2rtc does not decrypt
-SRTP, and the link is already carried inside TLS without it. After editing the file run
-`docker compose restart go2rtc`.
+The go2rtc relay that runs beside the app serves the slots as the streams `cam1` to
+`cam12`. For UniFi Protect, the links are on the camera's settings page in the Protect
+app, under Advanced, in the RTSP section: turn on the quality you want and copy its link.
+Use the medium quality: a tile is at most 1280 pixels wide on a 4K TV, and several cameras'
+full-resolution streams are more than the Pi's decoder is rated for. Leave off the
+`?enableSrtp` that Protect appends to the link: go2rtc does not decrypt SRTP, and the link
+is already carried inside TLS without it. After editing `.env` run `docker compose up -d`,
+which recreates the relay with the new values (a plain restart keeps the old ones).
 
-Then enable the view on the admin page and add a tile per camera: a caption, the stream's
-name from the file, and how many of the six grid columns it spans. Every row is as tall as a
+Then enable the view on the admin page and add a tile per camera: a caption, the slot's
+stream name (`cam1` for `HANGAR_CAM1`), and how many of the six grid columns it spans. Every row is as tall as a
 16:9 two-column tile, so two columns suit a normal camera and four a panoramic one; a
 portrait camera is centered in its tile. Tiles fill the rows in order. The status line at
 the top of the admin page says whether the relay is up and names tiles whose stream it does
-not know.
+not know or whose slot has no link in `.env`.
 
 **Screen.** Buttons to step the display to the previous or next view or jump to one, and
 to black out and restore the picture: the same things an automation can do (see below).
@@ -311,9 +312,9 @@ cameras:
   enabled: false
   label: Cameras
   dwell_s: 30
-  tiles:                     # streams by their name in data/go2rtc/go2rtc.yaml
+  tiles:                     # streams cam1 to cam12: the .env slots HANGAR_CAM1 to HANGAR_CAM12
     - name: Gate             # caption; the stream name when empty
-      stream: gate
+      stream: cam1
       cols: 2                # of 6 grid columns: 2 is a 16:9 tile, 4 a 32:9 tile
 ```
 
@@ -485,14 +486,16 @@ actions:
   upgrades the system and re-checks every other step). On a Pi 4 the kiosk browser updates
   with the OS; on a Pi 5 it is held at the patched build, and a newer patched release is
   taken up by changing the release named in `deploy/bootstrap.sh` and running it again.
-- **Add or change a camera:** edit `data/go2rtc/go2rtc.yaml` and run
-  `docker compose restart go2rtc`; the tiles are arranged on the admin page.
+- **Add or change a camera:** put its link in a `HANGAR_CAM` slot in `.env` and run
+  `docker compose up -d` (a restart alone keeps the old links); the tiles are arranged on
+  the admin page.
 - **Restart the display browser:** `pkill -x cage`. It comes straight back.
 - **Reboot the Pi:** everything starts again automatically, including after a power cut.
 - **Move to a new Pi:** your settings are the file `data/config.yaml` in the clone (the admin
   page writes them there), so copy it off the old Pi, or commit it in your clone, before
-  retiring it. Flash and bootstrap the new Pi as in the install steps, put the file back under
-  `data/`, and run `docker compose restart`. The tile and weather caches rebuild on their
+  retiring it. `.env`, with the admin password and the camera links, is never committed, so
+  copy it by hand. Flash and bootstrap the new Pi as in the install steps, put both files
+  back, and run `docker compose up -d`. The tile and weather caches rebuild on their
   own. The new Pi may get a different address: update any automation that points at it.
 - **Change the Wi-Fi network or password:** use `sudo nmtui` (Edit a connection), then run
   `sudo ~/ThePilotChannel/deploy/harden-wifi.sh`: it moves the edited profile back out of
@@ -550,9 +553,9 @@ actions:
   ten seconds old; red means the source is failing. Hover over it in a browser, or check
   `/api/status`, for the reason.
 - **A camera tile says NO SIGNAL.** The relay is not getting that stream. The admin page's
-  status line says whether the relay is up and lists tile streams it does not know (the
-  name must match one in `data/go2rtc/go2rtc.yaml`), and `docker compose logs go2rtc` shows
-  why a camera does not connect. A Protect link must be used without its `?enableSrtp`
+  status line says whether the relay is up, lists tile streams it does not know (the name
+  must be one of `cam1` to `cam12`) and slots that have no link in `.env`, and
+  `docker compose logs go2rtc` shows why a camera does not connect. A Protect link must be used without its `?enableSrtp`
   suffix, and the camera's RTSP output must be turned on.
 - **Camera video is choppy, or the tiles stay black on a Pi 4.** The camera view needs the
   Pi 5's hardware decoder. On a Pi 5, `deploy/bootstrap.sh --check` confirms that the

@@ -25,9 +25,11 @@ robustness and low resource use come before features.
   autologin shell and starts cage (Wayland compositor) plus Chromium; `harden-wifi.sh`,
   run by the bootstrap, keeps Wi-Fi in NetworkManager keyfiles. The kiosk is not in Docker
   because it needs the GPU and HDMI output directly.
-- `go2rtc`, the second compose service (image pinned), pulls the camera RTSPS streams listed
-  in `data/go2rtc/go2rtc.yaml` (gitignored: the URLs carry access tokens) and serves them
-  as fragmented MP4 without re-encoding. It publishes no port. The backend relays its MSE
+- `go2rtc`, the second compose service (image pinned), pulls the camera RTSPS streams and
+  serves them as fragmented MP4 without re-encoding. Its config `deploy/go2rtc.yaml` defines
+  the stream slots `cam1` to `cam12`, each expanded by go2rtc from its environment
+  (`${HANGAR_CAMn:}`, empty when unset), which compose fills from `.env`: the URLs carry
+  access tokens and are never in the repository. It publishes no port. The backend relays its MSE
   WebSocket per tile (`backend/app/cameras.py`, `WS /api/cameras/ws?stream=`), for streams
   configured as tiles only, and the display plays each tile with `lib/camstream.js`.
 - `data/config.yaml` is the single source of truth for configuration, validated by the
@@ -83,7 +85,7 @@ deploy/bootstrap.sh   idempotent OS provisioning for a fresh Pi (also --check / 
 deploy/harden-wifi.sh   Wi-Fi as NetworkManager keyfiles with read-only copies (also --check)
 deploy/grim-web-wrapper.sh   installed as /usr/local/bin/grim: web image formats via ImageMagick
 deploy/kiosk-launch.sh, getty-autologin.conf
-Dockerfile, docker-compose.yml (app + go2rtc), data/config.yaml, data/go2rtc/ (ignored)
+Dockerfile, docker-compose.yml (app + go2rtc), deploy/go2rtc.yaml, data/config.yaml, .env (ignored)
 ```
 
 ## Invariants
@@ -207,11 +209,12 @@ Dockerfile, docker-compose.yml (app + go2rtc), data/config.yaml, data/go2rtc/ (i
 - Satellite frame URLs come from parsing the NOAA STAR CDN directory listing
   (`satellite.py`), cached for 240 s per parameter set. Query parameters are validated
   before they reach a URL.
-- Camera stream URLs live only in `data/go2rtc/go2rtc.yaml`; `config.yaml` and the API
-  carry stream names. go2rtc's RTSP, WebRTC and SRTP listeners are off and it publishes no
-  port; the backend reaches it at `HANGAR_GO2RTC` over the compose network. `/api/status`
-  probes it (`cameras.status`, cached for `STATUS_TTL_S`) and returns only stream names,
-  never go2rtc's stream list, which holds the URLs. UniFi Protect links are used without
+- Camera stream URLs live only in `.env` (`HANGAR_CAM1` to `HANGAR_CAM12`, passed by compose
+  into the go2rtc container and expanded in `deploy/go2rtc.yaml`); `config.yaml` and the API
+  carry stream names. go2rtc's RTSP, WebRTC and SRTP listeners are off (set in that file) and
+  it publishes no port; the backend reaches it at `HANGAR_GO2RTC` over the compose network.
+  `/api/status` probes it (`cameras.status`, cached for `STATUS_TTL_S`) and returns only
+  stream names (tiles it does not know, slots with no URL), never go2rtc's stream list. UniFi Protect links are used without
   their `?enableSrtp` suffix: go2rtc does not implement SRTP (AlexxIT/go2rtc#81) and would
   relay encrypted payloads behind valid headers; `rtsps://` over TCP is inside TLS already.
 
@@ -375,7 +378,8 @@ loaded) before keeping it.
 - Environment variables: `HANGAR_CONFIG` (default `/data/config.yaml`), `HANGAR_STATIC`
   (default `/app/static`), `HANGAR_TILE_CACHE` (default `/data/tiles`), `HANGAR_GO2RTC`
   (default `http://go2rtc:1984`), `HANGAR_ADMIN_PASSWORD` (optional; compose reads it from
-  `.env`; `ADMIN_PASSWORD` is accepted as a fallback name).
+  `.env`; `ADMIN_PASSWORD` is accepted as a fallback name). `HANGAR_CAM1` to `HANGAR_CAM12`
+  are read from `.env` by compose for the go2rtc container only, not by the backend.
 - Docker runs rootless as the kiosk user (Docker CE from Docker's apt repo, user
   `docker.service`, linger enabled, CLI on the `rootless` context; the rootful daemon is
   disabled by the bootstrap). A drop-in on the user unit waits up to 60 s for a nameserver

@@ -128,3 +128,19 @@ def test_status_reports_the_relay_state(client):
     cams = client.get("/api/status").json()["cameras"]
     assert cams["enabled"] is True and cams["tiles"] == 2
     assert cams["relay"] == "down" and cams["error"]
+    assert cams["unknown_streams"] == [] and cams["empty_streams"] == []
+
+
+def test_status_names_unknown_tiles_and_slots_without_a_url(client, monkeypatch):
+    tiles = [{"name": "", "stream": s, "cols": 2} for s in ("cam1", "cam3", "cam9")]
+    assert put(client, cams_cfg(tiles=tiles)).status_code == 200
+
+    async def fake_fetch():  # go2rtc knows cam1 (with a URL) and cam3 (slot unset)
+        return {"cam1": {"producers": [{"url": "***"}], "consumers": None}, "cam3": {"producers": None, "consumers": None}}
+
+    monkeypatch.setattr(cameras, "fetch_streams", fake_fetch)
+    cameras._status_cache["value"] = None
+    cams = client.get("/api/status").json()["cameras"]
+    assert cams["relay"] == "ok" and cams["error"] is None and cams["tiles"] == 3
+    assert cams["unknown_streams"] == ["cam9"]
+    assert cams["empty_streams"] == ["cam3"]

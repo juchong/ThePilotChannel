@@ -8,4 +8,3 @@ data/config.yaml.tmp
 data/config.yaml.bak.*
 data/tiles/
 data/weather-cache.json*
-data/go2rtc/

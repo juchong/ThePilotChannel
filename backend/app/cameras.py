@@ -1,9 +1,9 @@
 """Live camera tiles: the browser's MSE WebSocket is relayed to go2rtc, which pulls
 the camera streams and serves them as fragmented MP4 without re-encoding.
 
-go2rtc publishes no port and its config file holds the camera URLs with their access
-tokens, so the browser never talks to it directly: only the stream names configured
-as tiles are reachable, through this relay.
+go2rtc publishes no port and takes the camera URLs, with their access tokens, from
+its environment (.env), so the browser never talks to it directly: only the stream
+names configured as tiles are reachable, through this relay.
 """
 from __future__ import annotations
 
@@ -80,19 +80,35 @@ async def proxy(ws: WebSocket, stream: str) -> None:
                 pass
 
 
+async def fetch_streams() -> Dict[str, dict]:
+    """go2rtc's stream list, name -> {producers, consumers}; it masks the URLs."""
+    async with httpx.AsyncClient(timeout=2.0) as client:
+        r = await client.get(f"{GO2RTC_URL}/api/streams")
+        r.raise_for_status()
+        return r.json()
+
+
 async def status(streams: List[str]) -> Dict:
-    """Whether go2rtc answers and which configured tile streams it does not know,
-    cached for STATUS_TTL_S so status polls do not hammer it."""
+    """Whether go2rtc answers, which configured tile streams it does not know, and which
+    it knows but has no camera URL for (an unset .env slot), cached for STATUS_TTL_S so
+    status polls do not hammer it. Only stream names are returned."""
     now = time.monotonic()
     if _status_cache["value"] is None or now - float(_status_cache["ts"]) > STATUS_TTL_S:
         try:
-            async with httpx.AsyncClient(timeout=2.0) as client:
-                r = await client.get(f"{GO2RTC_URL}/api/streams")
-                r.raise_for_status()
-                known = set(r.json().keys())  # only the names: the body carries the stream URLs
-            value = {"relay": "ok", "error": None, "unknown_streams": [s for s in streams if s not in known]}
+            known = await fetch_streams()
+            value = {
+                "relay": "ok",
+                "error": None,
+                "unknown_streams": [s for s in streams if s not in known],
+                "empty_streams": [s for s in streams if s in known and not (known[s] or {}).get("producers")],
+            }
         except Exception as exc:  # noqa: BLE001
-            value = {"relay": "down", "error": f"{type(exc).__name__}: {exc}"[:200], "unknown_streams": []}
+            value = {
+                "relay": "down",
+                "error": f"{type(exc).__name__}: {exc}"[:200],
+                "unknown_streams": [],
+                "empty_streams": [],
+            }
         _status_cache["ts"] = now
         _status_cache["value"] = value
     return {"tiles": len(streams), **_status_cache["value"]}  # type: ignore[dict-item]
