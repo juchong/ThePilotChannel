@@ -35,10 +35,14 @@ the build, test, and verify workflow are in AGENTS.md; read that first.
 
 - This Pi is the production kiosk. Building the image and deploying it here is authorized
   without asking. Afterwards, verify that the display actually loaded the new bundle.
-- Measure improvements on the live kiosk (screenshots, CPU, GPU memory, DevTools). A change
-  that breaks a working view is a regression, whatever it improves elsewhere; keep the
-  rendering paths that work.
-- Update the documentation screenshots when the display changes.
+- Measure improvements on the live kiosk (CPU, GPU memory, DevTools). A change that breaks
+  a working view is a regression, whatever it improves elsewhere; keep the rendering paths
+  that work.
+- To check a view, switch the display to it with `POST /api/display/view` instead of
+  waiting for the cycle to reach it.
+- Capture a screenshot only when debugging needs one or when asked for one. The
+  documentation screenshots are retaken on request; when a change alters what one of them
+  shows, say so.
 
 ## Tests
 

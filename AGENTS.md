@@ -622,21 +622,29 @@ Dockerfile, docker-compose.yml (app + go2rtc), deploy/go2rtc.yaml, data/config.y
   so the display's map never finishes loading there, and the display page holds its event
   stream open, so `--dump-dom` does not return. Drive it over the DevTools protocol
   (`--remote-debugging-port`) when you need page state.
-- Verify the display on the real kiosk: screenshots with
+- Verify the display on the real kiosk from its page state, not from a picture. The kiosk
+  Chromium exposes the DevTools protocol on `127.0.0.1:9222` (localhost only):
+  `curl -s 127.0.0.1:9222/json` lists the page target with its websocket URL. The host has
+  no websocket client; Python's standard library (`socket` plus the websocket handshake
+  and framing) is enough to send `Runtime.evaluate`: the loaded bundle from
+  `document.scripts`, then the rows, chips, markers and legend the change touches.
+  `window.__tpcMap` is the MapLibre instance.
+- To check one view, switch the display to it instead of waiting for the cycle:
+  `POST /api/display/view` with `{"view": id}` (ids from `GET /api/views`; `/next` and
+  `/previous` step; HTTP Basic auth when `HANGAR_ADMIN_PASSWORD` is set). `GET /api/display`
+  names the view under `showing` once the display has switched, within a second. The
+  display then carries on from that view on its own dwell timer.
+- Per-process CPU comes from `top` and GPU memory from `CmaFree` in `/proc/meminfo`.
+  Measure any performance change on the kiosk before calling it an improvement; the
+  regional radar view is the heaviest map view.
+- Capture a screenshot only when debugging needs the picture or when one is asked for:
   `WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/run/user/1000 grim -t jpeg -q 88 -s 0.5 out.jpg`
   (`-s` scales the TV's 3840x2160 mode to 1920 wide; a board that negotiates 4096x2160
-  needs 0.46875), per-process CPU from `top`, and GPU
-  memory from `CmaFree` in `/proc/meminfo`. Debian's grim writes only png/ppm; the
-  bootstrap installs `deploy/grim-web-wrapper.sh` as `/usr/local/bin/grim`, which adds
-  jpeg, webp, avif, gif, tiff, bmp, and heic through ImageMagick, either with `-t webp` or
-  inferred from the file name; png/ppm and unknown options pass through to the real grim
-  unchanged.
-  `sudo rm /usr/local/bin/grim` reverts. The kiosk Chromium exposes the DevTools protocol
-  on `127.0.0.1:9222` (localhost only): `curl -s 127.0.0.1:9222/json` lists the page target
-  with its websocket URL. The host has no websocket client; Python's standard library
-  (`socket` plus the websocket handshake and framing) is enough to send `Runtime.evaluate`.
-  `window.__tpcMap` is the MapLibre instance. Measure any performance change there before
-  calling it an improvement; the regional radar view is the heaviest map view.
+  needs 0.46875). Debian's grim writes only png/ppm; the bootstrap installs
+  `deploy/grim-web-wrapper.sh` as `/usr/local/bin/grim`, which adds jpeg, webp, avif, gif,
+  tiff, bmp, and heic through ImageMagick, either with `-t webp` or inferred from the file
+  name; png/ppm and unknown options pass through to the real grim unchanged.
+  `sudo rm /usr/local/bin/grim` reverts.
 - Verify the camera view on the kiosk: `fuser /dev/video19` names Chromium's GPU process
   while the view is on screen and nothing afterwards; `getVideoPlaybackQuality()` on each
   tile's video (over DevTools) gives frame and drop counts, and
@@ -653,6 +661,9 @@ Dockerfile, docker-compose.yml (app + go2rtc), deploy/go2rtc.yaml, data/config.y
 
 ## Documentation screenshots
 
+The screenshots are retaken when the owner asks for it, not after every display change;
+a change that alters what one of them shows is reported instead.
+
 `docs/display-*.jpg` are captured from the live kiosk with grim (`-t jpeg -q 88 -s 0.5`,
 which gives 1920x1080 from the 3840x2160 mode; the local and satellite frames are
 1920x1012, from a 4096x2160 mode at scale 0.46875) once each view is fully rendered: the KSEA
@@ -663,9 +674,9 @@ second container of the same image (its own copy of `data/`, port 8001) that the
 pointed at through the DevTools port and then pointed back from, so that production never
 shows sample NOTAMs.
 `docs/admin.png` is headless Chromium against a running backend at 1120 px wide, cropped
-to the page. Time the captures to a view start through the DevTools
-port, and check that the frame shows real data (aircraft listed, stations listed, frames
-loaded) before keeping it.
+to the page. Switch the display to the view with `POST /api/display/view` before a
+capture, and check that the frame shows real data (aircraft listed, stations listed,
+frames loaded) before keeping it.
 
 ## Runtime environment
 
