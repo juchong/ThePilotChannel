@@ -5,19 +5,11 @@ import os
 import time
 
 import pytest
-from support import AUTH, CFG, base_cfg, put
+from support import AUTH, CFG, base_cfg, put, wait_until
 
 from app import main as main_mod
 from app.config import SECRET_MASK, Config, load_config, save_config
 from app.views import build_views
-
-
-def wait_until(cond, timeout: float) -> bool:
-    """Poll `cond` every 100 ms until it holds or `timeout` seconds pass."""
-    deadline = time.time() + timeout
-    while not cond() and time.time() < deadline:
-        time.sleep(0.1)
-    return cond()
 
 
 # ---- config validation ---------------------------------------------------------

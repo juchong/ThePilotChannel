@@ -72,6 +72,25 @@ export const FIELDS = {
     { k: "label", label: "Label", type: "text", attrs: { maxlength: 80 } },
     { k: "dwell_s", label: "Dwell (s)", type: "number", attrs: num(5, 3600, 1, { required: true }) },
   ],
+  notams: [
+    { k: "enabled", label: "Enabled", type: "bool" },
+    { k: "source", label: "Source", type: "select", options: ["faa", "sample"], help: "faa: live NOTAMs from the FAA (needs the credentials in .env). sample: invented NOTAMs, marked as such on screen, for previewing the view." },
+    { k: "label", label: "Label", type: "text", attrs: { maxlength: 80 } },
+    { k: "lookahead_h", label: "Show NOTAMs starting within (h)", type: "number", attrs: num(0, 720, 1, { required: true }), help: "NOTAMs in effect are always shown; this adds the ones that take effect within this many hours." },
+    { k: "dwell_s", label: "Seconds per page", type: "number", attrs: num(5, 3600, 1, { required: true }), help: "A location with more NOTAMs than fit on one page stays up this long for each page." },
+    { k: "refresh_s", label: "Refresh (s)", type: "number", attrs: num(120, 3600, 1, { required: true }) },
+  ],
+  notam_translate: [
+    { k: "enabled", label: "Rewrite NOTAMs with a local model", type: "bool", help: "The model's sentence is shown only when every number, designator, identifier and word in it checks against the NOTAM and the FAA's own wording. Any other answer is discarded and the FAA terms spelled out stay on screen." },
+    { k: "base_url", label: "Model endpoint (OpenAI-compatible URL)", type: "text", attrs: { maxlength: 300, pattern: "https?://.+", spellcheck: "false", placeholder: "https://llm.example.net/v1" }, help: "A LiteLLM or vLLM server. Its API key goes in .env as HANGAR_LLM_API_KEY." },
+    { k: "model", label: "Model name", type: "text", attrs: { maxlength: 120, list: "llm-models", spellcheck: "false" } },
+    { k: "timeout_s", label: "Model timeout (s)", type: "number", attrs: num(5, 600, 1, { required: true }) },
+  ],
+  notam_location: [
+    { k: "ident", label: "Identifier", type: "text", span: 2, attrs: { maxlength: 4, pattern: "[A-Za-z0-9]{3,4}", required: true, autocapitalize: "characters", spellcheck: "false", placeholder: "KS50" } },
+    { k: "name", label: "Name (shown in the view's heading)", type: "text", span: 4, attrs: { maxlength: 80 } },
+    { k: "enabled", label: "On", type: "bool", span: 1 },
+  ],
   camera_tile: [
     { k: "name", label: "Caption", type: "text", span: 4, attrs: { maxlength: 40 } },
     { k: "stream", label: "Stream (its name in go2rtc.yaml)", type: "text", span: 4, attrs: { maxlength: 64, pattern: "[A-Za-z0-9_.-]+", required: true, spellcheck: "false", placeholder: "cam1" } },
@@ -81,7 +100,8 @@ export const FIELDS = {
 
 // Collections the add / delete / move buttons act on, by dotted config path,
 // each with the factory for a new item.
-const COLLECTIONS = { airports: newAirport, regions: newRegion, "cameras.tiles": newTile };
+const COLLECTIONS = { airports: newAirport, regions: newRegion, "cameras.tiles": newTile, "notams.locations": newNotamLocation };
+const IDENT_RE = /^[A-Z0-9]{3,4}$/;
 
 export function inputHtml(path, f, value) {
   const id = "f-" + path.replace(/[^A-Za-z0-9_-]/g, "-");
@@ -169,6 +189,32 @@ export function tileRowHtml(t, i, count) {
     </div>`;
 }
 
+export function notamLocationRowHtml(l, i, count) {
+  return `
+    <div class="row" data-i="${i}">
+      ${fieldsHtml(`notams.locations.${i}`, FIELDS.notam_location, l)}
+      <div class="row-actions">
+        <span class="status" id="notam-check-${i}" style="margin-right:auto"></span>
+        <button type="button" class="btn sm" data-check-notam="${i}" title="ask the source for this location now">Check</button>
+        <button type="button" class="btn sm" data-move="notams.locations.${i}.-1" ${i === 0 ? "disabled" : ""} title="move up">↑</button>
+        <button type="button" class="btn sm" data-move="notams.locations.${i}.1" ${i === count - 1 ? "disabled" : ""} title="move down">↓</button>
+        <button type="button" class="btn sm danger" data-del="notams.locations.${i}">delete</button>
+      </div>
+    </div>`;
+}
+
+// One button per display airport that is not a NOTAM location yet; a click adds it.
+export function notamSuggestHtml(cfg) {
+  const have = new Set(((cfg.notams && cfg.notams.locations) || []).map((l) => String(l.ident || "").toUpperCase()));
+  return (cfg.airports || [])
+    .filter((a) => IDENT_RE.test(String(a.icao || "").toUpperCase()) && !have.has(String(a.icao).toUpperCase()))
+    .map((a) => {
+      const preset = JSON.stringify({ ident: String(a.icao).toUpperCase(), name: a.name || "" });
+      return `<button type="button" class="btn sm" data-add="notams.locations" data-preset="${esc(preset)}">+ ${esc(a.icao)}</button>`;
+    })
+    .join(" ");
+}
+
 // Render every section of the form into the given roots.
 export function renderAll(cfg, roots) {
   const airports = cfg.airports || [];
@@ -187,6 +233,18 @@ export function renderAll(cfg, roots) {
   roots.cameras.innerHTML =
     `<div class="fields">${fieldsHtml("cameras", FIELDS.cameras, cfg.cameras)}</div>` +
     `<div class="tiles">${tiles.map((t, i) => tileRowHtml(t, i, tiles.length)).join("") || `<div class="empty">No tiles yet.</div>`}</div>`;
+  if (roots.notams) {
+    const locations = (cfg.notams && cfg.notams.locations) || [];
+    const suggest = notamSuggestHtml(cfg);
+    roots.notams.innerHTML =
+      `<div class="fields">${fieldsHtml("notams", FIELDS.notams, cfg.notams)}` +
+      `${fieldsHtml("notams.translate", FIELDS.notam_translate, (cfg.notams && cfg.notams.translate) || {})}</div>` +
+      `<div class="row-actions" style="justify-content:flex-start;margin:8px 0 12px">` +
+      `<button type="button" class="btn sm" data-test-model="1">Test model</button>` +
+      `<span class="status" id="model-test-result"></span></div>` +
+      `<div class="tiles">${locations.map((l, i) => notamLocationRowHtml(l, i, locations.length)).join("") || `<div class="empty">No locations yet.</div>`}</div>` +
+      (suggest ? `<div class="row-actions" style="justify-content:flex-start">Your airports: ${suggest}</div>` : "");
+  }
 }
 
 // Pull current form values back into cfg using data-f="path.to.field" and the
@@ -225,6 +283,29 @@ export function newTile() {
   return { name: "", stream: "", cols: 2 };
 }
 
+export function newNotamLocation() {
+  return { ident: "", name: "", enabled: true };
+}
+
+// Add a NOTAM location for each identifier in `text` (separated by spaces or
+// commas). One already monitored is skipped; anything that is not an identifier
+// is returned in `rest` for the person to correct.
+export function addNotamLocations(cfg, text) {
+  const list = collectionAt(cfg, "notams.locations");
+  const have = new Set(list.map((l) => String(l.ident || "").toUpperCase()));
+  const rest = [];
+  let added = 0;
+  for (const token of String(text || "").toUpperCase().split(/[\s,;]+/).filter(Boolean)) {
+    if (!IDENT_RE.test(token)) rest.push(token);
+    else if (!have.has(token)) {
+      list.push({ ...newNotamLocation(), ident: token });
+      have.add(token);
+      added++;
+    }
+  }
+  return { added, rest: rest.join(" ") };
+}
+
 // The array at a dotted config path (created if missing).
 function collectionAt(cfg, path) {
   const keys = path.split(".");
@@ -236,12 +317,24 @@ function collectionAt(cfg, path) {
 
 // Apply a button action to cfg: data-add="<collection>", data-del="<collection>.<i>",
 // data-move="<collection>.<i>.<-1|1>", where <collection> is a dotted path in
-// COLLECTIONS. Returns true if cfg changed.
+// COLLECTIONS. An add button may carry the new item's values as JSON
+// (data-preset), or name a text input holding NOTAM location identifiers
+// (data-from). Returns true if cfg changed.
 export function applyAction(cfg, btn) {
   if (btn.dataset.add) {
     const make = COLLECTIONS[btn.dataset.add];
     if (!make) return false;
-    collectionAt(cfg, btn.dataset.add).push(make());
+    if (btn.dataset.from && btn.dataset.add === "notams.locations") {
+      const input = document.getElementById(btn.dataset.from);
+      const { added, rest } = addNotamLocations(cfg, input ? input.value : "");
+      if (input) input.value = rest;
+      return added > 0;
+    }
+    let preset = {};
+    try {
+      preset = btn.dataset.preset ? JSON.parse(btn.dataset.preset) : {};
+    } catch (_) {}
+    collectionAt(cfg, btn.dataset.add).push({ ...make(), ...preset });
     return true;
   }
   if (btn.dataset.del) {

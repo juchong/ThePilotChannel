@@ -11,7 +11,7 @@ FETCH_RADIUS_FACTOR = 2.25  # see fetch_radius_nm below: covers the corners of a
 
 
 def build_views(cfg: Config) -> List[Dict]:
-    """Return ordered view descriptors. Each: id, type, label, center, radius, airports."""
+    """Return ordered view descriptors. Each: id, type, label, dwell_s, and what its type needs."""
     local_views: List[Dict] = []
     for ap in cfg.airports:
         if not ap.enabled:
@@ -92,6 +92,21 @@ def build_views(cfg: Config) -> List[Dict]:
                 ],
             }
         )
+    if cfg.notams.enabled:
+        for loc in cfg.notams.locations:
+            if not loc.enabled:
+                continue
+            views.append(
+                {
+                    "id": f"notams:{loc.ident}",
+                    "type": "notams",
+                    "label": f"{loc.ident} - {cfg.notams.label}",
+                    "dwell_s": cfg.notams.dwell_s,
+                    "location": loc.ident,
+                    "name": loc.name,
+                    "lookahead_h": cfg.notams.lookahead_h,
+                }
+            )
     return views
 
 

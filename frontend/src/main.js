@@ -4,6 +4,7 @@ import { CamStream } from "./lib/camstream.js";
 import { navTarget, wrapIndex } from "./lib/cycle.js";
 import { el, esc, sleep } from "./lib/dom.js";
 import { ALT_STOPS, HangarMap } from "./lib/map.js";
+import { counts, current, fmtSpan, fmtZ, listHtml, pageCount, visitSeconds } from "./lib/notams.js";
 import { radarStep } from "./lib/radarloop.js";
 import { nextStations, sameStations, stationsFooter } from "./lib/stations.js";
 import { windBarbSVG } from "./lib/windbarb.js";
@@ -42,6 +43,7 @@ const state = {
   dwellTimer: null,
   satTimer: null,
   cams: [], // CamStream instances of the camera view on screen
+  notamTimer: null, // page step of the NOTAM view on screen
   blackoutTimer: null, // local safety timer for a timed remote blackout
   navSeq: null, // last remote navigation request seen (applied or adopted)
   map: null,
@@ -144,6 +146,8 @@ function onServerEvent(msg) {
     applyNavigation(msg.nav);
   } else if (msg.event === "config_changed") {
     safeReload("config changed");
+  } else if (msg.event === "notams_updated") {
+    if (state.view && state.view.type === "notams") showNotams(state.view, { keepPage: true });
   } else if (msg.event === "weather_updated") {
     loadWeather().then(() => {
       if (!state.view) return;
@@ -214,8 +218,14 @@ function nextView(idx) {
     el("view-label").textContent = "View error";
   }
   reportShowing();
-  animateCountdown(dwell);
-  state.dwellTimer = setTimeout(() => nextView(state.idx + 1), dwell * 1000);
+  setDwell(dwell);
+}
+
+// (Re)start the time the view on screen stays up, and the countdown bar with it.
+function setDwell(seconds) {
+  if (state.dwellTimer) clearTimeout(state.dwellTimer);
+  animateCountdown(seconds);
+  state.dwellTimer = setTimeout(() => nextView(state.idx + 1), seconds * 1000);
 }
 
 function switchView(idx) {
@@ -223,6 +233,7 @@ function switchView(idx) {
   stopMotion();
   if (state.satTimer) clearTimeout(state.satTimer);
   stopCameras();
+  stopNotams();
   if (!state.views.length) {
     showOverlay("No views configured. Open /admin to add airports.");
     return FALLBACK_DWELL_S;
@@ -243,6 +254,9 @@ function switchView(idx) {
   } else if (state.view.type === "cameras") {
     showStage("cams");
     startCameras(state.view);
+  } else if (state.view.type === "notams") {
+    showStage("notams");
+    showNotams(state.view);
   } else if (state.view.type === "local") {
     showStage("map");
     state.map.resize();
@@ -276,8 +290,8 @@ function switchView(idx) {
 }
 
 // Toggle the stage between "map" (map + side panel), "sat" (fullscreen
-// satellite loop) and "cams" (camera grid). The satellite and camera views are
-// overlays: the map container keeps its size underneath. Hiding the map with
+// satellite loop), "cams" (camera grid) and "notams" (NOTAM cards). All but the
+// map are overlays: the map container keeps its size underneath. Hiding the map with
 // display:none shrinks it to 0x0 and MapLibre then trims its tile cache to a
 // handful of tiles.
 function showStage(mode) {
@@ -285,6 +299,8 @@ function showStage(mode) {
   el("stage").classList.toggle("stage-cams", mode === "cams");
   el("sat").classList.toggle("active", mode === "sat");
   el("cams").classList.toggle("active", mode === "cams");
+  el("stage").classList.toggle("stage-notams", mode === "notams");
+  el("notams").classList.toggle("active", mode === "notams");
 }
 
 function showRadarOverlays(on) {
@@ -471,6 +487,92 @@ function updateCameraFooter(view) {
   const n = state.cams.length;
   const live = state.cams.filter((c) => c.state === "live").length;
   updateFooter({ source: "cameras", healthy: live > 0, stale: live > 0 && live < n }, live, `of ${n} cameras live`);
+}
+
+// ---- NOTAMs -------------------------------------------------------------
+// One view per monitored location: cards grouped by type, laid out in columns
+// that continue to the right; a page is one screenful of columns. The view
+// stays up for the configured time per page, so its dwell is set once the
+// page count is known.
+function stopNotams() {
+  if (state.notamTimer) clearTimeout(state.notamTimer);
+  state.notamTimer = null;
+  el("notams-list").innerHTML = "";
+}
+
+async function showNotams(view, { keepPage = false } = {}) {
+  const head = el("notams-head");
+  if (!keepPage) {
+    el("notams-banner").textContent = "";
+    head.innerHTML = `<div class="nt-title">${esc(view.location)} <span>${esc(view.name || "")}</span></div>`;
+    el("notams-list").innerHTML = `<div class="nt-note">Loading NOTAMs…</div>`;
+  }
+  let r;
+  try {
+    r = await api.getNotams(view.location);
+    state.lastOk = Date.now();
+  } catch (e) {
+    if (state.view !== view) return;
+    el("notams-list").innerHTML = `<div class="nt-note bad">NOTAM data unavailable</div>`;
+    updateFooter({ source: "notams", healthy: false, error: e.message }, 0, "NOTAMs");
+    return;
+  }
+  if (state.view !== view) return;
+  const startPage = keepPage ? Number(el("notams-list").dataset.page) || 0 : 0;
+  renderNotams(view, r, startPage, !keepPage);
+}
+
+function renderNotams(view, r, page, restartDwell) {
+  if (state.notamTimer) clearTimeout(state.notamTimer);
+  const list = el("notams-list");
+  const nowS = Date.now() / 1000;
+  const notams = current(r.notams, nowS);
+  const c = counts(notams, nowS);
+  const sample = r.source === "sample";
+  el("notams-banner").textContent = sample ? "SAMPLE DATA · NOT REAL NOTAMS · FOR PREVIEW ONLY" : "";
+
+  if (notams.length) list.innerHTML = listHtml(notams, nowS);
+  else if (r.pending) list.innerHTML = `<div class="nt-note">Waiting for NOTAM data…</div>`;
+  else if (r.fetched == null) list.innerHTML = `<div class="nt-note bad">NOTAM data unavailable<small>${esc(r.error || "")}</small></div>`;
+  else list.innerHTML = `<div class="nt-note">No NOTAMs in effect or starting within ${esc(r.lookahead_h)} h</div>`;
+
+  const gap = parseFloat(getComputedStyle(list).columnGap) || 0;
+  const pages = notams.length ? pageCount(list.scrollWidth, list.clientWidth, gap) : 1;
+  page = page % pages;
+  const show = (p) => {
+    list.dataset.page = p;
+    list.style.transform = `translateX(${-p * (list.clientWidth + gap)}px)`;
+    renderNotamHead(view, r, c, p, pages);
+  };
+  show(page);
+  if (restartDwell) setDwell(visitSeconds(pages, view.dwell_s));
+  if (pages > 1) {
+    const step = () => {
+      if (state.view !== view) return;
+      page = (page + 1) % pages;
+      show(page);
+      state.notamTimer = setTimeout(step, view.dwell_s * 1000);
+    };
+    state.notamTimer = setTimeout(step, view.dwell_s * 1000);
+  }
+  updateFooter(
+    { source: sample ? "sample data" : "FAA NMS", healthy: !r.error && r.fetched != null, stale: r.stale, ts: r.fetched, age_s: r.age_s, error: r.error, pending: r.pending },
+    notams.length,
+    "NOTAMs"
+  );
+}
+
+function renderNotamHead(view, r, c, page, pages) {
+  const summary = c.total
+    ? `${c.active} in effect · ${c.upcoming} starting within ${esc(r.lookahead_h)} h`
+    : "";
+  const got = r.fetched != null ? `RETRIEVED ${esc(fmtZ(r.fetched))} (${esc(fmtSpan(r.age_s || 0))} ago)` : "NOT YET RETRIEVED";
+  const trouble = r.error && r.fetched != null ? `<span class="nt-trouble">NOT REFRESHING</span>` : "";
+  const pager = pages > 1 ? `<span class="nt-page">PAGE ${page + 1} / ${pages}</span>` : "";
+  el("notams-head").innerHTML =
+    `<div class="nt-title">${esc(view.location)} <span>${esc(view.name || "")}</span></div>` +
+    `<div class="nt-summary">${summary}</div>` +
+    `<div class="nt-meta${r.stale || r.error ? " old" : ""}">${trouble}${got}${pager}</div>`;
 }
 
 // ---- NEXRAD radar loop --------------------------------------------------

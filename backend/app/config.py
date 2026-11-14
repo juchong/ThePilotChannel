@@ -45,6 +45,8 @@ STREAM_RE = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 CAMERA_GRID_COLS = 6
 CAMERA_MAX_TILES = 12
 
+NOTAM_MAX_LOCATIONS = 12
+
 
 def validate_source_url(url: str) -> str:
     """A traffic-source URL the backend will fetch: http(s) only, must have a
@@ -253,6 +255,83 @@ class Cameras(BaseModel):
         return v.strip() or "Cameras"
 
 
+class NotamLocation(BaseModel):
+    """A location whose NOTAMs are shown: the identifier of the affected facility
+    (an airport, a NAVAID or an ARTCC), in its domestic or ICAO form."""
+    ident: str = Field(min_length=3, max_length=4)
+    name: str = Field("", max_length=80)
+    enabled: bool = True
+
+    @field_validator("ident")
+    @classmethod
+    def _ident(cls, v: str) -> str:
+        v = v.strip().upper()
+        if not ICAO_RE.match(v):
+            raise ValueError("identifier must be 3 or 4 letters or digits")
+        return v
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, v: str) -> str:
+        return v.strip()
+
+
+class NotamTranslate(BaseModel):
+    """Rewriting NOTAMs with a locally hosted model through an OpenAI-compatible
+    endpoint. An answer is shown only if it passes the check in notam_translate;
+    the API key lives in the environment, never here."""
+    enabled: bool = False
+    base_url: str = Field("", max_length=300)     # e.g. https://llm.example.net/v1
+    model: str = Field("", max_length=120)
+    timeout_s: int = Field(60, ge=5, le=600)
+
+    @field_validator("base_url")
+    @classmethod
+    def _base_url(cls, v: str) -> str:
+        v = v.strip().rstrip("/")
+        return validate_source_url(v) if v else v
+
+    @field_validator("model")
+    @classmethod
+    def _model(cls, v: str) -> str:
+        return v.strip()
+
+    @model_validator(mode="after")
+    def _complete(self):
+        if self.enabled and not (self.base_url and self.model):
+            raise ValueError("an endpoint URL and a model name are needed to enable the model rewrite")
+        return self
+
+
+class Notams(BaseModel):
+    """NOTAM views, one per monitored location. A NOTAM is shown while it is in
+    effect or when it takes effect within `lookahead_h` hours. `source` "sample"
+    shows invented NOTAMs, marked as such, for previewing the view; the FAA
+    credentials live in the environment, never here."""
+    enabled: bool = False
+    source: Literal["faa", "sample"] = "faa"
+    label: str = Field("NOTAMs", max_length=80)
+    dwell_s: int = Field(30, ge=5, le=3600)
+    lookahead_h: int = Field(24, ge=0, le=720)
+    refresh_s: int = Field(600, ge=120, le=3600)
+    locations: List[NotamLocation] = Field(default_factory=list, max_length=NOTAM_MAX_LOCATIONS)
+    translate: NotamTranslate = Field(default_factory=NotamTranslate)
+
+    @field_validator("label")
+    @classmethod
+    def _label(cls, v: str) -> str:
+        return v.strip() or "NOTAMs"
+
+    @model_validator(mode="after")
+    def _unique(self):
+        seen = set()
+        for loc in self.locations:
+            if loc.ident in seen:
+                raise ValueError(f"duplicate NOTAM location {loc.ident}")
+            seen.add(loc.ident)
+        return self
+
+
 class Config(BaseModel):
     airports: List[Airport] = Field(default_factory=list)
     regions: List[Region] = Field(default_factory=list)
@@ -263,6 +342,7 @@ class Config(BaseModel):
     satellite: Satellite = Field(default_factory=Satellite)
     radar: Radar = Field(default_factory=Radar)
     cameras: Cameras = Field(default_factory=Cameras)
+    notams: Notams = Field(default_factory=Notams)
 
     @model_validator(mode="after")
     def _unique(self):

@@ -7,7 +7,7 @@ import logging
 import os
 import secrets
 from contextlib import asynccontextmanager
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, WebSocket
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field, ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import cameras
-from .config import ICAO_RE, Config, mask_secrets, unknown_keys, unmask_secrets
+from .config import ICAO_RE, Config, mask_secrets, unknown_keys, unmask_secrets, validate_source_url
 from .manager import DataManager, TooManySubscribers, UnknownView
 from .radar import LAYER_RE
 from .tiles import valid_tile
@@ -215,6 +215,45 @@ async def get_satellite(
     return await manager.get_satellite(sat, sector, band, size, frames)
 
 
+@app.get("/api/notams")
+async def get_notams(location: str = Query(..., min_length=3, max_length=4)):
+    """The NOTAMs in effect or upcoming for a monitored location, from the cache."""
+    data = manager.get_notams(location.strip().upper())
+    if data is None:
+        raise HTTPException(status_code=404, detail="location is not monitored")
+    return data
+
+
+class NotamCheck(BaseModel):
+    ident: str = Field(..., min_length=3, max_length=4)
+    source: Literal["faa", "sample"] = "faa"
+
+
+@app.post("/api/notams/check", dependencies=[Depends(require_admin)])
+async def notams_check(req: NotamCheck):
+    """Ask the NOTAM source for a location now, without saving it."""
+    ident = req.ident.strip().upper()
+    if not ICAO_RE.match(ident):
+        raise HTTPException(status_code=422, detail="identifier must be 3 or 4 letters or digits")
+    return await manager.check_notam_location(ident, req.source)
+
+
+class ModelTest(BaseModel):
+    base_url: str = Field(..., min_length=8, max_length=300)
+    model: str = Field(..., min_length=1, max_length=120)
+    timeout_s: int = Field(60, ge=5, le=600)
+
+
+@app.post("/api/notams/model-test", dependencies=[Depends(require_admin)])
+async def notams_model_test(req: ModelTest):
+    """Ask a model endpoint to rewrite one FAA example NOTAM and check the answer; saves nothing."""
+    try:
+        url = validate_source_url(req.base_url.strip().rstrip("/"))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return await manager.test_model(url, req.model.strip(), req.timeout_s)
+
+
 @app.get("/api/status")
 async def get_status():
     data = manager.status()
@@ -339,7 +378,7 @@ def _sse(msg: dict) -> str:
 
 @app.get("/api/stream")
 async def stream(request: Request):
-    """SSE: config_changed / weather_updated / display so the kiosk hot-reloads
+    """SSE: config_changed / weather_updated / notams_updated / display so the kiosk hot-reloads
     and obeys remote blackouts and navigation. The `connected` event carries the backend boot
     id (so a client can tell when the backend was rebuilt and reload itself)
     and the current display state (so a reconnecting kiosk stays in sync)."""

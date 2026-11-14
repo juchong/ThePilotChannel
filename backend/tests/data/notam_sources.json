@@ -1,0 +1,9535 @@
+{
+"doc8400": {
+"AIP Ireland GEN 2.2": {
+"A": [
+"Amber"
+],
+"A/A": [
+"Air-to-air"
+],
+"A/G": [
+"Air-to ground"
+],
+"AAA": [
+"Amended meteorological message"
+],
+"AAD": [
+"Assigned altitude deviation"
+],
+"AAIM": [
+"Aircraft autonomous integrity monitoring"
+],
+"AAL": [
+"Above aerodrome level"
+],
+"AAR": [
+"Air to air refuelling"
+],
+"ABI": [
+"Advance boundary information"
+],
+"ABM": [
+"Abeam"
+],
+"ABN": [
+"Aerodrome beacon"
+],
+"ABT": [
+"About"
+],
+"ABV": [
+"Above"
+],
+"AC": [
+"Altocumulus"
+],
+"ACARS": [
+"Aircraft communication addressing and reporting system"
+],
+"ACAS": [
+"Airborne collision avoidance system"
+],
+"ACC": [
+"Area control centre or area control"
+],
+"ACCID": [
+"Notification of an aircraft accident"
+],
+"ACFT": [
+"Aircraft"
+],
+"ACK": [
+"Acknowledge"
+],
+"ACL": [
+"Altimeter check location"
+],
+"ACN": [
+"Aircraft Classification Number"
+],
+"ACP": [
+"Acceptance"
+],
+"ACPT": [
+"Accept or accepted"
+],
+"ACT": [
+"Active or activated or activity"
+],
+"AD": [
+"Aerodrome"
+],
+"ADA": [
+"Advisory area"
+],
+"ADC": [
+"Aerodrome chart"
+],
+"ADDN": [
+"Addition or additional"
+],
+"ADF": [
+"Automatic Direction Finding"
+],
+"ADIZ": [
+"Air defence identification zone"
+],
+"ADJ": [
+"Adjacent"
+],
+"ADO": [
+"Aerodrome office"
+],
+"ADR": [
+"Advisory route"
+],
+"ADS": [
+"Automatic dependent surveillance",
+"The address when this abbreviation is used to request a repetition, the question mark (IMI) precedes the abbreviation, e.g. IMI ADS (to be used in AFS as a procedure signal)"
+],
+"ADS-B": [
+"Automatic dependant surveillance - broadcast"
+],
+"ADS-C": [
+"Automatic dependant surveillance - contract"
+],
+"ADSU": [
+"Automatic dependent surveillance unit"
+],
+"ADVS": [
+"Advisory service"
+],
+"ADZ": [
+"Advise"
+],
+"AES": [
+"Aircraft earth station"
+],
+"AFIL": [
+"Flight plan filed in the air"
+],
+"AFIS": [
+"Aerodrome Flight Information Service"
+],
+"AFM": [
+"Yes or affirm or affirmative or that is correct"
+],
+"AFS": [
+"Aeronautical fixed service"
+],
+"AFT": [
+"After"
+],
+"AFTN": [
+"Aeronautical Fixed Telecommunication Network"
+],
+"AGA": [
+"Aerodromes, air routes and ground aids"
+],
+"AGL": [
+"Above ground level"
+],
+"AGN": [
+"Again"
+],
+"AIC": [
+"Aeronautical Information Circular"
+],
+"AIDC": [
+"Air traffic services inter-facility data communication"
+],
+"AIM": [
+"Aeronautical information management"
+],
+"AIP": [
+"Aeronautical Information Publication"
+],
+"AIRAC": [
+"Aeronautical Information Regulation and Control"
+],
+"AIREP": [
+"Air-report"
+],
+"AIRMET": [
+"Information concerning en-route weather phenomena which may effect the safety of low-level aircraft operations"
+],
+"AIS": [
+"Aeronautical Information Services"
+],
+"ALA": [
+"Alighting area"
+],
+"ALERFA": [
+"Alert phase"
+],
+"ALR": [
+"Alerting"
+],
+"ALRS": [
+"Alerting service"
+],
+"ALS": [
+"Approach lighting system"
+],
+"ALT": [
+"Altitude"
+],
+"ALTN": [
+"Alternate or alternating",
+"Alternate"
+],
+"AMA": [
+"Area minimum altitude"
+],
+"AMD": [
+"Amend or amended"
+],
+"AMDT": [
+"Amendment"
+],
+"AMS": [
+"Aeronautical mobile service"
+],
+"AMSL": [
+"Above mean sea level"
+],
+"AMSS": [
+"Aeronautical mobile satellite service"
+],
+"ANC": [
+"Aeronautical Chart 1:500 000"
+],
+"ANCS": [
+"Aeronautical Navigation Chart Small Scale"
+],
+"ANS": [
+"Answer"
+],
+"AO": [
+"Oceanic control area",
+"Aircraft Operator"
+],
+"AOC": [
+"Aerodrome obstacle chart"
+],
+"AP": [
+"Airport"
+],
+"APAPI": [
+"Abbreviated precision approach path indicator"
+],
+"APCH": [
+"Approach"
+],
+"APDC": [
+"Aircraft parking/docking chart"
+],
+"APN": [
+"Apron"
+],
+"APP": [
+"Approach control office or approach control or approach control service"
+],
+"APR": [
+"April"
+],
+"APRX": [
+"Approximate or approximately"
+],
+"APSG": [
+"After passing"
+],
+"APU": [
+"Auxiliary power unit"
+],
+"APV": [
+"Approach Procedures with Vertical guidance"
+],
+"ARC": [
+"Area chart"
+],
+"ARNG": [
+"Arrange"
+],
+"ARO": [
+"Air traffic services reporting office"
+],
+"ARP": [
+"Aerodrome reference point",
+"Air-report"
+],
+"ARQ": [
+"Automatic error correction"
+],
+"ARR": [
+"Arrive",
+"Arrival"
+],
+"ARS": [
+"Special air-report"
+],
+"ARST": [
+"Arresting"
+],
+"AS": [
+"Altrostratus"
+],
+"ASAP": [
+"As soon as possible"
+],
+"ASC": [
+"Ascent to or ascending to"
+],
+"ASDA": [
+"Accelerate stop distance available"
+],
+"ASE": [
+"Altimetry system error"
+],
+"ASPEEDG": [
+"Airspeed gain"
+],
+"ASPEEDL": [
+"Airspeed loss"
+],
+"ASPH": [
+"Asphalt"
+],
+"AT-VASIS": [
+"Abbreviated T visual approach slope indicator system"
+],
+"ATA": [
+"Actual time of arrival"
+],
+"ATC": [
+"Air Traffic Control"
+],
+"ATD": [
+"Actual time of departure"
+],
+"ATFM": [
+"Air traffic flow management"
+],
+"ATIS": [
+"Automatic terminal information service"
+],
+"ATM": [
+"Air traffic management"
+],
+"ATN": [
+"Aeronautical telecommunication network"
+],
+"ATP": [
+"At"
+],
+"ATS": [
+"Air traffic services"
+],
+"ATTN": [
+"Attention"
+],
+"ATZ": [
+"Aerodrome traffic zone"
+],
+"AUG": [
+"August"
+],
+"AUTH": [
+"Authorized or authorization"
+],
+"AUTO": [
+"Automatic"
+],
+"AUW": [
+"All up weight"
+],
+"AUX": [
+"Auxiliary"
+],
+"AVBL": [
+"Available or availability"
+],
+"AVG": [
+"Average"
+],
+"AVGAS": [
+"Aviation gasoline"
+],
+"AWOS": [
+"Automated Weather Observation System"
+],
+"AWTA": [
+"Advise at what time able"
+],
+"AWY": [
+"Airway"
+],
+"AZM": [
+"Azimuth"
+],
+"B": [
+"Blue"
+],
+"BA": [
+"Braking action"
+],
+"BASE": [
+"Cloud base"
+],
+"BCFG": [
+"Fog patches"
+],
+"BCN": [
+"Beacon"
+],
+"BCST": [
+"Broadcast"
+],
+"BDRY": [
+"Boundary"
+],
+"BECMG": [
+"Becoming"
+],
+"BFR": [
+"Before"
+],
+"BKN": [
+"Broken"
+],
+"BL": [
+"Blowing"
+],
+"BLDG": [
+"Building"
+],
+"BLO": [
+"Below clouds"
+],
+"BLW": [
+"Below"
+],
+"BOMB": [
+"Bombing"
+],
+"BR": [
+"Mist"
+],
+"BRF": [
+"Short"
+],
+"BRG": [
+"Bearing"
+],
+"BRKG": [
+"Braking"
+],
+"BS": [
+"Commercial broadcasting station"
+],
+"BTL": [
+"Between layers"
+],
+"BTN": [
+"Between"
+],
+"C": [
+"Centre",
+"Degrees Celsius"
+],
+"CAA": [
+"Civil Aviation Authority or Civil Aviation Administration"
+],
+"CAT": [
+"Category",
+"Clear air turbulence"
+],
+"CAVOK": [
+"Visibility, cloud and present weather better than prescribed values or conditions"
+],
+"CB": [
+"Cumulonimbus"
+],
+"CC": [
+"Cirrocumulus"
+],
+"CCA": [
+"Corrected meteorological message"
+],
+"CCO": [
+"Continuous climb operation"
+],
+"CD": [
+"Candela"
+],
+"CDN": [
+"Co-ordination message"
+],
+"CDO": [
+"Continuous descent operation"
+],
+"CDR": [
+"Conditional route"
+],
+"CF": [
+"Change frequency to"
+],
+"CFM": [
+"Confirm or I confirm"
+],
+"CGL": [
+"Circling guidance light(s)"
+],
+"CH": [
+"Channel",
+"This is a channel – continuity - check of transmission to permit comparison of your record of channel sequence numbers of messages received on the channel"
+],
+"CHG": [
+"Modification message"
+],
+"CI": [
+"Cirrus"
+],
+"CIDIN": [
+"Common ICAO data interchange network"
+],
+"CIV": [
+"Civil"
+],
+"CK": [
+"Check"
+],
+"CL": [
+"Centre line"
+],
+"CLA": [
+"Clear type of ice formation"
+],
+"CLBR": [
+"Calibration"
+],
+"CLD": [
+"Cloud"
+],
+"CLG": [
+"Calling"
+],
+"CLIMB-OUT": [
+"Climb-out area"
+],
+"CLR": [
+"Clear or cleared to… or clearance"
+],
+"CLRD": [
+"Runway(s) cleared"
+],
+"CLSD": [
+"Close or closed or closing"
+],
+"CMB": [
+"Climb to or climbing to"
+],
+"CMPL": [
+"Completion or completed or complete"
+],
+"CNL": [
+"Cancel or cancelled",
+"Flight plan cancellation"
+],
+"CNS": [
+"Communications, navigation and surveillance"
+],
+"COM": [
+"Communications"
+],
+"CONC": [
+"Concrete"
+],
+"COND": [
+"Condition"
+],
+"CONS": [
+"Continuous"
+],
+"CONST": [
+"Construction or constructed"
+],
+"CONT": [
+"Continue(s) or continued"
+],
+"COOR": [
+"Coordinate, or co-ordination"
+],
+"COORD": [
+"Coordinates"
+],
+"COP": [
+"Change-over point"
+],
+"COR": [
+"Correct or corrected or correction"
+],
+"COT": [
+"At the coast"
+],
+"COV": [
+"Cover or covered or covering"
+],
+"CPDLC": [
+"Controller – pilot data link communications"
+],
+"CPL": [
+"Current flight plan message"
+],
+"CRC": [
+"Cyclic redundancy check"
+],
+"CRM": [
+"Collision risk model"
+],
+"CRP": [
+"Compulsory reporting point"
+],
+"CRZ": [
+"Cruise"
+],
+"CS": [
+"Cirrostratus",
+"Call sign"
+],
+"CTA": [
+"Control area"
+],
+"CTAM": [
+"Climb to and maintain"
+],
+"CTC": [
+"Contact"
+],
+"CTL": [
+"Control"
+],
+"CTN": [
+"Caution"
+],
+"CTR": [
+"Control zone"
+],
+"CU": [
+"Cumulus"
+],
+"CUF": [
+"Cumuliform"
+],
+"CUST": [
+"Customs"
+],
+"CVR": [
+"Cockpit voice recorder"
+],
+"CW": [
+"Continuous wave"
+],
+"CWY": [
+"Clearway"
+],
+"D": [
+"Downward",
+"Danger area"
+],
+"D-ATIS": [
+"Data link automatic terminal information service"
+],
+"D-VOLMET": [
+"Data link VOLMET"
+],
+"DA": [
+"Decision altitude"
+],
+"DCD": [
+"Double channel duplex"
+],
+"DCKG": [
+"Docking"
+],
+"DCP": [
+"Datum crossing point"
+],
+"DCPC": [
+"Direct controller-pilot communications"
+],
+"DCS": [
+"Double channel simplex"
+],
+"DCT": [
+"Direct"
+],
+"DE": [
+"From"
+],
+"DEC": [
+"December"
+],
+"DEG": [
+"Degrees"
+],
+"DEP": [
+"Depart or departure or departure message"
+],
+"DES": [
+"Descend to or descending to"
+],
+"DEST": [
+"Destination"
+],
+"DETRESFA": [
+"Distress phase"
+],
+"DEV": [
+"Deviation or deviating"
+],
+"DFDR": [
+"Digital flight data recorder"
+],
+"DFTI": [
+"Distance from touch down indicator"
+],
+"DH": [
+"Decision height"
+],
+"DIF": [
+"Diffuse"
+],
+"DIST": [
+"Distance"
+],
+"DIV": [
+"Divert or diverting"
+],
+"DLA": [
+"Delay or delayed",
+"Delay"
+],
+"DLIC": [
+"Data link initiation capability"
+],
+"DLY": [
+"Daily"
+],
+"DME": [
+"Distance measuring equipment"
+],
+"DNG": [
+"Danger or dangerous"
+],
+"DOF": [
+"Date of flight"
+],
+"DOM": [
+"Domestic"
+],
+"DP": [
+"Dew point temperature"
+],
+"DPT": [
+"Depth"
+],
+"DR": [
+"Dead reckoning",
+"Low drifting"
+],
+"DRG": [
+"During"
+],
+"DS": [
+"Dust storm"
+],
+"DSB": [
+"Double sideband"
+],
+"DTAM": [
+"Descend to and maintain"
+],
+"DTG": [
+"Date-time group"
+],
+"DTHR": [
+"Displaced runway threshold"
+],
+"DTRT": [
+"Deteriorate or deteriorating"
+],
+"DTW": [
+"Dual tandem wheels"
+],
+"DU": [
+"Dust"
+],
+"DUC": [
+"Dense upper cloud"
+],
+"DUPE": [
+"This is a duplicate message"
+],
+"DUR": [
+"Duration"
+],
+"DVOR": [
+"Doppler VOR"
+],
+"DW": [
+"Dual wheels"
+],
+"DZ": [
+"Drizzle"
+],
+"E": [
+"East or Eastern longitude"
+],
+"EAT": [
+"Expected approach time"
+],
+"EB": [
+"Eastbound"
+],
+"EDA": [
+"Elevation differential area"
+],
+"EDTO": [
+"Extended diversion time operations"
+],
+"EEE": [
+"Error"
+],
+"EET": [
+"Estimated elapsed time"
+],
+"EFC": [
+"Expect further clearance"
+],
+"EGNOS": [
+"European geostationary navigation overlay service"
+],
+"EHF": [
+"Extremely high frequency"
+],
+"ELBA": [
+"Emergency location beacon-aircraft"
+],
+"ELEV": [
+"Elevation"
+],
+"ELR": [
+"Extra long range"
+],
+"ELT": [
+"Emergency locator transmitter"
+],
+"EM": [
+"Emission"
+],
+"EMBD": [
+"Embedded in a layer"
+],
+"EMERG": [
+"Emergency"
+],
+"END": [
+"Stop-end"
+],
+"ENE": [
+"East-north-east"
+],
+"ENG": [
+"Engine"
+],
+"ENR": [
+"En route"
+],
+"ENRC": [
+"Enroute chart"
+],
+"EOBT": [
+"Estimated off-block time"
+],
+"EQPT": [
+"Equipment"
+],
+"ESE": [
+"East-south-east"
+],
+"EST": [
+"Estimate or estimated or estimate"
+],
+"ETA": [
+"Estimated time of arrival or estimating arrival"
+],
+"ETD": [
+"Estimated time of departure or estimating departure"
+],
+"ETO": [
+"Estimated time over significant point"
+],
+"EV": [
+"Every"
+],
+"EXC": [
+"Except"
+],
+"EXER": [
+"Exercise or exercising or to exercise"
+],
+"EXP": [
+"Expected or expending"
+],
+"EXTD": [
+"Extend or extending or Extended"
+],
+"F": [
+"Fixed"
+],
+"FAC": [
+"Facilities"
+],
+"FAF": [
+"Final approach fix"
+],
+"FAL": [
+"Facilitation of international air transport"
+],
+"FAP": [
+"Final approach point"
+],
+"FATO": [
+"Final approach and take-off area"
+],
+"FAX": [
+"Facsimile transmission"
+],
+"FBL": [
+"Light"
+],
+"FC": [
+"Funnel cloud"
+],
+"FCST": [
+"Forecast"
+],
+"FCT": [
+"Friction coefficient"
+],
+"FDPS": [
+"Flight data processing system"
+],
+"FEB": [
+"February"
+],
+"FEW": [
+"Few"
+],
+"FG": [
+"Fog"
+],
+"FIC": [
+"Flight information centre"
+],
+"FIR": [
+"Flight information region"
+],
+"FIS": [
+"Flight information service"
+],
+"FISA": [
+"Automated flight information service"
+],
+"FL": [
+"Flight level"
+],
+"FLD": [
+"Field"
+],
+"FLG": [
+"Flashing"
+],
+"FLR": [
+"Flares"
+],
+"FLT": [
+"Flight"
+],
+"FLTCK": [
+"Flight check"
+],
+"FLUC": [
+"Fluctuating or fluctuation or fluctuated"
+],
+"FLW": [
+"Follow(s) or following"
+],
+"FLY": [
+"Fly or flying"
+],
+"FM": [
+"From"
+],
+"FMS": [
+"Flight management system"
+],
+"FMU": [
+"Flow management unit"
+],
+"FNA": [
+"Final approach"
+],
+"FPAP": [
+"Flight pass alignment point"
+],
+"FPL": [
+"Flight plan"
+],
+"FPM": [
+"Feet per minute"
+],
+"FPR": [
+"Flight plan route"
+],
+"FR": [
+"Fuel remaining"
+],
+"FREQ": [
+"Frequency"
+],
+"FRI": [
+"Friday"
+],
+"FRNG": [
+"Firing"
+],
+"FRONT": [
+"Front"
+],
+"FRQ": [
+"Frequent"
+],
+"FSL": [
+"Full stop landing"
+],
+"FSS": [
+"Flight service station"
+],
+"FST": [
+"First"
+],
+"FTP": [
+"Fictitious threshold point"
+],
+"FU": [
+"Smoke"
+],
+"FZ": [
+"Freezing"
+],
+"FZDZ": [
+"Freezing drizzle"
+],
+"FZFG": [
+"Freezing fog"
+],
+"FZRA": [
+"Freezing rain"
+],
+"G": [
+"Green",
+"Variations from the mean wind speed"
+],
+"G/A": [
+"Ground to air"
+],
+"G/A/G": [
+"Ground to air and air to ground"
+],
+"GA": [
+"Go ahead, resume sending",
+"General Aviation"
+],
+"GAGAN": [
+"GPS and geostationary earth orbit augmented navigation"
+],
+"GAMET": [
+"Area forecast for low-level flights"
+],
+"GARP": [
+"GBAS azimuth referencia point"
+],
+"GBAS": [
+"Ground-based augmentation system"
+],
+"GCA": [
+"Ground control approach system or ground control approach"
+],
+"GEN": [
+"General"
+],
+"GEO": [
+"Geographic or true"
+],
+"GES": [
+"Ground earth station"
+],
+"GLD": [
+"Glider"
+],
+"GLONASS": [
+"Global orbiting navigation satellite system"
+],
+"GLS": [
+"GBAS landing system"
+],
+"GMC": [
+"Ground movement chart (followed by name/title)"
+],
+"GND": [
+"Ground"
+],
+"GNDCK": [
+"Ground check"
+],
+"GNSS": [
+"Global navigation satellite system"
+],
+"GOC": [
+"General Officer Commanding"
+],
+"GOV": [
+"Government"
+],
+"GP": [
+"Glide path"
+],
+"GPS": [
+"Global positioning system"
+],
+"GPU": [
+"Ground power unit"
+],
+"GR": [
+"Hail"
+],
+"GRAS": [
+"Ground-based regional augmentation system"
+],
+"GRASS": [
+"Grass landing area"
+],
+"GRIB": [
+"Processed meteorological data in the form of grid point values"
+],
+"GRVL": [
+"Gravel"
+],
+"GS": [
+"Ground speed",
+"Small hail and/or snow pellets"
+],
+"GUND": [
+"Geoid undulation"
+],
+"H": [
+"High pressure area or the centre of high pressure",
+"Significant wave height (followed by figures in METAR/SPECI)"
+],
+"H24": [
+"Continuous day and night service"
+],
+"HAPI": [
+"Helicopter approach path indicator"
+],
+"HBN": [
+"Hazard beacon"
+],
+"HCH": [
+"Heliport crossing height"
+],
+"HDF": [
+"High frequency direction finding station"
+],
+"HDG": [
+"Heading"
+],
+"HEL": [
+"Helicopter"
+],
+"HF": [
+"High frequency"
+],
+"HGT": [
+"Height or height above"
+],
+"HJ": [
+"Sunrise to sunset"
+],
+"HLDG": [
+"Holding"
+],
+"HLP": [
+"Heliport"
+],
+"HLS": [
+"Helicopter landing site"
+],
+"HM": [
+"Holding/Racetrack to a manual termination"
+],
+"HN": [
+"Sunset to sunrise"
+],
+"HO": [
+"Service available to meet operational requirements"
+],
+"HOL": [
+"Holiday"
+],
+"HOSP": [
+"Hospital aircraft"
+],
+"HPA": [
+"Hectopascal"
+],
+"HR": [
+"Hours"
+],
+"HRP": [
+"Heliport reference point"
+],
+"HS": [
+"Service available during hours of scheduled operations"
+],
+"HUM": [
+"Humanitarian"
+],
+"HURCN": [
+"Hurricane"
+],
+"HVDF": [
+"High and very high frequency direction finding stations"
+],
+"HVY": [
+"Heavy"
+],
+"HX": [
+"No specific working hours"
+],
+"HYR": [
+"Higher"
+],
+"HZ": [
+"Haze"
+],
+"IAC": [
+"Instrument approach chart"
+],
+"IAF": [
+"Initial approach fix"
+],
+"IAP": [
+"Instrument approach procedure"
+],
+"IAR": [
+"Intersection of air routes"
+],
+"IAS": [
+"Indicated air speed"
+],
+"IBN": [
+"Identification beacon"
+],
+"ICAO": [
+"International Civil Aviation Organization"
+],
+"ICE": [
+"Icing"
+],
+"ID": [
+"Identifier or identify"
+],
+"IDENT": [
+"Identification"
+],
+"IF": [
+"Intermediate approach fix"
+],
+"IFF": [
+"Identification friend/foe"
+],
+"IFR": [
+"Instrument flight rules"
+],
+"IGA": [
+"International general aviation"
+],
+"ILS": [
+"Instrument landing system"
+],
+"IM": [
+"Inner marker"
+],
+"IMC": [
+"Instrument meteorological conditions"
+],
+"IMG": [
+"Immigration"
+],
+"IMI": [
+"Interrogation sign"
+],
+"IMPR": [
+"Improve or improving"
+],
+"IMT": [
+"Immediate or immediately"
+],
+"INA": [
+"Initial approach"
+],
+"INBD": [
+"Inbound"
+],
+"INC": [
+"In cloud"
+],
+"INCERFA": [
+"Uncertainty phase"
+],
+"INCORP": [
+"Incorporated"
+],
+"INFO": [
+"Information"
+],
+"INOP": [
+"Inoperative"
+],
+"INP": [
+"If not possible"
+],
+"INPR": [
+"In progress"
+],
+"INS": [
+"Inertial navigation system"
+],
+"INSTL": [
+"Install or installed or installation"
+],
+"INSTR": [
+"Instrument"
+],
+"INT": [
+"Intersection"
+],
+"INTL": [
+"International"
+],
+"INTRG": [
+"Interrogator"
+],
+"INTRP": [
+"Interrupt or interruption or interrupted"
+],
+"INTSF": [
+"Intensify or intensifying"
+],
+"INTST": [
+"Intensity"
+],
+"IR": [
+"Ice on runway"
+],
+"IRS": [
+"Inertial Reference System"
+],
+"ISA": [
+"International standard atmosphere"
+],
+"ISB": [
+"Independent sideband"
+],
+"ISOL": [
+"Isolated"
+],
+"JAN": [
+"January"
+],
+"JTST": [
+"Jet stream"
+],
+"JUL": [
+"July"
+],
+"JUN": [
+"June"
+],
+"L": [
+"Left",
+"Locator",
+"Low pressure area or the centre of low pressure",
+"Litre"
+],
+"LAM": [
+"Logical acknowledgement"
+],
+"LAN": [
+"Inland"
+],
+"LAT": [
+"Latitude"
+],
+"LCA": [
+"Local or Locally or location or located"
+],
+"LDA": [
+"Landing distance available"
+],
+"LDAH": [
+"Landing distance available, helicopter"
+],
+"LDG": [
+"Landing"
+],
+"LDI": [
+"Landing direction indicator"
+],
+"LEN": [
+"Length"
+],
+"LF": [
+"Low frequency"
+],
+"LGT": [
+"Light or lighting"
+],
+"LGTD": [
+"Lighted"
+],
+"LIH": [
+"Light intensity high"
+],
+"LIL": [
+"Light intensity low"
+],
+"LIM": [
+"Light intensity medium"
+],
+"LM": [
+"Locator, middle"
+],
+"LMT": [
+"Local Mean Time"
+],
+"LNG": [
+"Long"
+],
+"LO": [
+"Locator outer"
+],
+"LOC": [
+"Localizer"
+],
+"LONG": [
+"Longitude"
+],
+"LORAN": [
+"LORAN (Long Range Navigation Systems)"
+],
+"LR": [
+"The last message received by me was …."
+],
+"LRG": [
+"Long range"
+],
+"LS": [
+"The last message sent by me was …."
+],
+"LTA": [
+"Lower control area"
+],
+"LTD": [
+"Limited"
+],
+"LTP": [
+"Landing threshold point"
+],
+"LV": [
+"Light and variable"
+],
+"LVE": [
+"Leave or leaving"
+],
+"LVL": [
+"Level"
+],
+"LYR": [
+"Layer or layered"
+],
+"M": [
+"Mach number",
+"Metres",
+"Minimum values of runway visual range"
+],
+"MAA": [
+"Maximum authorized altitude"
+],
+"MAG": [
+"Magnetic"
+],
+"MAINT": [
+"Maintenance"
+],
+"MAP": [
+"Aeronautical maps and charts"
+],
+"MAPT": [
+"Missed approach point"
+],
+"MAR": [
+"March",
+"At sea"
+],
+"MATF": [
+"Missed approach turning fix"
+],
+"MATZ": [
+"Military aerodrome traffic zone"
+],
+"MAX": [
+"Maximum"
+],
+"MAY": [
+"May"
+],
+"MBST": [
+"Microburst"
+],
+"MCA": [
+"Minimum crossing altitude"
+],
+"MCTR": [
+"Military control zone"
+],
+"MCW": [
+"Modulated continuous wave"
+],
+"MDA": [
+"Minimum descent altitude"
+],
+"MDF": [
+"Medium frequency direction-finding station"
+],
+"MDH": [
+"Minimum descent height"
+],
+"MEA": [
+"Minimum en-route altitude"
+],
+"MEDEVAC": [
+"Medical evacuation flight"
+],
+"MEHT": [
+"Minimum eye-height over threshold"
+],
+"MET": [
+"Meteorological or meteorology"
+],
+"METAR": [
+"Aviation routine weather report"
+],
+"METREPORT": [
+"Local routine meteorological report"
+],
+"MF": [
+"Medium frequency"
+],
+"MHA": [
+"Minimum holding altitude"
+],
+"MHDF": [
+"Medium and high frequency direction- finding stations"
+],
+"MHVDF": [
+"Medium, high and very high frequency direction-finding stations"
+],
+"MID": [
+"Mid-point"
+],
+"MIFG": [
+"Shallow fog"
+],
+"MIL": [
+"Military"
+],
+"MIN": [
+"Minutes"
+],
+"MIS": [
+"Missing"
+],
+"MKR": [
+"Marker radio beacon"
+],
+"MLS": [
+"Microwave landing system"
+],
+"MM": [
+"Middle marker"
+],
+"MNM": [
+"Minimum"
+],
+"MNPS": [
+"Minimum navigation performance specifications"
+],
+"MNT": [
+"Monitor or monitoring or monitored"
+],
+"MNTN": [
+"Maintain"
+],
+"MOA": [
+"Military operating area"
+],
+"MOC": [
+"Minimum obstacle clearance"
+],
+"MOD": [
+"Moderate"
+],
+"MON": [
+"Above mountains",
+"Monday"
+],
+"MOPS": [
+"Minimum operational performance standards"
+],
+"MOTNE": [
+"Meteorological Operational Telecommunications Network Europe"
+],
+"MOV": [
+"Move or moving or movement"
+],
+"MPS": [
+"Metres per second"
+],
+"MRA": [
+"Minimum reception altitude"
+],
+"MRG": [
+"Medium range"
+],
+"MRP": [
+"ATS per MET reporting point"
+],
+"MS": [
+"Minus"
+],
+"MSA": [
+"Minimum sector altitude"
+],
+"MSAS": [
+"Multi-functional transport satellite (MTSAT) satellite-based augmentation system"
+],
+"MSAW": [
+"Minimum safe altitude warning"
+],
+"MSG": [
+"Message"
+],
+"MSL": [
+"Mean sea level"
+],
+"MSR": [
+"Message"
+],
+"MSSR": [
+"Monopulse secondary surveillance radar"
+],
+"MT": [
+"Mountain"
+],
+"MTOM": [
+"Maximum take-off mass"
+],
+"MTU": [
+"Metric units"
+],
+"MTW": [
+"Mountain waves"
+],
+"MVDF": [
+"Medium and very high frequency direction-finding stations (at the same position)"
+],
+"MWO": [
+"Meteorological watch office"
+],
+"MX": [
+"Mixed type of ice formation"
+],
+"N": [
+"North or Northern latitude",
+"No distinct tendency"
+],
+"NASC": [
+"National AIS system centre"
+],
+"NAT": [
+"North Atlantic"
+],
+"NAV": [
+"Navigation"
+],
+"NAVAID": [
+"Navigation aid"
+],
+"NB": [
+"Northbound"
+],
+"NBFR": [
+"Not before"
+],
+"NC": [
+"No change"
+],
+"NCD": [
+"No cloud detected"
+],
+"NDB": [
+"Non-directional radio beacon"
+],
+"NDV": [
+"No directional variations available"
+],
+"NE": [
+"North-east"
+],
+"NEB": [
+"North-eastbound"
+],
+"NEG": [
+"No or negative or permission not granted or that is not correct"
+],
+"NGT": [
+"Night"
+],
+"NIL": [
+"None or I have nothing to send to you"
+],
+"NM": [
+"Nautical miles"
+],
+"NML": [
+"Normal"
+],
+"NNE": [
+"North - north-east"
+],
+"NNW": [
+"North - north-west"
+],
+"NO": [
+"No"
+],
+"NOF": [
+"International NOTAM office"
+],
+"NONSTD": [
+"Non-standard"
+],
+"NOSIG": [
+"No significant change"
+],
+"NOTAM": [
+"A notice distributed by means of telecommunication containing information concerning the establishment, condition or change in any aeronautical facility, service, procedure or hazard, the timely knowledge of which is essential to personnel concerned with flight operations."
+],
+"NOTAMC": [
+"Cancelling NOTAM"
+],
+"NOTAMN": [
+"New NOTAM"
+],
+"NOTAMR": [
+"Replacing NOTAM"
+],
+"NOV": [
+"November"
+],
+"NOZ": [
+"Normal operating zone"
+],
+"NR": [
+"Number"
+],
+"NRH": [
+"No reply heard"
+],
+"NS": [
+"Nimbostratus"
+],
+"NSC": [
+"Nil significant cloud"
+],
+"NSW": [
+"Nil significant weather"
+],
+"NTL": [
+"National"
+],
+"NTZ": [
+"No transgression zone"
+],
+"NW": [
+"North-west"
+],
+"NWB": [
+"North-westbound"
+],
+"NXT": [
+"Next"
+],
+"O/R": [
+"On request"
+],
+"OAC": [
+"Oceanic area control centre"
+],
+"OAS": [
+"Obstacle assessment surface"
+],
+"OAT": [
+"Operational Air Traffic"
+],
+"OBS": [
+"Observe or observed or observation"
+],
+"OBSC": [
+"Obscure or obscured or obscuring"
+],
+"OBST": [
+"Obstacle"
+],
+"OCA": [
+"Obstacle clearance altitude",
+"Oceanic control area"
+],
+"OCC": [
+"Occulting"
+],
+"OCH": [
+"Obstacle clearance height"
+],
+"OCNL": [
+"Occasional or occasionally"
+],
+"OCS": [
+"Obstacle clearance surface"
+],
+"OCT": [
+"October"
+],
+"OFZ": [
+"Obstacle free zone"
+],
+"OGN": [
+"Originate"
+],
+"OHD": [
+"Overhead"
+],
+"OK": [
+"We agree or it is correct"
+],
+"OLDI": [
+"On line data interchange"
+],
+"OM": [
+"Outer marker"
+],
+"OPA": [
+"Opaque, white type of ice formation"
+],
+"OPC": [
+"Control indicated is operational control"
+],
+"OPMET": [
+"Operational meteorological (information)"
+],
+"OPN": [
+"Open or opening or opened"
+],
+"OPR": [
+"Operator or operate or operative or operating or operational"
+],
+"OPS": [
+"Operations"
+],
+"ORD": [
+"Indication of an order"
+],
+"OSV": [
+"Ocean station vessel"
+],
+"OTLK": [
+"Outlook"
+],
+"OTP": [
+"On top"
+],
+"OTS": [
+"Organized track system"
+],
+"OUBD": [
+"Outbound"
+],
+"OVC": [
+"Overcast"
+],
+"P": [
+"Maximum values of runway visual range",
+"Prohibited area"
+],
+"PA": [
+"Precision approach"
+],
+"PALS": [
+"Precision approach lighting system"
+],
+"PANS": [
+"Procedures for air navigation services"
+],
+"PAPI": [
+"Precision approach path indicator"
+],
+"PAR": [
+"Precision approach radar"
+],
+"PARL": [
+"Parallel"
+],
+"PATC": [
+"Precision approach terrain chart"
+],
+"PAX": [
+"Passenger(s)"
+],
+"PBC": [
+"Performance-based communications"
+],
+"PBN": [
+"Performance-based navigation"
+],
+"PBS": [
+"Performance-based surveillance"
+],
+"PCD": [
+"Proceed or proceeding"
+],
+"PCL": [
+"Pilot controlled lighting"
+],
+"PCN": [
+"Pavement classification number"
+],
+"PCT": [
+"Per cent"
+],
+"PDC": [
+"Predeparture clearance"
+],
+"PDG": [
+"Procedure design gradient"
+],
+"PER": [
+"Performance"
+],
+"PERM": [
+"Permanent"
+],
+"PIB": [
+"Preflight information bulletin"
+],
+"PJE": [
+"Parachute jumping exercise"
+],
+"PL": [
+"Ice pellets"
+],
+"PLA": [
+"Practice low approach"
+],
+"PLVL": [
+"Present level"
+],
+"PN": [
+"Prior notice required"
+],
+"PNR": [
+"Point of no return"
+],
+"PO": [
+"Dust/sand whirls (dust devils)"
+],
+"POB": [
+"Persons on board"
+],
+"POSS": [
+"Possible"
+],
+"PPI": [
+"Plan position indicator"
+],
+"PPR": [
+"Prior permission required"
+],
+"PPSN": [
+"Present position"
+],
+"PRFG": [
+"Aerodrome partially covered by fog"
+],
+"PRI": [
+"Primary"
+],
+"PRKG": [
+"Parking"
+],
+"PROB": [
+"Probability"
+],
+"PROC": [
+"Procedure"
+],
+"PROP": [
+"Propeller"
+],
+"PROV": [
+"Provisional"
+],
+"PS": [
+"Plus"
+],
+"PSG": [
+"Passing"
+],
+"PSN": [
+"Position"
+],
+"PSP": [
+"Pierced steel plank"
+],
+"PSR": [
+"Primary surveillance radar"
+],
+"PSYS": [
+"Pressure system(s)"
+],
+"PTN": [
+"Procedure turn"
+],
+"PTS": [
+"Polar track structure"
+],
+"PWR": [
+"Power"
+],
+"QDL": [
+"Do you intend to ask me for a series of bearings? or I intend to ask for a series of bearings (to be used in radiotelegraphy as a Q Code)"
+],
+"QDM": [
+"Magnetic heading (zero wind)"
+],
+"QDR": [
+"Magnetic bearing"
+],
+"QFE": [
+"Atmospheric pressure at aerodrome elevation"
+],
+"QFU": [
+"Magnetic orientation of runway"
+],
+"QGE": [
+"What is my distance to your station or Your distance to my station is"
+],
+"QJH": [
+"Shall I run my test tape/a test sentence or run your test tape/a test sentence"
+],
+"QNH": [
+"Altimeter sub-scale setting to obtain elevation when on the ground"
+],
+"QSP": [
+"Will you relay to … free of charge or I will relay to … free of charge"
+],
+"QTA": [
+"Shall I cancel telegram number…? or cancel telegram number"
+],
+"QTE": [
+"True bearing"
+],
+"QTF": [
+"Will you give me the position of my station according to the bearings taken by the D/F stations which you control or the position of your station according to the bearings taken by the D/F stations that I control was … latitude …longitude"
+],
+"QUAD": [
+"Quadrant"
+],
+"QUJ": [
+"Will you indicate the TRUE track to reach you or The TRUE track to reach me is … degrees at … hours"
+],
+"R": [
+"Right",
+"Red",
+"Runway (followed by figures in METAR/SPECI)",
+"Received",
+"Restricted area",
+"Radial from VOR (followed by three figures)"
+],
+"RA": [
+"Rain"
+],
+"RAC": [
+"Rules of the air and air traffic services"
+],
+"RAG": [
+"Ragged"
+],
+"RAI": [
+"Runway alignment indicator"
+],
+"RAIM": [
+"Receiver autonomous integrity monitoring"
+],
+"RASC": [
+"Regional AIS system centre"
+],
+"RASS": [
+"Remote altimeter setting source"
+],
+"RB": [
+"Rescue boat"
+],
+"RCA": [
+"Reach cruising altitude"
+],
+"RCC": [
+"Rescue co-ordination centre"
+],
+"RCF": [
+"Radio communication failure message"
+],
+"RCH": [
+"Reach or reaching"
+],
+"RCL": [
+"Runway centre line"
+],
+"RCLL": [
+"Runway centre line light(s)"
+],
+"RCLR": [
+"Re cleared"
+],
+"RCP": [
+"Required Communication Performance"
+],
+"RDH": [
+"Reference datum height"
+],
+"RDL": [
+"Radial"
+],
+"RDO": [
+"Radio"
+],
+"RDOACT": [
+"Radioactive"
+],
+"RE": [
+"Recent"
+],
+"REC": [
+"Receive or receiver"
+],
+"REDL": [
+"Runway edge light(s)"
+],
+"REF": [
+"Reference to… or refer to"
+],
+"REG": [
+"Registration"
+],
+"RENL": [
+"Runway end light(s)"
+],
+"REP": [
+"Report or reporting or reporting point"
+],
+"REQ": [
+"Request or requested"
+],
+"RERTE": [
+"Reroute"
+],
+"RESA": [
+"RWY end safety area"
+],
+"RF": [
+"Constant radius arc to fix"
+],
+"RFFS": [
+"Rescue and Fire Fighting Services"
+],
+"RG": [
+"Range"
+],
+"RHC": [
+"Right-hand circuit"
+],
+"RIF": [
+"Re clearance on flight"
+],
+"RIME": [
+"Rime (used in aerodrome warnings)"
+],
+"RL": [
+"Report leaving"
+],
+"RLA": [
+"Relay to"
+],
+"RLCE": [
+"Request level change enroute"
+],
+"RLLS": [
+"Runway lead-in lighting system"
+],
+"RLNA": [
+"Request level not available"
+],
+"RMAC": [
+"Radar minimum altitude chart"
+],
+"RMK": [
+"Remark"
+],
+"RNAV": [
+"Area navigation"
+],
+"RNG": [
+"Radio range"
+],
+"RNP": [
+"Required navigation performance"
+],
+"ROBEX": [
+"Regional OPMET bulletin exchange"
+],
+"ROC": [
+"Rate of climb"
+],
+"ROD": [
+"Rate of descent"
+],
+"ROFOR": [
+"Route forecast"
+],
+"RON": [
+"Receiving only"
+],
+"RPI": [
+"Radar position indicator"
+],
+"RPL": [
+"Repetitive flight plan"
+],
+"RPLC": [
+"Replace or replaced"
+],
+"RPS": [
+"Radar position symbol"
+],
+"RPT": [
+"Repeat or I repeat"
+],
+"RQ": [
+"Request"
+],
+"RQMNTS": [
+"Requirements"
+],
+"RQP": [
+"Request flight plan"
+],
+"RQS": [
+"Request supplementary flight plan"
+],
+"RR": [
+"Report reaching"
+],
+"RRA": [
+"Delayed meteorological message"
+],
+"RSC": [
+"Rescue sub-centre"
+],
+"RSCD": [
+"Runway surface condition"
+],
+"RSP": [
+"Required surveillance performance",
+"Responder beacon"
+],
+"RSR": [
+"En-route surveillance radar"
+],
+"RTD": [
+"Delayed"
+],
+"RTE": [
+"Route"
+],
+"RTF": [
+"Radio telephone"
+],
+"RTG": [
+"Radio telegraph"
+],
+"RTHL": [
+"Runway threshold light(s)"
+],
+"RTN": [
+"Return or returned or returning"
+],
+"RTODAH": [
+"Rejected take-off distance available helicopter"
+],
+"RTS": [
+"Return to service"
+],
+"RTT": [
+"Radio teletypewriter"
+],
+"RTZL": [
+"Runway touchdown zone light(s)"
+],
+"RUT": [
+"Standard regional route transmitting frequencies"
+],
+"RV": [
+"Rescue vessel"
+],
+"RVA": [
+"Radar vectoring area"
+],
+"RVR": [
+"Runway visual range"
+],
+"RVSM": [
+"Reduced Vertical Separation Minima"
+],
+"RWY": [
+"Runway"
+],
+"S": [
+"State of the sea",
+"South or Southern latitude"
+],
+"SA": [
+"Sand"
+],
+"SALS": [
+"Simple approach lighting system"
+],
+"SAN": [
+"Sanitary"
+],
+"SAR": [
+"Search and rescue"
+],
+"SARPS": [
+"Standards and recommended practices"
+],
+"SAT": [
+"Saturday"
+],
+"SATCOM": [
+"Satellite communication (used only when referring generally to both voice and data satellite communication or only data satellite communication)"
+],
+"SATVOICE": [
+"Satellite voice communication"
+],
+"SB": [
+"Southbound"
+],
+"SBAS": [
+"Satellite-based augmentation system"
+],
+"SC": [
+"Stratocumulus"
+],
+"SCT": [
+"Scattered"
+],
+"SDBY": [
+"Stand by"
+],
+"SE": [
+"South-east"
+],
+"SEA": [
+"Sea"
+],
+"SEB": [
+"South-eastbound"
+],
+"SEC": [
+"Seconds"
+],
+"SECN": [
+"Section"
+],
+"SECT": [
+"Sector"
+],
+"SELCAL": [
+"Selective calling system"
+],
+"SEP": [
+"September"
+],
+"SER": [
+"Service or servicing or served"
+],
+"SEV": [
+"Severe"
+],
+"SFC": [
+"Surface"
+],
+"SG": [
+"Snow grains"
+],
+"SGL": [
+"Signal"
+],
+"SH": [
+"Showers"
+],
+"SHF": [
+"Super high frequency"
+],
+"SID": [
+"Standard instrument departure"
+],
+"SIF": [
+"Selective identification feature"
+],
+"SIG": [
+"Significant"
+],
+"SIGMET": [
+"Information concerning en-route weather and other phenomena in the atmosphere that may effect the safety of aircraft operations"
+],
+"SIMUL": [
+"Simultaneous or simultaneously"
+],
+"SIWL": [
+"Single isolated wheel load"
+],
+"SKC": [
+"Sky clear"
+],
+"SKED": [
+"Schedule or scheduled"
+],
+"SLP": [
+"Speed limiting point"
+],
+"SLW": [
+"Slow"
+],
+"SMC": [
+"Surface movement control"
+],
+"SMR": [
+"Surface movement radar"
+],
+"SN": [
+"Snow"
+],
+"SNOCLO": [
+"Aerodrome closed due to snow"
+],
+"SNOWTAM": [
+"A special series NOTAM notifying the presence or removal of hazardous conditions due to snow, ice, slush or standing water associated with snow, slush and ice on the movement area, by means of a specific pro format."
+],
+"SPECI": [
+"Aviation selected special weather report"
+],
+"SPECIAL": [
+"Special meteorological report"
+],
+"SPL": [
+"Supplementary flight plan message"
+],
+"SPOC": [
+"SAR point of contact"
+],
+"SPOT": [
+"Spot wind"
+],
+"SQ": [
+"Squall"
+],
+"SQL": [
+"Squall line"
+],
+"SR": [
+"Sunrise"
+],
+"SRA": [
+"Surveillance radar approach"
+],
+"SRE": [
+"Surveillance radar element of precision approach radar system"
+],
+"SRG": [
+"Short range"
+],
+"SRR": [
+"Search and rescue region"
+],
+"SRY": [
+"Secondary"
+],
+"SS": [
+"Sandstorm",
+"Sunset"
+],
+"SSB": [
+"Single sideband"
+],
+"SSE": [
+"South-south-east"
+],
+"SSR": [
+"Secondary surveillance radar"
+],
+"SST": [
+"Supersonic transport"
+],
+"SSW": [
+"South-south-west"
+],
+"ST": [
+"Stratus"
+],
+"STA": [
+"Straight in approach"
+],
+"STAR": [
+"Standard (instrument) arrival"
+],
+"STD": [
+"Standard"
+],
+"STF": [
+"Stratiform"
+],
+"STN": [
+"Station"
+],
+"STNR": [
+"Stationary"
+],
+"STOL": [
+"Short take-off and landing"
+],
+"STS": [
+"Status"
+],
+"STWL": [
+"Stopway light(s)"
+],
+"SUBJ": [
+"Subject to"
+],
+"SUN": [
+"Sunday"
+],
+"SUP": [
+"Supplement"
+],
+"SUPPS": [
+"Regional supplementary procedures"
+],
+"SVC": [
+"Service (message type only)"
+],
+"SVCBL": [
+"Serviceable"
+],
+"SW": [
+"South-west"
+],
+"SWB": [
+"South-westbound"
+],
+"SWY": [
+"Stopway"
+],
+"T": [
+"Temperature",
+"True"
+],
+"T-VASIS": [
+"T visual approach slope indicator system"
+],
+"TA": [
+"Transition altitude"
+],
+"TAA": [
+"Terminal arrival altitude"
+],
+"TACAN": [
+"UHF tactical air navigation aid"
+],
+"TAF": [
+"Aerodrome forecast"
+],
+"TAIL": [
+"Tail wind"
+],
+"TAR": [
+"Terminal area surveillance radar"
+],
+"TAS": [
+"True airspeed"
+],
+"TAX": [
+"Taxiing or taxi"
+],
+"TC": [
+"Tropical cyclone"
+],
+"TCAS": [
+"Traffic Collision Avoidance System"
+],
+"TCU": [
+"Towering cumulus"
+],
+"TDO": [
+"Tornado"
+],
+"TDZ": [
+"Touchdown zone"
+],
+"TECR": [
+"Technical reason"
+],
+"TEL": [
+"Telephone"
+],
+"TEMPO": [
+"Temporary or temporarily"
+],
+"TEND": [
+"Trend forecast"
+],
+"TFC": [
+"Traffic"
+],
+"TGL": [
+"Touch-and-go landing"
+],
+"TGS": [
+"Taxiing guidance system"
+],
+"THR": [
+"Threshold"
+],
+"THRU": [
+"Through"
+],
+"THU": [
+"Thursday"
+],
+"TIBA": [
+"Traffic information broadcast by aircraft"
+],
+"TIL": [
+"Until"
+],
+"TIP": [
+"Until past"
+],
+"TKOF": [
+"Take-off"
+],
+"TL": [
+"Till"
+],
+"TLOF": [
+"Touchdown and lift-off area"
+],
+"TMA": [
+"Terminal control area"
+],
+"TN": [
+"Minimum temperature"
+],
+"TNA": [
+"Turn altitude"
+],
+"TNH": [
+"Turn Height"
+],
+"TO": [
+"To"
+],
+"TOC": [
+"Top of climb"
+],
+"TODA": [
+"Take-off distance available"
+],
+"TODAH": [
+"Take-off distance available, helicopter"
+],
+"TOP": [
+"Cloud top"
+],
+"TORA": [
+"Take-off run available"
+],
+"TP": [
+"Turning point"
+],
+"TR": [
+"Track"
+],
+"TRA": [
+"Temporary reserved airspace"
+],
+"TRANS": [
+"Transmits or transmitter"
+],
+"TREND": [
+"Trend forecast"
+],
+"TRG": [
+"Training"
+],
+"TRL": [
+"Transition level"
+],
+"TROP": [
+"Tropopauza"
+],
+"TS": [
+"Thunderstorm"
+],
+"TT": [
+"Teletypewriter"
+],
+"TUE": [
+"Tuesday"
+],
+"TURB": [
+"Turbulence"
+],
+"TVOR": [
+"Terminal VOR"
+],
+"TWR": [
+"Aerodrome control tower or aerodrome control"
+],
+"TWY": [
+"Taxiway"
+],
+"TX": [
+"Maximum temperature (followed by figures in TAF)"
+],
+"TXL": [
+"Taxilane"
+],
+"TXT": [
+"Text /when the abbreviation is used to request a repetition, the question mark (IMI) precedes the abbreviation, e.g. IMI TXT/"
+],
+"TYP": [
+"Type of aircraft"
+],
+"TYPH": [
+"Typhoon"
+],
+"U": [
+"Upward"
+],
+"U/S": [
+"Unserviceable"
+],
+"UA": [
+"Unmanned aircraft"
+],
+"UAB": [
+"Until advised by"
+],
+"UAC": [
+"Upper area control centre"
+],
+"UAR": [
+"Upper air route"
+],
+"UDF": [
+"Ultra high frequency direction-finding station"
+],
+"UFN": [
+"Until further notice"
+],
+"UHDT": [
+"Unable higher due traffic"
+],
+"UHF": [
+"Ultra high frequency"
+],
+"UIC": [
+"Upper Information Centre"
+],
+"UIR": [
+"Upper Flight Information Region"
+],
+"ULM": [
+"Ultra light motorized aircraft"
+],
+"ULR": [
+"Ultra long range"
+],
+"UNA": [
+"Unable"
+],
+"UNAP": [
+"Unable to approve"
+],
+"UNL": [
+"Unlimited"
+],
+"UNREL": [
+"Unreliable"
+],
+"UP": [
+"Unidentified precipitation"
+],
+"UTA": [
+"Upper control area"
+],
+"UTC": [
+"Co-ordinated universal time"
+],
+"V": [
+"Variations from the mean wind direction"
+],
+"VA": [
+"Volcanic ash"
+],
+"VAC": [
+"Visual approach chart"
+],
+"VAL": [
+"In valleys"
+],
+"VAN": [
+"Runway control van"
+],
+"VAR": [
+"Magnetic variation",
+"Visual-aural radio range"
+],
+"VASIS": [
+"Visual approach slope indicator systems"
+],
+"VC": [
+"Vicinity of the aerodrome"
+],
+"VCY": [
+"Vicinity"
+],
+"VDF": [
+"Very high frequency direction finding station"
+],
+"VER": [
+"Vertical"
+],
+"VFR": [
+"Visual flight rules"
+],
+"VHF": [
+"Very high frequency"
+],
+"VIP": [
+"Very important person"
+],
+"VIS": [
+"Visibility"
+],
+"VLF": [
+"Very low frequency"
+],
+"VLR": [
+"Very long range"
+],
+"VMC": [
+"Visual meteorological conditions"
+],
+"VNAV": [
+"Vertical Navigation"
+],
+"VOL": [
+"Volmet (followed by I,II..)"
+],
+"VOLMET": [
+"Meteorological information for aircraft in flight"
+],
+"VOR": [
+"VHF omnidirectional radio range"
+],
+"VORTAC": [
+"VOR and TACAN combination"
+],
+"VOT": [
+"VOR airborne equipment test facility"
+],
+"VPA": [
+"Vertical path angle"
+],
+"VPT": [
+"Visual manoeuvre with prescribed track"
+],
+"VRB": [
+"Variable"
+],
+"VSA": [
+"By visual reference to the ground"
+],
+"VSP": [
+"Vertical speed"
+],
+"VTOL": [
+"Vertical take-off and landing"
+],
+"VV": [
+"Vertical visibility"
+],
+"W": [
+"Sea-surface temperature",
+"West or western longitude",
+"White"
+],
+"WAAS": [
+"Wide area augmentation system"
+],
+"WAC": [
+"World Aeronautical Chart – ICAO 1: 1 000 000"
+],
+"WAFC": [
+"World Area Forecast Centre"
+],
+"WB": [
+"Westbound"
+],
+"WBAR": [
+"Wing bar lights"
+],
+"WDI": [
+"Wind direction indicator"
+],
+"WDSPR": [
+"Widespread"
+],
+"WED": [
+"Wednesday"
+],
+"WEF": [
+"With effect from or effective from"
+],
+"WGS-84": [
+"World geodetic system- 1984"
+],
+"WI": [
+"Within"
+],
+"WID": [
+"Width"
+],
+"WIE": [
+"With immediate effect or effective immediately"
+],
+"WILCO": [
+"Will comply"
+],
+"WIND": [
+"Wind"
+],
+"WINTEM": [
+"Forecast upper wind and temperature for aviation"
+],
+"WIP": [
+"Work in progress"
+],
+"WKN": [
+"Weaken or weakening"
+],
+"WNW": [
+"West-north-west"
+],
+"WO": [
+"Without"
+],
+"WPT": [
+"Way-point"
+],
+"WRNG": [
+"Warning"
+],
+"WS": [
+"Wind shear"
+],
+"WSPD": [
+"Wind speed"
+],
+"WSW": [
+"West-south-west"
+],
+"WT": [
+"Weight"
+],
+"WTSPT": [
+"Waterspout"
+],
+"WWW": [
+"World wide web"
+],
+"WX": [
+"Weather"
+],
+"WXR": [
+"Weather radar"
+],
+"X": [
+"Cross"
+],
+"XBAR": [
+"Crossbar"
+],
+"XNG": [
+"Crossing"
+],
+"XS": [
+"Atmospherics"
+],
+"Y": [
+"Yellow"
+],
+"YCZ": [
+"Yellow caution zone"
+],
+"YES": [
+"Yes"
+],
+"YR": [
+"Your"
+],
+"Z": [
+"Co-ordinated Universal Time"
+]
+},
+"AIP Portugal GEN 2.2": {
+"A/G": [
+"Air-to-ground"
+],
+"ABN": [
+"Aerodrome beacon"
+],
+"ACARS": [
+"Aircraft Communication addressing and Reporting System"
+],
+"ACC": [
+"Area control centre or area control"
+],
+"ACFT": [
+"Aircraft"
+],
+"ACT": [
+"Active or activated or activity"
+],
+"AD": [
+"Aerodrome"
+],
+"ADC": [
+"Aerodrome chart"
+],
+"ADF": [
+"Automatic direction-finding equipment"
+],
+"ADIZ": [
+"Air defence identification zone"
+],
+"AFIL": [
+"Flight plan filed in the air"
+],
+"AFIS": [
+"Aerodrome flight information service"
+],
+"AFS": [
+"Aeronautical fixed service"
+],
+"AFTN": [
+"Aeronautical fixed telecommunication network"
+],
+"AGL": [
+"Above ground level"
+],
+"AIC": [
+"Aeronautical Information Circular"
+],
+"AIM": [
+"Aeronautical Information Management"
+],
+"AIP": [
+"Aeronautical Information Publication"
+],
+"AIRMET": [
+"Information concerning en-route weather phenomena which may affect the safety of low-level aircraft operations"
+],
+"AIS": [
+"Aeronautical information services"
+],
+"ALRS": [
+"Alerting service"
+],
+"ALT": [
+"Altitude"
+],
+"ALTN": [
+"Alternate (aerodrome)"
+],
+"AMDT": [
+"Amendment"
+],
+"AMSL": [
+"Above mean sea level"
+],
+"ANC": [
+"Aeronautical chart (1:500 000)"
+],
+"ANS": [
+"Air Navigation Services"
+],
+"ANSP": [
+"Air Navigation Services Provider"
+],
+"AO": [
+"Aircraft Operator"
+],
+"APCH": [
+"Approach"
+],
+"APP": [
+"Approach control office or approach control or approach control service"
+],
+"APR": [
+"April"
+],
+"APU": [
+"Auxiliary Power Unit"
+],
+"ARO": [
+"Air traffic services reporting office"
+],
+"ARP": [
+"Aerodrome reference point"
+],
+"ARR": [
+"Arrival ATS message designator"
+],
+"ASDA": [
+"Accelerate-stop distance available"
+],
+"ASPH": [
+"Asphalt"
+],
+"ATC": [
+"Air traffic control"
+],
+"ATIS": [
+"Automatic terminal information service"
+],
+"ATM": [
+"Air traffic management"
+],
+"ATS": [
+"Air traffic service"
+],
+"ATZ": [
+"Aerodrome traffic zone"
+],
+"AUG": [
+"August"
+],
+"AVBL": [
+"Available or availability"
+],
+"AVGAS": [
+"Aviation gasoline"
+],
+"B": [
+"Blue"
+],
+"BFR": [
+"Before"
+],
+"BLW": [
+"Below"
+],
+"BRG": [
+"Bearing"
+],
+"BTN": [
+"Between"
+],
+"C": [
+"Degrees Celsius (Centigrade)"
+],
+"CAT": [
+"Category"
+],
+"CHG": [
+"Modification ATS message designator"
+],
+"CIA": [
+"Aeronautical Information Circular (national)"
+],
+"CL": [
+"Centre line"
+],
+"CM": [
+"Centimetre"
+],
+"CNL": [
+"Cancel or cancelled",
+"Cancellation ATS message designator"
+],
+"COM": [
+"Communications"
+],
+"CONC": [
+"Concrete"
+],
+"CONS": [
+"Continuous"
+],
+"CPDLC": [
+"Controller-Pilot Data Link Communications"
+],
+"CS": [
+"Call sign"
+],
+"CTA": [
+"Control area"
+],
+"CTC": [
+"Contact"
+],
+"CTL": [
+"Control"
+],
+"CTR": [
+"Control zone"
+],
+"CWY": [
+"Clearway"
+],
+"DCT": [
+"Direct (in relation to flight plan clearances and type of approach)"
+],
+"DEC": [
+"December"
+],
+"DEG": [
+"Degrees"
+],
+"DEP": [
+"Departure ATS message designator"
+],
+"DEST": [
+"Destination"
+],
+"DIST": [
+"Distance"
+],
+"DLA": [
+"Delay ATS message designator"
+],
+"DME": [
+"Distance measuring equipment"
+],
+"DOF": [
+"Date of Flight (YYMMDD)"
+],
+"DVOR": [
+"Doppler VOR"
+],
+"E": [
+"East or eastern longitude"
+],
+"EET": [
+"Estimated elapsed time"
+],
+"ELEV": [
+"Elevation"
+],
+"ELR": [
+"Extra long range"
+],
+"ENR": [
+"En-route"
+],
+"ENRC": [
+"En-route chart"
+],
+"EOBT": [
+"Estimated off-block time"
+],
+"EQPT": [
+"Equipment"
+],
+"EST": [
+"Estimate ATS message designator, estimated or estimation"
+],
+"ETA": [
+"Estimated time of arrival or estimating arrival"
+],
+"ETD": [
+"Estimated time of departure or estimating departure"
+],
+"ETO": [
+"Estimated time over significant point"
+],
+"FATO": [
+"Final approach and take-off area"
+],
+"FEB": [
+"February"
+],
+"FIR": [
+"Flight information region"
+],
+"FIS": [
+"Flight information service"
+],
+"FIZ": [
+"Flight information zone"
+],
+"FL": [
+"Flight level"
+],
+"FLG": [
+"Flashing"
+],
+"FLTCK": [
+"Flight check"
+],
+"FM": [
+"From"
+],
+"FPL": [
+"Flight plan ATS message designator"
+],
+"FREQ": [
+"Frequency"
+],
+"FRI": [
+"Friday"
+],
+"FT": [
+"Foot or Feet (dimensional unit)"
+],
+"G": [
+"Green"
+],
+"GAMET": [
+"Area forecast for low-level flights"
+],
+"GBAS": [
+"Ground Based Augmentation System"
+],
+"GEN": [
+"General"
+],
+"GEO": [
+"Geographic or true"
+],
+"GND": [
+"Ground"
+],
+"GNSS": [
+"Global navigation satellite system"
+],
+"GPS": [
+"Global positioning system"
+],
+"GUND": [
+"Geoid Undulation"
+],
+"H24": [
+"Continuous day and night service"
+],
+"HEL": [
+"Helicopter"
+],
+"HF": [
+"High frequency [3 000 to 30 000 kHz]"
+],
+"HJ": [
+"Sunrise to sunset"
+],
+"HLDG": [
+"Holding"
+],
+"HLP": [
+"Heliport"
+],
+"HN": [
+"Sunset to sunrise"
+],
+"HO": [
+"Service available to meet operational requirements"
+],
+"HOL": [
+"Holiday"
+],
+"HOSP": [
+"Hospital aircraft"
+],
+"HPA": [
+"Hectopascal"
+],
+"HR": [
+"Hours"
+],
+"HS": [
+"Service available during hours of scheduled operations"
+],
+"HUM": [
+"Humanitarian"
+],
+"HX": [
+"No specific working hours"
+],
+"HZ": [
+"Hertz (cycle per second)"
+],
+"IAS": [
+"Indicated airspeed"
+],
+"IBN": [
+"Identification beacon"
+],
+"ICAO": [
+"International Civil Aviation Organisation"
+],
+"ID": [
+"Identifier or identify"
+],
+"IFR": [
+"Instrument flight rules"
+],
+"INOP": [
+"Inoperative"
+],
+"INS": [
+"Inertial navigation system"
+],
+"INTL": [
+"International"
+],
+"JAN": [
+"January"
+],
+"JUL": [
+"July"
+],
+"JUN": [
+"June"
+],
+"KG": [
+"Kilograms"
+],
+"KHZ": [
+"Kilohertz"
+],
+"KIAS": [
+"Knots indicated airspeed"
+],
+"KM": [
+"Kilometres"
+],
+"KT": [
+"Knots"
+],
+"L": [
+"Left (preceded by runway designation number to identify a parallel runway)",
+"Locator (see LM, LO)"
+],
+"LAT": [
+"Latitude"
+],
+"LDA": [
+"Landing distance available"
+],
+"LDI": [
+"Landing direction indicator"
+],
+"LGT": [
+"Light or lighting"
+],
+"LIH": [
+"Light intensity high"
+],
+"LIL": [
+"Light intensity low"
+],
+"LIM": [
+"Light intensity medium"
+],
+"LM": [
+"Locator, middle"
+],
+"LMT": [
+"Local mean time"
+],
+"LO": [
+"Locator, outer"
+],
+"LONG": [
+"Longitude"
+],
+"LRG": [
+"Long range"
+],
+"M": [
+"Metres (preceded by figures)"
+],
+"MAG": [
+"Magnetic"
+],
+"MAR": [
+"March"
+],
+"MAX": [
+"Maximum"
+],
+"MAY": [
+"May"
+],
+"MCTA": [
+"Military Control Area"
+],
+"MCTR": [
+"Military Control Zone"
+],
+"MDA": [
+"Minimum descent altitude"
+],
+"MEHT": [
+"Minimum, eye height over threshold (for visual approach slope indicator systems)"
+],
+"MET": [
+"Meteorological or meteorology"
+],
+"METAR": [
+"Aerodrome routine meteorological report"
+],
+"MF": [
+"Medium frequency (300 to 3000 khz)"
+],
+"MHA": [
+"Minimum holding altitude"
+],
+"MHZ": [
+"Megahertz"
+],
+"MIL": [
+"Military"
+],
+"MIN": [
+"Minutes"
+],
+"MNM": [
+"Minimum"
+],
+"MON": [
+"Monday"
+],
+"MSA": [
+"Minimum sector altitude"
+],
+"MSL": [
+"Mean sea level"
+],
+"MTOM": [
+"Maximum take-off mass"
+],
+"MWO": [
+"Meteorological Watch Office"
+],
+"N": [
+"North or northern latitude"
+],
+"NAT": [
+"North Atlantic Region"
+],
+"NAV": [
+"Navigation"
+],
+"NDB": [
+"Non-directional radio beacon"
+],
+"NE": [
+"North-east"
+],
+"NIL": [
+"None or I have nothing to send to you"
+],
+"NM": [
+"Nautical miles"
+],
+"NNE": [
+"North-north-east"
+],
+"NNW": [
+"North-north-west"
+],
+"NOF": [
+"International NOTAM office"
+],
+"NOTAM": [
+"A notice distributed by means of telecommunication containing information concerning the establishment, condition or change in any aeronautical facility, service, procedure or hazard, the timely knowledge of which is essential to personnel concerned with flight operations"
+],
+"NOV": [
+"November"
+],
+"NR": [
+"Number"
+],
+"NW": [
+"North-west"
+],
+"NWB": [
+"North-westbound"
+],
+"OAC": [
+"Oceanic area control centre"
+],
+"OBST": [
+"Obstacle"
+],
+"OCA": [
+"Oceanic control area"
+],
+"OCH": [
+"Obstacle clearance height"
+],
+"OCT": [
+"October"
+],
+"OPMET": [
+"Operational meteorological information"
+],
+"OPR": [
+"Operator or operate or operative or operating or operational"
+],
+"OPS": [
+"Operations"
+],
+"OTR": [
+"Others"
+],
+"PALS": [
+"Precision approach lighting system (specify category)"
+],
+"PANS": [
+"Procedures for Air navigation Services"
+],
+"PAPI": [
+"Precision approach path indicator"
+],
+"PAX": [
+"Passenger(s)"
+],
+"PCN": [
+"Pavement classification number"
+],
+"PERM": [
+"Permanent"
+],
+"PIB": [
+"Pre-flight information bulletin"
+],
+"PPR": [
+"Prior permission required"
+],
+"QFE": [
+"Atmospheric pressure at aerodrome elevation (or at runway threshold)"
+],
+"QNH": [
+"Altimeter sub-scale setting to obtain elevation when on the ground"
+],
+"R": [
+"Right (preceded by runway designation number to identify a parallel runway)",
+"Red"
+],
+"RAC": [
+"Rules of the air and air traffic services"
+],
+"RCC": [
+"Search and Rescue coordination centre"
+],
+"RCF": [
+"Radio communication failure ATS message designator"
+],
+"RCL": [
+"Runway centre line"
+],
+"REG": [
+"Registration"
+],
+"REP": [
+"Report or reporting or reporting point"
+],
+"RESA": [
+"Runway end safety area"
+],
+"RMK": [
+"Remark"
+],
+"ROC": [
+"Rate of climb"
+],
+"RTE": [
+"Route"
+],
+"RTF": [
+"Radiotelephone"
+],
+"RVR": [
+"Runway visual range"
+],
+"RWY": [
+"Runway"
+],
+"S": [
+"South or southern latitude"
+],
+"SA": [
+"Sand"
+],
+"SALS": [
+"Simple approach lighting system"
+],
+"SAR": [
+"Search and rescue"
+],
+"SAT": [
+"Saturday"
+],
+"SBA": [
+"Aerodrome Brigade Service"
+],
+"SBAS": [
+"Satellite based augmentation system"
+],
+"SE": [
+"South-east"
+],
+"SEC": [
+"Seconds"
+],
+"SELCAL": [
+"Selective calling system"
+],
+"SEP": [
+"September"
+],
+"SFC": [
+"Surface"
+],
+"SIGMET": [
+"Information concerning en-route weather phenomena which may affect the safety of aircraft operations"
+],
+"SPECI": [
+"Aerodrome special meteorological report"
+],
+"SR": [
+"Sunrise"
+],
+"SRR": [
+"Search and rescue region"
+],
+"SS": [
+"Sunset"
+],
+"SSE": [
+"South-south-east"
+],
+"SSR": [
+"Secondary surveillance radar"
+],
+"SSW": [
+"South-south-west"
+],
+"SUN": [
+"Sunday"
+],
+"SUP": [
+"Supplement"
+],
+"SW": [
+"South-west"
+],
+"SWY": [
+"Stopway"
+],
+"T": [
+"Temperature"
+],
+"TACAN": [
+"UHF tactical air navigation aid"
+],
+"TAF": [
+"Aerodrome forecast"
+],
+"TCO": [
+"Third country operator"
+],
+"TDPM": [
+"Touchdown positioning marking"
+],
+"TDZ": [
+"Touchdown zone"
+],
+"TEL": [
+"Telephone"
+],
+"THR": [
+"Threshold"
+],
+"THU": [
+"Thursday"
+],
+"TKOF": [
+"Take-off"
+],
+"TLOF": [
+"Touchdown and lift-off area"
+],
+"TMA": [
+"Terminal control area"
+],
+"TODA": [
+"Take-off distance available"
+],
+"TORA": [
+"Take-off run available"
+],
+"TRA": [
+"Temporary reserved airspace"
+],
+"TUE": [
+"Tuesday"
+],
+"TWR": [
+"Aerodrome control tower or aerodrome control"
+],
+"TWY": [
+"Taxiway"
+],
+"TYP": [
+"Type of aircraft"
+],
+"UFN": [
+"Until further notice"
+],
+"UHF": [
+"Ultra high frequency [300 to 3000MHz]"
+],
+"ULM": [
+"Ultra Light motorized aircraft"
+],
+"UNL": [
+"Unlimited"
+],
+"UTC": [
+"Coordinated Universal Time"
+],
+"VAC": [
+"Visual approach chart"
+],
+"VALC": [
+"Visual approach and landing chart"
+],
+"VASIS": [
+"Visual approach slope indicator systems"
+],
+"VFR": [
+"Visual flight rules"
+],
+"VHF": [
+"Very high frequency (30 to 300 MHz)"
+],
+"VLR": [
+"Very long range"
+],
+"VMC": [
+"Visual meteorological conditions"
+],
+"VOLMET": [
+"Meteorological information for aircraft in flight"
+],
+"VOR": [
+"VHF omnidirectional radio range"
+],
+"VRB": [
+"Variable"
+],
+"VTOF": [
+"Visual take-off chart"
+],
+"W": [
+"West or western longitude",
+"White"
+],
+"WB": [
+"Westbound"
+],
+"WDI": [
+"Wind direction indicator"
+],
+"WED": [
+"Wednesday"
+],
+"WGS-84": [
+"World Geodetic System - 1984"
+],
+"WID": [
+"Width"
+],
+"WIP": [
+"Work in progress"
+],
+"WS": [
+"Wind shear"
+],
+"WSW": [
+"West-south-west"
+],
+"WT": [
+"Weight"
+],
+"Y": [
+"Yellow"
+]
+},
+"AIP Republic of Korea GEN 2.2": {
+"A": [
+"Amber"
+],
+"A-CDM": [
+"Airport collaborative decision making"
+],
+"A/A": [
+"Air-to-air"
+],
+"A/G": [
+"Air-to-ground"
+],
+"AAD": [
+"Assigned altitude deviation"
+],
+"AAL": [
+"Above aerodrome level"
+],
+"ABM": [
+"Abeam"
+],
+"ABN": [
+"Aerodrome beacon"
+],
+"ABT": [
+"About"
+],
+"ABV": [
+"Above"
+],
+"AC": [
+"Altocumulus"
+],
+"ACARS": [
+"Aircraft communication addressing and reporting system"
+],
+"ACAS": [
+"Airborne collision avoidance system"
+],
+"ACC": [
+"Area control center"
+],
+"ACCID": [
+"Notification of an aircraft accident"
+],
+"ACFT": [
+"Aircraft"
+],
+"ACK": [
+"Acknowledge"
+],
+"ACL": [
+"Altimeter check location"
+],
+"ACN": [
+"Aircraft classification number"
+],
+"ACP": [
+"Acceptance(message type designator)"
+],
+"ACPT": [
+"Accept, accepted"
+],
+"ACT": [
+"Active or activated or activity"
+],
+"AD": [
+"Aerodrome"
+],
+"ADA": [
+"Advisory Area"
+],
+"ADC": [
+"Aerodrome chart"
+],
+"ADDN": [
+"Addition or additional"
+],
+"ADF": [
+"Automatic direction-finding equipment"
+],
+"ADIZ": [
+"Air defence identification zone"
+],
+"ADJ": [
+"Adjacent"
+],
+"ADP": [
+"ATFM daily plan"
+],
+"ADR": [
+"Advisory route"
+],
+"ADS": [
+"Automatic dependent surveillance"
+],
+"ADSU": [
+"Automatic dependent surveillance unit"
+],
+"ADVS": [
+"Advisory service"
+],
+"ADZ": [
+"Advise"
+],
+"AES": [
+"Aircraft earth station"
+],
+"AFIL": [
+"Flight plan filed in the air"
+],
+"AFIS": [
+"Aerodrome flight information service"
+],
+"AFM": [
+"Yes or affirm or affirmative or that is correct"
+],
+"AFP": [
+"Airspace flow program"
+],
+"AFS": [
+"Aeronautical fixed service"
+],
+"AFT": [
+"After.......(time or place)"
+],
+"AFTN": [
+"Aeronautical fixed telecommunication network"
+],
+"AGA": [
+"Aerodrome, air routes and ground aids"
+],
+"AGL": [
+"Above ground level"
+],
+"AGN": [
+"Again"
+],
+"AIC": [
+"Aeronautical information circular"
+],
+"AIDC": [
+"Air traffic services inter-facility data communication"
+],
+"AIP": [
+"Aeronautical information publication"
+],
+"AIRAC": [
+"Aeronautical information regulation and control"
+],
+"AIREP": [
+"Air-report"
+],
+"AIRMET": [
+"Information concerning enroute weather phenomena which may affect the safety of low-level aircraft operations"
+],
+"AIS": [
+"Aeronautical information services"
+],
+"ALA": [
+"Alighting area"
+],
+"ALERFA": [
+"Alert phase"
+],
+"ALR": [
+"Alerting(message type designator)"
+],
+"ALRS": [
+"Alerting service"
+],
+"ALS": [
+"Approach lighting system"
+],
+"ALT": [
+"Altitude"
+],
+"ALTN": [
+"Alternate or alternating (light alternates in colour)",
+"Alternate(aerodrome)"
+],
+"AMA": [
+"Area minimum altitude"
+],
+"AMD": [
+"Amend or amended(used to indicate amended meteorological message; message type designator)"
+],
+"AMDT": [
+"Amendment (AIP Amendment)"
+],
+"AMS": [
+"Aeronautical mobile service"
+],
+"AMSL": [
+"Above mean sea level"
+],
+"AMSS": [
+"Aeronautical mobile satellite service"
+],
+"ANC": [
+"Aeronautical chart 1:500 000 (followed by name title)"
+],
+"ANCS": [
+"Aeronautical navigation chart - small scale(followed byname/title and scale)"
+],
+"ANS": [
+"Answer"
+],
+"AOC": [
+"Aerodrome obstacle chart"
+],
+"AP": [
+"Airport"
+],
+"APCH": [
+"Approach"
+],
+"APDC": [
+"Aircraft parking/docking chart(followed by name/title)"
+],
+"APN": [
+"Apron"
+],
+"APP": [
+"Approach control office or approach control or approach control service"
+],
+"APR": [
+"April"
+],
+"APRX": [
+"Approximate or approximately"
+],
+"APSG": [
+"After passing"
+],
+"APV": [
+"Approach procedure with vertical guidance",
+"Approve or approved or approval"
+],
+"ARC": [
+"Area chart"
+],
+"ARFOR": [
+"Area forecast (in aeronautical meteorological code)"
+],
+"ARNG": [
+"Arrange"
+],
+"ARO": [
+"Air traffic services reporting office"
+],
+"ARP": [
+"Aerodrome reference point",
+"Air-report (message type designator)"
+],
+"ARQ": [
+"Automatic error correction"
+],
+"ARR": [
+"Arrive or arrival",
+"Arrival(message type designator)"
+],
+"ARS": [
+"Special air-report (message type designator)"
+],
+"ARST": [
+"Arresting (specify part of aircraft arresting equipment)"
+],
+"AS": [
+"Altostratus"
+],
+"ASC": [
+"Ascend to or ascending to"
+],
+"ASDA": [
+"Accelerate-stop distance available"
+],
+"ASE": [
+"Altimetry system error"
+],
+"ASPH": [
+"Asphalt"
+],
+"AT": [
+"At (followed by time at which weather change is forecast to occur)"
+],
+"AT-VASIS": [
+"Abbreviated T visual approach slope indicator system"
+],
+"ATA": [
+"Actual time of arrival"
+],
+"ATC": [
+"Air traffic control (in general)"
+],
+"ATD": [
+"Actual time of departure"
+],
+"ATFM": [
+"Air traffic flow management"
+],
+"ATIS": [
+"Automatic terminal information service"
+],
+"ATM": [
+"Air traffic management"
+],
+"ATN": [
+"Aeronautical telecommunication network"
+],
+"ATP": [
+"At... (time or place)"
+],
+"ATS": [
+"Air traffic services"
+],
+"ATTN": [
+"Attention"
+],
+"ATZ": [
+"Aerodrome traffic zone"
+],
+"AUG": [
+"August"
+],
+"AUTH": [
+"Authorized or authorization"
+],
+"AUW": [
+"All up weight"
+],
+"AUX": [
+"Auxiliary"
+],
+"AVBL": [
+"Available or availability"
+],
+"AVG": [
+"Average"
+],
+"AVGAS": [
+"Aviation gasoline"
+],
+"AWTA": [
+"Advise at what time able"
+],
+"AWY": [
+"Airway"
+],
+"AZM": [
+"Azimuth"
+],
+"B": [
+"Blue"
+],
+"BA": [
+"Braking action"
+],
+"BARO-VNAV": [
+"Barometric Vertical Navigation"
+],
+"BASE": [
+"Cloud base"
+],
+"BCFG": [
+"Fog patches"
+],
+"BCN": [
+"Beacon (aeronautical ground light)"
+],
+"BCST": [
+"Broadcast"
+],
+"BDRY": [
+"Boundary"
+],
+"BECMG": [
+"Becoming"
+],
+"BFR": [
+"Before"
+],
+"BKN": [
+"Broken"
+],
+"BLDG": [
+"Building"
+],
+"BLO": [
+"Below clouds"
+],
+"BLW": [
+"Below"
+],
+"BOMB": [
+"Bombing"
+],
+"BR": [
+"Mist"
+],
+"BRF": [
+"Short (used to indicate the type of approach desired or required)"
+],
+"BRG": [
+"Bearing"
+],
+"BRKG": [
+"Braking"
+],
+"BS": [
+"Commercial broadcasting station"
+],
+"BTL": [
+"Between layers"
+],
+"BTN": [
+"Between"
+],
+"C": [
+"Degrees Celsius (Centigrade)"
+],
+"CAT": [
+"Category",
+"Clear air turbulance"
+],
+"CAVOK": [
+"Visibility, cloud and present weather better than prescribed values or conditions"
+],
+"CB": [
+"Cumulonimbus"
+],
+"CC": [
+"Cirrocumulus"
+],
+"CCA": [
+"(or CCB, CCC...etc. in sequence) Corrected meteorological message (message type designator)"
+],
+"CD": [
+"Candela"
+],
+"CDM": [
+"Collaborative decision making meeting"
+],
+"CDN": [
+"Coordination"
+],
+"CF": [
+"Change frequency to"
+],
+"CGL": [
+"Circling guidance light"
+],
+"CH": [
+"Channel"
+],
+"CHG": [
+"Modification (message type designator)"
+],
+"CI": [
+"Cirrus"
+],
+"CIDIN": [
+"Common ICAO data interchange network"
+],
+"CIT": [
+"Near or over large town"
+],
+"CIV": [
+"Civil"
+],
+"CK": [
+"Check"
+],
+"CL": [
+"Centre line"
+],
+"CLA": [
+"Clear type of ice formation"
+],
+"CLBR": [
+"Calibration"
+],
+"CLD": [
+"Cloud"
+],
+"CLDT": [
+"Calculated landing time"
+],
+"CLR": [
+"Clear(s) or cleared to ... or clearance"
+],
+"CLSD": [
+"Close or closed or closing"
+],
+"CM": [
+"Centimeter"
+],
+"CMB": [
+"Climb to or climbing to"
+],
+"CMPL": [
+"Completion or completed or complete"
+],
+"CNL": [
+"Cancel or cancelled",
+"Flight plan cancellation (message type designator)"
+],
+"CNS": [
+"Communications, navigation and surveillance"
+],
+"COBT": [
+"Calculated off-block time"
+],
+"COM": [
+"Communications"
+],
+"CONC": [
+"Concrete"
+],
+"COND": [
+"Condition"
+],
+"CONS": [
+"Continuous"
+],
+"CONST": [
+"Construction or constructed"
+],
+"CONT": [
+"Continue or continued"
+],
+"COOR": [
+"Coordinate or coordination"
+],
+"COORD": [
+"Coordinates"
+],
+"COP": [
+"Change-over-point"
+],
+"COR": [
+"Correct or corrected or correction(used to indicate corrected meterological message : message type designator)"
+],
+"COT": [
+"At the coast"
+],
+"COV": [
+"Cover or covered or covering"
+],
+"CPL": [
+"Current flight plan (message type designator)"
+],
+"CRC": [
+"Cyclic redundancy check"
+],
+"CRM": [
+"Collision risk model"
+],
+"CRZ": [
+"Cruise"
+],
+"CS": [
+"Cirrostratus",
+"Call sign"
+],
+"CTA": [
+"Control area"
+],
+"CTAM": [
+"Climb to and maintain"
+],
+"CTC": [
+"Contact"
+],
+"CTL": [
+"Control"
+],
+"CTN": [
+"Caution"
+],
+"CTO": [
+"Calculated time over"
+],
+"CTOT": [
+"Calculated take-off time"
+],
+"CTR": [
+"Control zone"
+],
+"CU": [
+"Cumulus"
+],
+"CUF": [
+"Cumuliform"
+],
+"CUST": [
+"Customs"
+],
+"CVR": [
+"Cockpit voice recorder"
+],
+"CW": [
+"Continuous wave"
+],
+"CWY": [
+"Clearway"
+],
+"D": [
+"Downward (tendency in RVR during previous 10 minutes)"
+],
+"D-ATIS": [
+"Data link automatic terminal information service"
+],
+"D-VOLMET": [
+"Data link VOLMET"
+],
+"DA": [
+"Decision altitude"
+],
+"DCD": [
+"Double channel duplex"
+],
+"DCKG": [
+"Docking"
+],
+"DCPC": [
+"Direct controller-pilot communications"
+],
+"DCS": [
+"Double channel simplex"
+],
+"DCT": [
+"Direct (in relation to flight plan clearances and type of approach)"
+],
+"DE": [
+"From (used to precede the call sign of the calling station) (to be used in AFS as a procedure signal)"
+],
+"DEC": [
+"December"
+],
+"DEG": [
+"Degrees"
+],
+"DENEB": [
+"Fog dispersal operations"
+],
+"DEP": [
+"Depart or departure",
+"Departure (message type designator)"
+],
+"DES": [
+"Descend to or descending to"
+],
+"DEST": [
+"Destination"
+],
+"DETRESFA": [
+"Distress phase"
+],
+"DEV": [
+"Deviation or deviating"
+],
+"DFDR": [
+"Digital flight data recorder"
+],
+"DFTI": [
+"Distance from touchdown indicator"
+],
+"DH": [
+"Decision height"
+],
+"DIF": [
+"Diffuse"
+],
+"DIST": [
+"Distance"
+],
+"DIV": [
+"Divert or diverting"
+],
+"DLA": [
+"Delay or delayed or Delay (message type designator)",
+"Delay or delayed"
+],
+"DME": [
+"Distance measuring equipment"
+],
+"DNG": [
+"Danger or dangerous"
+],
+"DOM": [
+"Domestic"
+],
+"DP": [
+"Dew point temperature"
+],
+"DPT": [
+"Depth"
+],
+"DR": [
+"Dead reckoning"
+],
+"DRG": [
+"During"
+],
+"DS": [
+"Dust storm"
+],
+"DSB": [
+"Double Sideband"
+],
+"DTAM": [
+"Descend to and maintain"
+],
+"DTG": [
+"Date-time group"
+],
+"DTHR": [
+"Displaced runway threshold"
+],
+"DTRT": [
+"Deteriorate or deteriorating"
+],
+"DTW": [
+"Dual tandem wheels"
+],
+"DU": [
+"Dust"
+],
+"DUC": [
+"Dense upper cloud"
+],
+"DUR": [
+"Duration"
+],
+"DVOR": [
+"Doppler VOR"
+],
+"DW": [
+"Dual wheels"
+],
+"DZ": [
+"Drizzle"
+],
+"E": [
+"East or eastern longitude"
+],
+"EAT": [
+"Expected approach time"
+],
+"EB": [
+"East bound"
+],
+"EET": [
+"Estimated elapsed time"
+],
+"EFC": [
+"Expect further clearance"
+],
+"EHF": [
+"Extremely high frequency (30 000 to 300 000 Mhz)"
+],
+"ELBA": [
+"Emergency location beacon-aircraft"
+],
+"ELDT": [
+"Estimated landing time"
+],
+"ELEV": [
+"Elevation"
+],
+"ELR": [
+"Extra long range"
+],
+"ELT": [
+"Emergency locator transmitter"
+],
+"EM": [
+"Emission"
+],
+"EMBD": [
+"Embedded in a layer (to indicate cumulonimbus embedded in layers of other clouds)"
+],
+"EMERG": [
+"Emergency"
+],
+"END": [
+"Stop-end (related to RVR)"
+],
+"ENE": [
+"East north east"
+],
+"ENG": [
+"Engine"
+],
+"ENR": [
+"En route"
+],
+"ENRC": [
+"Enroute chart (followed by name/title)"
+],
+"EOBT": [
+"Estimated off-block time"
+],
+"EQPT": [
+"Equipment"
+],
+"ER": [
+"here... or herewith"
+],
+"ESE": [
+"East south east"
+],
+"EST": [
+"Estimate or estimated or estimation(message type designator)"
+],
+"ETA": [
+"Estimated time of arrival or estimating arrival"
+],
+"ETD": [
+"Estimated time of departure or estimating departure"
+],
+"ETO": [
+"Estimated time over",
+"Estimated time over significant point"
+],
+"ETOT": [
+"Estimated take-off time"
+],
+"EV": [
+"Every"
+],
+"EXC": [
+"Except"
+],
+"EXER": [
+"Exercise or exercising or to exercise"
+],
+"EXP": [
+"Expect or expected or expecting"
+],
+"EXTD": [
+"Extend or extending"
+],
+"F": [
+"Fixed"
+],
+"FAC": [
+"Facilities"
+],
+"FAF": [
+"Final approach fix"
+],
+"FAL": [
+"Facilitation of international air transport"
+],
+"FAP": [
+"Final approach point"
+],
+"FATO": [
+"Final approach and take-off area"
+],
+"FAX": [
+"Facsimile transmission"
+],
+"FBL": [
+"Light (used to indicate the intensity of weather phenomena, interference or static reports, e.g. FBL RA=light rain)"
+],
+"FC": [
+"Funnel cloud(tornado or water spout)"
+],
+"FCST": [
+"Forecast"
+],
+"FCT": [
+"Friction coefficient"
+],
+"FDPS": [
+"Flight data processing system"
+],
+"FDR": [
+"Flight data recorder"
+],
+"FEB": [
+"February"
+],
+"FEW": [
+"Few"
+],
+"FG": [
+"Fog"
+],
+"FIC": [
+"Flight information centre"
+],
+"FIR": [
+"Flight information region"
+],
+"FIS": [
+"Flight information service"
+],
+"FISA": [
+"Automated flight information service"
+],
+"FL": [
+"Flight level"
+],
+"FLD": [
+"Field"
+],
+"FLG": [
+"Flashing"
+],
+"FLR": [
+"Flares"
+],
+"FLT": [
+"Flight"
+],
+"FLTCK": [
+"Flight check"
+],
+"FLUC": [
+"Fluctuating or fluctuation or fluctuated"
+],
+"FLW": [
+"Follow(s) or following"
+],
+"FLY": [
+"Fly or flying"
+],
+"FM": [
+"From",
+"From (Followed by time weather change is forecast to begin)"
+],
+"FMC": [
+"Flight management computer"
+],
+"FMS": [
+"Flight management system"
+],
+"FMU": [
+"Flow management unit"
+],
+"FNA": [
+"Final approach"
+],
+"FPL": [
+"Filed flight plan (message type designator)"
+],
+"FPM": [
+"Feet per minute"
+],
+"FPR": [
+"Flight plan route"
+],
+"FR": [
+"Fuel remaining"
+],
+"FREQ": [
+"Frequency"
+],
+"FRI": [
+"Friday"
+],
+"FRNG": [
+"Firing"
+],
+"FRONT": [
+"Front (relating to weather)"
+],
+"FRQ": [
+"Frequent"
+],
+"FSL": [
+"Full stop landing"
+],
+"FSS": [
+"Flight service station"
+],
+"FST": [
+"First"
+],
+"FT": [
+"Feet (Dimensional unit)"
+],
+"FU": [
+"Smoke"
+],
+"FZ": [
+"Freezing"
+],
+"FZDZ": [
+"Freezing drizzle"
+],
+"FZFG": [
+"Freezing fog"
+],
+"FZRA": [
+"Freezing rain"
+],
+"G": [
+"Green"
+],
+"G/A": [
+"Ground-to-air"
+],
+"G/A/G": [
+"Ground-to-air and air-to-ground"
+],
+"GA": [
+"Go ahead, resume sending to be used in AFS as a procedure signal"
+],
+"GAMET": [
+"Area forecast for low-level flights"
+],
+"GCA": [
+"Ground controlled approach system or ground controlled approach"
+],
+"GDP": [
+"Ground delay program"
+],
+"GEN": [
+"General"
+],
+"GEO": [
+"Geographic or true"
+],
+"GES": [
+"Ground earth station"
+],
+"GLD": [
+"Glider"
+],
+"GLONASS": [
+"Global orbiting navigation satellite system(to be pronounced \"GLO-NAS\")"
+],
+"GMC": [
+"Ground movement chart (followed by name/title)"
+],
+"GND": [
+"Ground"
+],
+"GNDCK": [
+"Ground check"
+],
+"GNSS": [
+"Global navigation satellite system"
+],
+"GP": [
+"Glide path"
+],
+"GPS": [
+"Global positioning system"
+],
+"GR": [
+"Hail"
+],
+"GRASS": [
+"Grass landing area"
+],
+"GRF": [
+"Global reporting format for assessing and reporting runway surface condition"
+],
+"GRID": [
+"Processed meteorological data in the form of grid point values expressed in binary form(meteological code)"
+],
+"GRVL": [
+"Gravel"
+],
+"GS": [
+"Ground speed",
+"Ground stop",
+"Small hail and/or snow pellets"
+],
+"GUND": [
+"Geoid undulation"
+],
+"H24": [
+"Continuous day and night service"
+],
+"HAPI": [
+"Helicopter approach path indicator"
+],
+"HBN": [
+"Hazard beacon"
+],
+"HCH": [
+"Heliport crossing height"
+],
+"HDF": [
+"High frequency direction-finding station"
+],
+"HDG": [
+"Heading"
+],
+"HEL": [
+"Helicopter"
+],
+"HF": [
+"High frequency(3 000 to 30 000 kHz)"
+],
+"HGT": [
+"Height or height above"
+],
+"HJ": [
+"Sunrise to sunset"
+],
+"HLDG": [
+"Holding"
+],
+"HN": [
+"Sunset to sunrise"
+],
+"HO": [
+"Service available to meet operational requirement"
+],
+"HOL": [
+"Holiday"
+],
+"HOSP": [
+"Hospital aircraft"
+],
+"HPA": [
+"Hectopascal"
+],
+"HR": [
+"Hours"
+],
+"HRP": [
+"Heliport reference point"
+],
+"HS": [
+"Service available during hours of scheduled operations"
+],
+"HURCN": [
+"Hurricane"
+],
+"HVDF": [
+"High and very high frequency direction-finding stations(at the same location)"
+],
+"HVY": [
+"Heavy",
+"Heavy(used to indicate the intensity of weather phenomena, e.g. HVY RA=heavy rain)"
+],
+"HX": [
+"No specific working hours"
+],
+"HYR": [
+"Higher"
+],
+"HZ": [
+"Haze"
+],
+"IAC": [
+"Instrument approach chart(followed by name/title)"
+],
+"IAF": [
+"Initial approach fix"
+],
+"IAO": [
+"In and out of clouds"
+],
+"IAR": [
+"Intersection of air routes"
+],
+"IAS": [
+"Indicated air speed"
+],
+"IBN": [
+"Identification beacon"
+],
+"IC": [
+"Ice Crystals(very small ice crystals in suspension, also known as diamond dust)"
+],
+"ICE": [
+"Icing"
+],
+"ID": [
+"Identifier or identify"
+],
+"IDENT": [
+"Identification"
+],
+"IF": [
+"Intermediate approach fix"
+],
+"IFF": [
+"Identification friend/foe"
+],
+"IFR": [
+"Instrument flight rule"
+],
+"IGA": [
+"International general aviation"
+],
+"ILS": [
+"Instrument landing system"
+],
+"IM": [
+"Inner marker"
+],
+"IMC": [
+"Instrument meteorological conditions"
+],
+"IMG": [
+"Immigration"
+],
+"IMPR": [
+"Improve or improving"
+],
+"IMT": [
+"immediate or immediately"
+],
+"INA": [
+"Initial approach"
+],
+"INBD": [
+"Inbound"
+],
+"INC": [
+"In cloud"
+],
+"INCERFA": [
+"Uncertainty phase"
+],
+"INFO": [
+"Information"
+],
+"INOP": [
+"Inoperative"
+],
+"INP": [
+"If not possible"
+],
+"INPR": [
+"In progress"
+],
+"INS": [
+"Inertial navigation system"
+],
+"INSTL": [
+"Install or installed or installation"
+],
+"INSTR": [
+"Instrument"
+],
+"INT": [
+"Intersection"
+],
+"INTL": [
+"International"
+],
+"INTRG": [
+"Interrogator"
+],
+"INTRP": [
+"Interrupt or interruption or interrupted"
+],
+"INTSF": [
+"Intensify or intensifying"
+],
+"INTST": [
+"Intensity"
+],
+"IR": [
+"Ice on runway"
+],
+"ISA": [
+"International standard atmosphere"
+],
+"ISB": [
+"Independent sideband"
+],
+"ISOL": [
+"Isolated"
+],
+"JAN": [
+"January"
+],
+"JTST": [
+"Jet stream"
+],
+"JUL": [
+"July"
+],
+"JUN": [
+"June"
+],
+"KG": [
+"Kilograms"
+],
+"KHZ": [
+"Kilohertz"
+],
+"KIAS": [
+"Knots indicated airspeed"
+],
+"KM": [
+"kilometers"
+],
+"KMH": [
+"Kilometers per hour"
+],
+"KPA": [
+"Kilopascal"
+],
+"KST": [
+"Korean standard time"
+],
+"KT": [
+"Knots"
+],
+"KW": [
+"Kilowatts"
+],
+"L": [
+"Left(preceded by runway designation number to identify a parallel runway)",
+"Locator(see LM, LO)"
+],
+"LAM": [
+"Logical acknowledgement(message type designator)"
+],
+"LAN": [
+"Inland"
+],
+"LAT": [
+"Latitude"
+],
+"LDA": [
+"Landing distance available"
+],
+"LDAH": [
+"Landing distance available, helicopter"
+],
+"LDG": [
+"Landing"
+],
+"LDI": [
+"Landing direction indicator"
+],
+"LEN": [
+"Length"
+],
+"LF": [
+"Low frequency(30 to 300Khz)"
+],
+"LGT": [
+"Light or lighting"
+],
+"LGTD": [
+"Lighted"
+],
+"LIH": [
+"Light intensity high"
+],
+"LIL": [
+"Light intensity low"
+],
+"LIM": [
+"Light intensity medium"
+],
+"LM": [
+"Locator, middle"
+],
+"LMT": [
+"Local mean time"
+],
+"LNAV": [
+"Lateral Navigation"
+],
+"LNG": [
+"Long(Used to indicate the type of approach desired or required)"
+],
+"LO": [
+"Locator, outer"
+],
+"LOC": [
+"Localizer"
+],
+"LONG": [
+"Longitude"
+],
+"LORAN": [
+"LORAN(long range air navigation system)"
+],
+"LPV": [
+"Localizer performance with vertical guidance"
+],
+"LRG": [
+"Long range"
+],
+"LSQ": [
+"Line squall"
+],
+"LTD": [
+"Limited"
+],
+"LTT": [
+"Landing teletypewriter"
+],
+"LV": [
+"Light and variable(relating to wind)"
+],
+"LVE": [
+"Leave or leaving"
+],
+"LVL": [
+"Level"
+],
+"LYR": [
+"Layer or layered"
+],
+"MAA": [
+"Maximum authorized altitude"
+],
+"MAG": [
+"Magnetic"
+],
+"MAINT": [
+"Maintenance"
+],
+"MAP": [
+"Aeronautical maps and charts"
+],
+"MAPT": [
+"Missed approach point"
+],
+"MAR": [
+"At sea",
+"March"
+],
+"MAS": [
+"Manual Al simplex"
+],
+"MAX": [
+"Maximum"
+],
+"MAY": [
+"May"
+],
+"MCA": [
+"Minimum crossing altitude"
+],
+"MCW": [
+"Modulated continuous wave"
+],
+"MDA": [
+"Minimum descent altitude"
+],
+"MDF": [
+"Medium frequency direction-finding station"
+],
+"MDH": [
+"Minimum descent height"
+],
+"MEA": [
+"Minimum en-route altitude"
+],
+"MEHT": [
+"Minimum eye height over threshold(for visual approach slope indicator systems)"
+],
+"MET": [
+"Meteorological or Meteorology"
+],
+"METAR": [
+"Aerodrome routine meteorological report(in meteorological code)"
+],
+"MF": [
+"Medium frequency(300 to 3 000 kHz)"
+],
+"MHDF": [
+"Medium and high frequency direction-finding stations(at the same location)"
+],
+"MHVDF": [
+"Medium, high and very high frequency direction-finding station(at the same location)"
+],
+"MHZ": [
+"Megahertz"
+],
+"MID": [
+"Mid-point(related to RVR)"
+],
+"MIFG": [
+"Shallow fog"
+],
+"MIL": [
+"Military"
+],
+"MIN": [
+"Minute"
+],
+"MINT": [
+"Minute in trail"
+],
+"MIT": [
+"Miles in trail"
+],
+"MKR": [
+"Marker radio beacon"
+],
+"MLS": [
+"Microwave landing system"
+],
+"MM": [
+"Middle marker"
+],
+"MNM": [
+"Minimum"
+],
+"MNPS": [
+"Minimum navigation performance specifications"
+],
+"MNT": [
+"Monitor or monitoring or monitored"
+],
+"MNTN": [
+"Maintain"
+],
+"MOA": [
+"Military operating area"
+],
+"MOC": [
+"Minimum obstacle clearance(required)"
+],
+"MOCA": [
+"Minimum obstacle clearance Altitude"
+],
+"MOD": [
+"Moderate(used to indicate the intensity of weather phenomena, interference or static reports, e,g. MODRA=moderate rain)"
+],
+"MON": [
+"Above mountains",
+"Monday"
+],
+"MOPS": [
+"Minimum operational performance standards"
+],
+"MOV": [
+"Move or moving or movement"
+],
+"MPS": [
+"Meters per second"
+],
+"MRA": [
+"Minimum reception altitude"
+],
+"MRG": [
+"Medium range"
+],
+"MRP": [
+"ATS/MET reporting point"
+],
+"MS": [
+"Minus"
+],
+"MSA": [
+"Minimum sector altitude"
+],
+"MSG": [
+"Message"
+],
+"MSL": [
+"Mean sea level"
+],
+"MSSR": [
+"Monopulse secondary surveillance radar"
+],
+"MT": [
+"Mountain"
+],
+"MTU": [
+"Metric units"
+],
+"MTW": [
+"Mountain waves"
+],
+"MVDF": [
+"Medium and very high frequency direction finding stations(at the same location)"
+],
+"MWO": [
+"Meteorological watch office"
+],
+"MX": [
+"Mixed type of ice formation(white and clear)"
+],
+"N": [
+"North or northern latitude",
+"No distinct tendency(in RVR during previous 10 minutes)"
+],
+"NASC": [
+"National AIS system center"
+],
+"NAT": [
+"North Atlantic"
+],
+"NAV": [
+"Navigation"
+],
+"NB": [
+"Northbound"
+],
+"NBFR": [
+"Not before"
+],
+"NC": [
+"No change"
+],
+"NDB": [
+"Non-directional radio beacon"
+],
+"NE": [
+"North-east"
+],
+"NEB": [
+"North-east bound"
+],
+"NEG": [
+"No or negative or permission not granted or that is not correct"
+],
+"NGT": [
+"Night"
+],
+"NIL": [
+"None or I have nothing to send you"
+],
+"NM": [
+"Nautical miles"
+],
+"NML": [
+"Normal"
+],
+"NNE": [
+"North north east"
+],
+"NNW": [
+"North north west"
+],
+"NOF": [
+"International NOTAM office"
+],
+"NOSIG": [
+"No significant change (Used in trend-type landing forecasts)"
+],
+"NOTAM": [
+"A notice distributed by means of telecommunication containing information concerning the establishment, condition or change in any aeronautical facility, service, procedure or hazard, the timely knowledge of which is essential to personnel concerned with flight operations"
+],
+"NOV": [
+"November"
+],
+"NOZ": [
+"Normal operating zone"
+],
+"NR": [
+"Number"
+],
+"NRH": [
+"NO reply heard"
+],
+"NS": [
+"Nimbostratus"
+],
+"NSC": [
+"Nil significant cloud"
+],
+"NSW": [
+"Nil significant weather"
+],
+"NTL": [
+"National"
+],
+"NTZ": [
+"No transgression zone"
+],
+"NW": [
+"North west"
+],
+"NWB": [
+"North west bound"
+],
+"NXT": [
+"Next"
+],
+"O/R": [
+"On request"
+],
+"OAS": [
+"Obstacle assessment surface"
+],
+"OBS": [
+"Observe or observed or observation"
+],
+"OBSC": [
+"Obscure or obscured or obscuring"
+],
+"OBST": [
+"Obstacle"
+],
+"OCA": [
+"Obstacle clearance altitude"
+],
+"OCC": [
+"Occulting(light)"
+],
+"OCH": [
+"Obstacle clearance height"
+],
+"OCNL": [
+"Occasional or occasionally"
+],
+"OCS": [
+"Obstacle clearance surface"
+],
+"OCT": [
+"October"
+],
+"OFZ": [
+"Obstacle free zone"
+],
+"OHD": [
+"Overhead"
+],
+"OLDI": [
+"On-line data interchange"
+],
+"OM": [
+"Outer marker"
+],
+"OPA": [
+"Opaque, white type of ice formation"
+],
+"OPMET": [
+"Operational meteorological(information)"
+],
+"OPN": [
+"Open or opening or opened"
+],
+"OPR": [
+"Operater or operate or operative or operating or operational"
+],
+"OPS": [
+"Operations"
+],
+"OTLK": [
+"Outlook(used in SIGMET message for valcanic ash and tropical cyclones)"
+],
+"OTP": [
+"On top"
+],
+"OUBD": [
+"Outbound"
+],
+"OVC": [
+"Overcast"
+],
+"PALS": [
+"Precision approach lighting system(specify category)"
+],
+"PANS": [
+"Procedures for air navigation services"
+],
+"PAPI": [
+"Precision approach path indictor"
+],
+"PAR": [
+"Precisoin approach radar"
+],
+"PARL": [
+"Parallel"
+],
+"PAX": [
+"Passenger(s)"
+],
+"PBN": [
+"Performance-based navigation"
+],
+"PCD": [
+"Proceed or proceeding"
+],
+"PCL": [
+"Pilot-controlled lighting"
+],
+"PCN": [
+"Pavement classification number"
+],
+"PCR": [
+"Pavement classification rating"
+],
+"PDC": [
+"Pre-departure clearance"
+],
+"PDG": [
+"Procedure design gradient"
+],
+"PE": [
+"Ice pellets"
+],
+"PER": [
+"Performance"
+],
+"PERM": [
+"Permanent"
+],
+"PIB": [
+"Pre-flight information bulletin"
+],
+"PJE": [
+"Parachute jumping exercise"
+],
+"PL": [
+"Ice pellets"
+],
+"PLA": [
+"Practice low approach"
+],
+"PLN": [
+"Flight plan"
+],
+"PLVL": [
+"Present level"
+],
+"PN": [
+"Prior notice required"
+],
+"PNR": [
+"Point of no return"
+],
+"PO": [
+"Dust/sand whirls(dust devils)"
+],
+"POB": [
+"Persons on board"
+],
+"POSS": [
+"Possible"
+],
+"PPI": [
+"Plan position indicator"
+],
+"PPR": [
+"Prior permission required"
+],
+"PPSN": [
+"Present position"
+],
+"PRFG": [
+"Aerodrome partially covered by fog"
+],
+"PRI": [
+"Primary"
+],
+"PRKG": [
+"Parking"
+],
+"PROB": [
+"Probability"
+],
+"PROC": [
+"Procedure"
+],
+"PROV": [
+"Provisional"
+],
+"PS": [
+"Plus"
+],
+"PSG": [
+"Passing"
+],
+"PSN": [
+"Position"
+],
+"PSP": [
+"Pierced steel plank"
+],
+"PSR": [
+"Primary surveillance radar"
+],
+"PSYS": [
+"Pressure system(s)"
+],
+"PTN": [
+"Procedure turn"
+],
+"PTS": [
+"Polar track structure"
+],
+"PWR": [
+"Power"
+],
+"QDM": [
+"Magnetic heading(zero wind)"
+],
+"QDR": [
+"Magnetic bearing"
+],
+"QFE": [
+"atmospheric pressure at aerodrome elevation(or at runway threshold)"
+],
+"QFU": [
+"Magnetic orientation of runway"
+],
+"QNH": [
+"Altimeter sub-scale setting to obtain elevation when on the ground"
+],
+"QTE": [
+"True bearing"
+],
+"QUAD": [
+"Quadrant"
+],
+"R": [
+"Red"
+],
+"RA": [
+"Rain"
+],
+"RAC": [
+"Rules of the air and air traffic services"
+],
+"RAFC": [
+"Regional area forecast center"
+],
+"RAG": [
+"Runway arresting gear"
+],
+"RAI": [
+"Runway alignment indicator"
+],
+"RAIM": [
+"Receiver autonomous integrity monitoring"
+],
+"RASC": [
+"Regional AIS system center"
+],
+"RB": [
+"Rescue boat"
+],
+"RCA": [
+"Reach cruising altitude"
+],
+"RCAM": [
+"Runway condition assessment matrix"
+],
+"RCC": [
+"Rescue coordination center"
+],
+"RCF": [
+"Radiocommunication failure(message type designator)"
+],
+"RCH": [
+"Reach or reaching"
+],
+"RCL": [
+"Runway center line"
+],
+"RCLL": [
+"Runway center line light(s)"
+],
+"RCLR": [
+"Recleared"
+],
+"RCR": [
+"Runway condition report"
+],
+"RDH": [
+"Reference datum height"
+],
+"RDL": [
+"Radial"
+],
+"RDO": [
+"Radio"
+],
+"REC": [
+"Receive or receiver"
+],
+"REDL": [
+"Runway edge light(s)"
+],
+"REF": [
+"Reference to...or refer to"
+],
+"REG": [
+"Registration"
+],
+"RENL": [
+"Runway end light(s)"
+],
+"REP": [
+"Report or reporting or reporting point"
+],
+"REQ": [
+"Request or requested"
+],
+"RERTE": [
+"Re-route"
+],
+"RESA": [
+"Runway end safety area"
+],
+"RG": [
+"Range(lights)"
+],
+"RHC": [
+"Right-hand circuit"
+],
+"RIF": [
+"Reclearance in flight"
+],
+"RITE": [
+"Right(direction of turn)"
+],
+"RL": [
+"Report leaving"
+],
+"RLA": [
+"Relay to"
+],
+"RLCE": [
+"Request level change en-route"
+],
+"RLLS": [
+"Runway lead-in lighting system"
+],
+"RLNA": [
+"Request level not available"
+],
+"RMK": [
+"Remark"
+],
+"RNAV": [
+"Area navigation"
+],
+"RNG": [
+"Radio range"
+],
+"RNP": [
+"Required navigation performance"
+],
+"ROBEX": [
+"Regional OPMET bulletin exchange (scheme)"
+],
+"ROC": [
+"Rate of climb"
+],
+"ROD": [
+"Rate of descent"
+],
+"ROFOR": [
+"Route forecast(in meteorological code)"
+],
+"RON": [
+"Receiving only"
+],
+"RPI": [
+"Radar position indicator"
+],
+"RPL": [
+"Repetitive flight plan"
+],
+"RPLC": [
+"Replace or replaced"
+],
+"RPS": [
+"Radar positon symbol"
+],
+"RQMNTS": [
+"Requirements"
+],
+"RQP": [
+"Request flight plan(message type designator)"
+],
+"RQS": [
+"Request supplementary flight plan(message type designator)"
+],
+"RR": [
+"Report reaching"
+],
+"RRA": [
+"Delayed meteorological message (message type designator)"
+],
+"RSCD": [
+"Runway surface condition"
+],
+"RSP": [
+"Responder beacon"
+],
+"RSR": [
+"En-route surveillance radar"
+],
+"RTD": [
+"Delayed(used to indicate delayed meteorological message : message type designator)"
+],
+"RTE": [
+"Route"
+],
+"RTF": [
+"Radiotelephone"
+],
+"RTG": [
+"Radiotelegraph"
+],
+"RTHL": [
+"Runway threshold light(s)"
+],
+"RTN": [
+"Return or returned or returning"
+],
+"RTODAH": [
+"Rejected take-off distance available, helicopter"
+],
+"RTS": [
+"Return to service"
+],
+"RTT": [
+"Radioteletypewriter"
+],
+"RTZL": [
+"Runway touchdown zone light(s)"
+],
+"RUT": [
+"Standard regional route transmitting frequencies"
+],
+"RV": [
+"Rescue vessel"
+],
+"RVR": [
+"Runway visual range"
+],
+"RVSM": [
+"Reduced vertical seperation minimum(300 m(1 000 ft) between FL290 and FL410)"
+],
+"RWY": [
+"Runway"
+],
+"RWYCC": [
+"Runway condition code"
+],
+"RX": [
+"Receiver"
+],
+"S": [
+"South or Southern latitude"
+],
+"SA": [
+"Sand"
+],
+"SALS": [
+"Simple approach lighting system"
+],
+"SAN": [
+"Sanitary"
+],
+"SAP": [
+"As soon as possible"
+],
+"SAR": [
+"Search and rescue"
+],
+"SARPS": [
+"Standards and Recommended Practices(ICAO)"
+],
+"SAT": [
+"Saturday"
+],
+"SATCOM": [
+"Satellite communication"
+],
+"SB": [
+"Southbound"
+],
+"SBAS": [
+"Satellite-based augmentation system"
+],
+"SC": [
+"Stratocumulus"
+],
+"SCT": [
+"Scattered"
+],
+"SDBY": [
+"Stand by"
+],
+"SDF": [
+"Step down Fix"
+],
+"SE": [
+"South-east"
+],
+"SEB": [
+"South-east bound"
+],
+"SEC": [
+"Seconds"
+],
+"SECT": [
+"Sector"
+],
+"SELCAL": [
+"Selective calling system"
+],
+"SEP": [
+"September"
+],
+"SER": [
+"Service or servicing or served"
+],
+"SEV": [
+"Severe(used e.g. to qualify icing and turbulence reports)"
+],
+"SFC": [
+"Surface"
+],
+"SG": [
+"Snow grains"
+],
+"SGL": [
+"Signal"
+],
+"SHF": [
+"Super high frequency(3 000 to 30 000 MHz)"
+],
+"SID": [
+"Standard instrument departure"
+],
+"SIF": [
+"Selective identification feature"
+],
+"SIG": [
+"Significant"
+],
+"SIGMET": [
+"Information concerning en-route weather phenomena which may affect the safety of aircraft operation"
+],
+"SIGWX": [
+"Significant weather"
+],
+"SIMUL": [
+"Simultaneous or simultaneously"
+],
+"SIWL": [
+"Single isolated wheel load"
+],
+"SKC": [
+"Sky clear"
+],
+"SKED": [
+"Schedule or scheduled"
+],
+"SLP": [
+"Speed limiting point"
+],
+"SLW": [
+"Slow"
+],
+"SMC": [
+"Surface movement control"
+],
+"SMR": [
+"Surface movement radar"
+],
+"SN": [
+"Snow"
+],
+"SNOWTAM": [
+"Special series NOTAM notifying the presence or removal of hazardous conditions due to snow, ice, slush or standing water associated with snow, slush and ice on the movement area, by means of a specific format"
+],
+"SPECI": [
+"Aerodrome special meteorological report(in meteorological code)"
+],
+"SPECIAL": [
+"Special meteorological report(in abbreviated plan language)"
+],
+"SPL": [
+"Supplementary flight plan(message type designator)"
+],
+"SPOC": [
+"SAR point of contact"
+],
+"SQ": [
+"Squall"
+],
+"SQL": [
+"Squall line"
+],
+"SR": [
+"Sunrise"
+],
+"SRA": [
+"Surveillance radar approach"
+],
+"SRE": [
+"Surveillance radar element of precision approach radar system"
+],
+"SRG": [
+"Short range"
+],
+"SRR": [
+"Search and rescue region"
+],
+"SRY": [
+"Secondary"
+],
+"SS": [
+"Sunset",
+"Sandstorm"
+],
+"SSB": [
+"Single sideband"
+],
+"SSE": [
+"South south east"
+],
+"SSR": [
+"Secondary surveillance radar"
+],
+"SST": [
+"supersonic transport"
+],
+"SSW": [
+"South south west"
+],
+"ST": [
+"Stratus"
+],
+"STA": [
+"Straight in approach"
+],
+"STAR": [
+"Standard instrument arrival"
+],
+"STD": [
+"Standard"
+],
+"STF": [
+"Stratiform"
+],
+"STN": [
+"Station"
+],
+"STNR": [
+"Stationary"
+],
+"STOL": [
+"Short take-off and landing"
+],
+"STS": [
+"Status"
+],
+"STWL": [
+"Stopway light(S)"
+],
+"SUBJ": [
+"Subject to"
+],
+"SUN": [
+"Sunday"
+],
+"SUP": [
+"Supplement(AIP Supplement)"
+],
+"SUPPS": [
+"Regional supplementary procedure"
+],
+"SVC": [
+"Service message"
+],
+"SVCBL": [
+"Serviceable"
+],
+"SW": [
+"South-west",
+"South-westbound"
+],
+"SWY": [
+"Stopway"
+],
+"T": [
+"Temperature"
+],
+"T-VASIS": [
+"T visual approach slope indicator system"
+],
+"TA": [
+"Transition altitude"
+],
+"TACAN": [
+"UHF tactical air navigation aid"
+],
+"TAF": [
+"Aerodrome forecast(in meteorological code)"
+],
+"TAIL": [
+"Tail wind"
+],
+"TAR": [
+"Terminal area surveillance radar"
+],
+"TAS": [
+"True airspeed"
+],
+"TAX": [
+"Taxiing or taxi"
+],
+"TC": [
+"Tropical cyclone"
+],
+"TCH": [
+"Threshold crossing height"
+],
+"TCU": [
+"Towering cumulus"
+],
+"TDO": [
+"Tornado"
+],
+"TDZ": [
+"Touchdown zone"
+],
+"TECR": [
+"Technical reason"
+],
+"TEL": [
+"Telephone"
+],
+"TEMPO": [
+"Temporary or temporarily"
+],
+"TEND": [
+"Trend forecast"
+],
+"TFC": [
+"Traffic"
+],
+"TGL": [
+"Touch-and-go landing"
+],
+"TGS": [
+"Taxiing guidance system"
+],
+"THR": [
+"Threshold"
+],
+"THRU": [
+"Through"
+],
+"THU": [
+"Thursday"
+],
+"TIBA": [
+"Traffic information broadcast by aircraft"
+],
+"TIL": [
+"Until"
+],
+"TIP": [
+"Until past...(place)"
+],
+"TKOF": [
+"Take off"
+],
+"TLOF": [
+"Touchdown and lift-off area"
+],
+"TMA": [
+"Terminal control area"
+],
+"TNA": [
+"Turn altitude"
+],
+"TNH": [
+"Turn height"
+],
+"TO": [
+"To...(place)"
+],
+"TOC": [
+"Top of climb"
+],
+"TODA": [
+"Take-off distance available"
+],
+"TODAH": [
+"Take-off distance available, helicopter"
+],
+"TOP": [
+"Cloud top"
+],
+"TORA": [
+"Take-off run available"
+],
+"TP": [
+"Turning point"
+],
+"TR": [
+"Track"
+],
+"TRA": [
+"Temporary reserved airspace"
+],
+"TRANS": [
+"Transmits or transmitter"
+],
+"TRL": [
+"Transition level"
+],
+"TROP": [
+"Tropopause"
+],
+"TS": [
+"Thunderstorm (in aerodrome reports and forecasts, TS used alone means thunder heard but no precipitation as the aerodrome)"
+],
+"TT": [
+"Teletypewriter"
+],
+"TUE": [
+"Tuesday"
+],
+"TURB": [
+"Turbulence"
+],
+"TVOR": [
+"Terminal VOR"
+],
+"TWR": [
+"Aerodrome control tower or aerodrome control"
+],
+"TWY": [
+"Taxiway"
+],
+"TWYL": [
+"Taxiway-link"
+],
+"TX": [
+"Transmitter"
+],
+"TXL": [
+"Taxilane"
+],
+"TYP": [
+"Type of aircraft"
+],
+"TYPH": [
+"Typhoon"
+],
+"U": [
+"Upward(tendency in RVR during previous 10 minutes)"
+],
+"U/S": [
+"Unserviceable"
+],
+"UAB": [
+"Until advised by"
+],
+"UAC": [
+"Upper area control center"
+],
+"UAR": [
+"Upper air route"
+],
+"UDF": [
+"Ultra high frequency direction-finding station"
+],
+"UFN": [
+"Until further notice"
+],
+"UHDT": [
+"Unable higher due traffic"
+],
+"UHF": [
+"Ultra high frequency(300 to 3 000 MHz)"
+],
+"UIC": [
+"Upper information centre"
+],
+"UIR": [
+"Upper fight information region"
+],
+"ULR": [
+"Ultra long range"
+],
+"UNA": [
+"Unable"
+],
+"UNAP": [
+"Unable to approve"
+],
+"UNL": [
+"Unlimited"
+],
+"UNREL": [
+"Unreliable"
+],
+"UTA": [
+"Upper control area"
+],
+"UTC": [
+"Co-ordinated universal time"
+],
+"VA": [
+"Volcanic ash"
+],
+"VAC": [
+"Visual approach chart(followed by name/title)"
+],
+"VAL": [
+"In valleys",
+"Visual approach and landing chart"
+],
+"VAN": [
+"Runway control van"
+],
+"VAR": [
+"Magnetic variation",
+"Visual-aural radio range"
+],
+"VASIS": [
+"Visual approach slope indicator system"
+],
+"VC": [
+"Vicinity of the aerodrome(followed by, FG =fog, FC =funnel cloud, SH = shower, PO = dust/sand whirls, BLDU = blowing dust, BLSA = blowing sand, BLSN = blowing snow, DS = duststorm, SS = sandstorm, TS = thunderstorm or VA = volcanic ash, e.g. VCFG = vicinity fog)"
+],
+"VCY": [
+"Vicinity"
+],
+"VDF": [
+"Very high frequency direction-finding station"
+],
+"VER": [
+"Vertical"
+],
+"VFR": [
+"Visual flight rules"
+],
+"VHF": [
+"Very high frequency(30 to 300 MHz)"
+],
+"VIP": [
+"Very important person"
+],
+"VIS": [
+"Visibility"
+],
+"VLF": [
+"Very low frequency(3 to 30 kHz)"
+],
+"VLR": [
+"Very long range"
+],
+"VMC": [
+"Visual meteorological conditions"
+],
+"VOLMET": [
+"Meteorological information for aircraft in flight"
+],
+"VOR": [
+"VHF omnidirectional radio range"
+],
+"VORTAC": [
+"VOR and TACAN combination"
+],
+"VOT": [
+"Vor airborne equipment test facility"
+],
+"VPA": [
+"Vertical path angle"
+],
+"VRB": [
+"Variable"
+],
+"VSA": [
+"By visual reference to the ground"
+],
+"VSP": [
+"Vertical speed"
+],
+"VTOL": [
+"Vertical take-off and landing"
+],
+"W": [
+"West or western longitude",
+"White"
+],
+"WAC": [
+"World Aeronautical Chart ICAO-1:1,000,000(followed by name/title)"
+],
+"WAFC": [
+"World area forecast center"
+],
+"WB": [
+"Westbound"
+],
+"WBAR": [
+"Wing bar lights"
+],
+"WDI": [
+"Wind direction indicator"
+],
+"WDSPR": [
+"Widespread"
+],
+"WED": [
+"Wednesday"
+],
+"WEF": [
+"With effect from or effective from"
+],
+"WGS-84": [
+"World Geodetic System - 1984"
+],
+"WI": [
+"Within"
+],
+"WID": [
+"Width"
+],
+"WIE": [
+"With immediate effect or effective immediately"
+],
+"WILCO": [
+"Will comply"
+],
+"WIND": [
+"Wind"
+],
+"WINTEM": [
+"Forecast upper wind and temperature for aviation"
+],
+"WIP": [
+"Work in progress"
+],
+"WKN": [
+"Weaken or weakening"
+],
+"WNW": [
+"West north west"
+],
+"WO": [
+"Without"
+],
+"WPT": [
+"Way-point"
+],
+"WRNG": [
+"Warning"
+],
+"WS": [
+"Wind shear"
+],
+"WSPD": [
+"Wind speed"
+],
+"WSW": [
+"West south west"
+],
+"WT": [
+"Weight"
+],
+"WTSPT": [
+"Waterspout"
+],
+"WWW": [
+"World wide web"
+],
+"WX": [
+"Weather"
+],
+"X": [
+"Cross"
+],
+"XBAR": [
+"Crossbar(of approach lighting system)"
+],
+"XNG": [
+"Crossing"
+],
+"XS": [
+"Atmospherics"
+],
+"Y": [
+"Yellow"
+],
+"YCZ": [
+"Yellow caution zone(runway lighting)"
+],
+"YR": [
+"Your"
+],
+"Z": [
+"Coordinated Universal Time(in meteorological message)"
+]
+}
+},
+"english": {
+"also_contractions": [
+"abbr",
+"acct",
+"aces",
+"acid",
+"admin",
+"ails",
+"arts",
+"assoc",
+"asst",
+"auto",
+"base",
+"bldg",
+"bomb",
+"brag",
+"bran",
+"caws",
+"chap",
+"comb",
+"cons",
+"cont",
+"contrails",
+"dept",
+"disc",
+"dolly",
+"dupe",
+"equip",
+"exam",
+"exec",
+"flip",
+"front",
+"gals",
+"govt",
+"grad",
+"grass",
+"grid",
+"hang",
+"hazmat",
+"head",
+"info",
+"inter",
+"labs",
+"long",
+"maps",
+"metro",
+"mint",
+"misc",
+"mops",
+"natl",
+"nomad",
+"pals",
+"pans",
+"parrot",
+"pent",
+"perm",
+"poss",
+"pres",
+"prim",
+"prop",
+"quad",
+"race",
+"radar",
+"radon",
+"rail",
+"rash",
+"reform",
+"regal",
+"resp",
+"rhino",
+"rime",
+"rite",
+"scan",
+"scat",
+"sect",
+"shorn",
+"soap",
+"span",
+"spec",
+"special",
+"spot",
+"star",
+"state",
+"subj",
+"swap",
+"tail",
+"taper",
+"tars",
+"telex",
+"temp",
+"tempo",
+"tend",
+"thru",
+"tips",
+"trans",
+"trend",
+"trust",
+"wind"
+],
+"also_names": [
+"acts",
+"advent",
+"advents",
+"afghan",
+"afghans",
+"aids",
+"aline",
+"almighty",
+"alpine",
+"amazon",
+"amazons",
+"amber",
+"ampere",
+"anchorage",
+"android",
+"angel",
+"angora",
+"angoras",
+"antarctic",
+"apple",
+"arctic",
+"ares",
+"armour",
+"aspen",
+"astrakhan",
+"atlas",
+"atlases",
+"atria",
+"attic",
+"auburn",
+"august",
+"autumn",
+"awol",
+"babel",
+"babels",
+"bacon",
+"badlands",
+"baker",
+"balder",
+"ball",
+"banks",
+"bannister",
+"baptist",
+"baptists",
+"barber",
+"barker",
+"barney",
+"basic",
+"basics",
+"basil",
+"bass",
+"bates",
+"battle",
+"beach",
+"bean",
+"beard",
+"beau",
+"beck",
+"begin",
+"bell",
+"bellow",
+"bend",
+"bender",
+"berg",
+"berry",
+"beryl",
+"best",
+"bible",
+"bibles",
+"biblical",
+"bill",
+"billings",
+"billy",
+"bird",
+"bishop",
+"black",
+"blacks",
+"blockbuster",
+"bloom",
+"bloomer",
+"blvd",
+"boas",
+"bobby",
+"bohemian",
+"bohemians",
+"bologna",
+"bond",
+"bonnie",
+"booth",
+"born",
+"boulder",
+"bourbon",
+"bowers",
+"bowman",
+"brad",
+"braille",
+"brain",
+"bran",
+"branch",
+"brandy",
+"bray",
+"brewer",
+"bridges",
+"bright",
+"brontosaurus",
+"brooks",
+"brown",
+"brownie",
+"brownies",
+"browning",
+"buck",
+"buddy",
+"buffalo",
+"bullock",
+"bunker",
+"burger",
+"burns",
+"burr",
+"bush",
+"butler",
+"butterfingers",
+"cabinet",
+"caesarean",
+"cage",
+"calliope",
+"camel",
+"canaries",
+"cancer",
+"cancers",
+"candy",
+"cannon",
+"canon",
+"canton",
+"cantor",
+"capitol",
+"capitols",
+"carmine",
+"carnation",
+"carol",
+"carpenter",
+"carrier",
+"carver",
+"cascades",
+"case",
+"cash",
+"castor",
+"caterpillar",
+"catholic",
+"cayenne",
+"centigrade",
+"cesarean",
+"chad",
+"challenger",
+"chamberlain",
+"chambers",
+"chance",
+"chandler",
+"charity",
+"chase",
+"cheddar",
+"cheer",
+"cherry",
+"chevron",
+"chile",
+"chimera",
+"china",
+"chuck",
+"church",
+"clay",
+"clement",
+"cliff",
+"closure",
+"cockney",
+"cognac",
+"coke",
+"cokes",
+"cola",
+"colleen",
+"collier",
+"cologne",
+"colon",
+"colonial",
+"colt",
+"columbine",
+"combs",
+"commons",
+"commonwealth",
+"communion",
+"communions",
+"communism",
+"communist",
+"communists",
+"concord",
+"confederacy",
+"confederate",
+"confederates",
+"congress",
+"congresses",
+"constable",
+"constitution",
+"continent",
+"continental",
+"cook",
+"cooper",
+"corning",
+"corp",
+"cote",
+"cotton",
+"coward",
+"craft",
+"crane",
+"crater",
+"cray",
+"crayola",
+"creation",
+"creator",
+"creek",
+"creole",
+"creoles",
+"crest",
+"crick",
+"cross",
+"cruise",
+"crusades",
+"crux",
+"crystal",
+"cupid",
+"curie",
+"curry",
+"curt",
+"daisy",
+"dale",
+"dalmatian",
+"dalmatians",
+"dare",
+"darling",
+"davenport",
+"dawn",
+"dean",
+"debs",
+"deity",
+"delicious",
+"dell",
+"delta",
+"democrat",
+"democratic",
+"democrats",
+"derby",
+"derrick",
+"dial",
+"dick",
+"diesel",
+"dipper",
+"dirk",
+"doctor",
+"dodge",
+"dole",
+"dolly",
+"downs",
+"downy",
+"draconian",
+"drake",
+"drew",
+"drudge",
+"druid",
+"duke",
+"dumpster",
+"dusty",
+"dyer",
+"earl",
+"earnest",
+"earth",
+"east",
+"eastern",
+"easterner",
+"ebony",
+"eddy",
+"emery",
+"enterprise",
+"epicurean",
+"episcopal",
+"establishment",
+"ester",
+"everglades",
+"exodus",
+"faith",
+"fanny",
+"farmer",
+"farrow",
+"fascism",
+"fates",
+"father",
+"fathers",
+"federalist",
+"feds",
+"felicity",
+"fern",
+"fiat",
+"fielding",
+"fields",
+"finch",
+"fisher",
+"flagstaff",
+"flint",
+"flora",
+"flowers",
+"ford",
+"foreman",
+"forest",
+"forester",
+"foster",
+"frank",
+"frankfurter",
+"franks",
+"freeman",
+"french",
+"frost",
+"fuller",
+"gable",
+"gage",
+"gale",
+"gall",
+"gamble",
+"gantry",
+"garland",
+"garner",
+"garrison",
+"gates",
+"gene",
+"genesis",
+"gentile",
+"gentiles",
+"gentry",
+"gibbon",
+"gill",
+"ginger",
+"gipsies",
+"gipsy",
+"glass",
+"glen",
+"golden",
+"goldsmith",
+"good",
+"goodwill",
+"google",
+"gopher",
+"gore",
+"gospel",
+"gospels",
+"grace",
+"grail",
+"grant",
+"grass",
+"graves",
+"gray",
+"green",
+"grey",
+"griffin",
+"grimes",
+"gross",
+"guinea",
+"gypsies",
+"gypsy",
+"hale",
+"hall",
+"hallmark",
+"halon",
+"hamlet",
+"handy",
+"hank",
+"hardy",
+"harlequin",
+"harry",
+"hart",
+"hawking",
+"hays",
+"hazel",
+"head",
+"heath",
+"heather",
+"hector",
+"hell",
+"herder",
+"hermitage",
+"herring",
+"hertz",
+"hickory",
+"hicks",
+"highness",
+"hill",
+"hiss",
+"hogan",
+"holder",
+"holiday",
+"holly",
+"holocaust",
+"homer",
+"hood",
+"hooker",
+"hooters",
+"hope",
+"hopper",
+"horn",
+"house",
+"huff",
+"hull",
+"hung",
+"hunt",
+"hunter",
+"hydra",
+"hymen",
+"independence",
+"innocent",
+"inquisition",
+"intel",
+"internet",
+"iris",
+"ivory",
+"jack",
+"jaguar",
+"japan",
+"jarred",
+"jasmine",
+"jasper",
+"jeep",
+"jersey",
+"jerseys",
+"jewel",
+"jimmy",
+"jobs",
+"jock",
+"jockey",
+"john",
+"johns",
+"josh",
+"joule",
+"juggernaut",
+"junior",
+"juniors",
+"justice",
+"khan",
+"king",
+"kitty",
+"knight",
+"lacy",
+"lamb",
+"lance",
+"land",
+"lane",
+"lassie",
+"laud",
+"laundromat",
+"laurel",
+"leach",
+"lean",
+"leeward",
+"left",
+"lent",
+"leviathan",
+"levy",
+"liege",
+"lily",
+"little",
+"loafer",
+"loafers",
+"lodge",
+"long",
+"lord",
+"lords",
+"louvre",
+"love",
+"lupus",
+"lynch",
+"mace",
+"macintosh",
+"mackinaw",
+"madden",
+"madras",
+"mailer",
+"major",
+"male",
+"mammon",
+"mandarin",
+"manning",
+"mantle",
+"marathon",
+"march",
+"marches",
+"margarita",
+"maria",
+"marina",
+"marine",
+"marines",
+"mark",
+"marks",
+"marlin",
+"marquis",
+"mars",
+"marsh",
+"martial",
+"martian",
+"martians",
+"martin",
+"mason",
+"masonic",
+"masons",
+"mass",
+"masses",
+"masters",
+"matt",
+"mayflower",
+"mayo",
+"mead",
+"meadows",
+"mecca",
+"meccas",
+"media",
+"melody",
+"mercury",
+"merino",
+"mesa",
+"messiah",
+"messiahs",
+"mickey",
+"midland",
+"midway",
+"mike",
+"miles",
+"mill",
+"miller",
+"millet",
+"mills",
+"milquetoast",
+"mimosa",
+"miss",
+"mister",
+"misty",
+"mobile",
+"moll",
+"monk",
+"moody",
+"moon",
+"moor",
+"moors",
+"more",
+"morocco",
+"morrow",
+"mosaic",
+"moss",
+"mount",
+"munch",
+"muscat",
+"muse",
+"myrtle",
+"narcissus",
+"nation",
+"nationwide",
+"nautilus",
+"nemesis",
+"nestle",
+"news",
+"newton",
+"nice",
+"nick",
+"nickelodeon",
+"nightingale",
+"nirvana",
+"noble",
+"noel",
+"noels",
+"normal",
+"north",
+"northeast",
+"northerner",
+"northwest",
+"nova",
+"numbers",
+"occidental",
+"occidentals",
+"odyssey",
+"olive",
+"onion",
+"opal",
+"oracle",
+"orange",
+"orient",
+"oriental",
+"orientals",
+"ottoman",
+"oxford",
+"oxfords",
+"pace",
+"pacific",
+"page",
+"palisades",
+"pampers",
+"pansy",
+"pantheon",
+"paradise",
+"paramount",
+"park",
+"parks",
+"parliament",
+"parsons",
+"passion",
+"passions",
+"pate",
+"patsy",
+"patty",
+"peace",
+"pearl",
+"peck",
+"peel",
+"penny",
+"pentagon",
+"perm",
+"peter",
+"peters",
+"petty",
+"pharaoh",
+"pharaohs",
+"philistine",
+"phoebe",
+"phoenix",
+"pierce",
+"pigmies",
+"pigmy",
+"pike",
+"pilgrim",
+"pippin",
+"platonic",
+"playboy",
+"pole",
+"poles",
+"polish",
+"polo",
+"pompadour",
+"pooh",
+"pope",
+"porter",
+"post",
+"potter",
+"pound",
+"powers",
+"pres",
+"president",
+"presidents",
+"price",
+"prince",
+"prof",
+"prohibition",
+"protestant",
+"protestants",
+"proverbs",
+"providence",
+"prudence",
+"prudential",
+"psalms",
+"psyche",
+"puck",
+"pueblo",
+"punch",
+"puritan",
+"puritanism",
+"pygmies",
+"pygmy",
+"python",
+"queen",
+"queens",
+"quisling",
+"raffles",
+"rainier",
+"rams",
+"randy",
+"rather",
+"ravel",
+"reading",
+"realtor",
+"reed",
+"reeves",
+"renaissance",
+"renaissances",
+"representative",
+"republican",
+"republicans",
+"resurrection",
+"reunion",
+"revelations",
+"revere",
+"reverend",
+"rhea",
+"rice",
+"rich",
+"rick",
+"riddle",
+"ride",
+"rivers",
+"riverside",
+"roach",
+"robin",
+"rock",
+"rocky",
+"roentgen",
+"roger",
+"rogers",
+"roman",
+"romanticism",
+"root",
+"rose",
+"rosemary",
+"rove",
+"rover",
+"royal",
+"ruby",
+"rush",
+"rusty",
+"sabre",
+"saki",
+"salamis",
+"sally",
+"salt",
+"sand",
+"sanders",
+"sandy",
+"sang",
+"satanism",
+"savage",
+"savannah",
+"savior",
+"sawyer",
+"schnauzer",
+"scopes",
+"scotch",
+"scotches",
+"scout",
+"scrabble",
+"scripture",
+"scriptures",
+"scrooge",
+"scud",
+"sears",
+"seaside",
+"secretariat",
+"secretary",
+"sellers",
+"senate",
+"senates",
+"senator",
+"senior",
+"sexton",
+"shanghai",
+"shantung",
+"sharp",
+"shell",
+"shepherd",
+"sherry",
+"shields",
+"short",
+"shorthorn",
+"sibyl",
+"sims",
+"singer",
+"singleton",
+"sister",
+"sisters",
+"slinky",
+"small",
+"smith",
+"smuts",
+"snake",
+"snickers",
+"snider",
+"snoopy",
+"snow",
+"sonny",
+"south",
+"southeast",
+"southerner",
+"southerners",
+"southwest",
+"soviet",
+"spam",
+"sparks",
+"spartan",
+"spears",
+"sphinx",
+"sprint",
+"sprite",
+"staples",
+"stark",
+"stein",
+"sterling",
+"stern",
+"stoic",
+"stoicism",
+"stokes",
+"stone",
+"stout",
+"strong",
+"summer",
+"summers",
+"sunbeam",
+"sung",
+"suns",
+"superior",
+"superman",
+"swat",
+"sweet",
+"swift",
+"tanner",
+"target",
+"tarp",
+"tartar",
+"tartars",
+"teletype",
+"tell",
+"teller",
+"telnet",
+"temple",
+"terry",
+"tertiary",
+"thanksgiving",
+"thanksgivings",
+"thatcher",
+"theosophy",
+"thermos",
+"thespian",
+"thoroughbred",
+"tide",
+"ting",
+"titan",
+"titanic",
+"tony",
+"treasuries",
+"treasury",
+"trident",
+"trinities",
+"trinity",
+"troy",
+"trump",
+"truth",
+"tucker",
+"turkey",
+"turner",
+"tutu",
+"twain",
+"tweed",
+"twitter",
+"tyre",
+"union",
+"unions",
+"urban",
+"utopia",
+"utopian",
+"utopians",
+"utopias",
+"valentine",
+"vandal",
+"victor",
+"villa",
+"villas",
+"viola",
+"violet",
+"visa",
+"vogue",
+"voyager",
+"wade",
+"wake",
+"waldo",
+"wales",
+"walker",
+"wall",
+"walls",
+"ward",
+"ware",
+"warren",
+"wash",
+"wasp",
+"waters",
+"watt",
+"watts",
+"weaver",
+"weeks",
+"welch",
+"wellington",
+"wells",
+"welsh",
+"west",
+"western",
+"westerner",
+"westerns",
+"wheeler",
+"wheeling",
+"whirlpool",
+"whistler",
+"white",
+"whites",
+"wilder",
+"wiles",
+"will",
+"windbreaker",
+"windows",
+"windward",
+"winters",
+"wise",
+"wolf",
+"wonder",
+"wood",
+"woodland",
+"woods",
+"workman",
+"worms",
+"wren",
+"wright",
+"yahoo",
+"yank",
+"yanks",
+"young",
+"yule",
+"yuletide",
+"zens",
+"zeppelin",
+"zest",
+"zipper",
+"zippers"
+],
+"lists": [
+[
+"wamerican 2020.12.07-4",
+"https://deb.debian.org/debian/pool/main/s/scowl/wamerican_2020.12.07-4_all.deb"
+],
+[
+"wbritish 2020.12.07-4",
+"https://deb.debian.org/debian/pool/main/s/scowl/wbritish_2020.12.07-4_all.deb"
+]
+],
+"words": 65407
+},
+"faa_aip": {
+"A/C": "approach control",
+"AAM": "Advanced Air Mobility",
+"AAS": "airport advisory service",
+"ACFT": "aircraft",
+"ACR": "air carrier",
+"ADF": "automatic direction finder",
+"AER": "approach end runway",
+"AFIS": "Automatic Flight Information Service",
+"AFT": "after",
+"AGL": "above ground level",
+"AHRS": "Attitude Heading Reference System",
+"AIM": "Aeronautical Information Manual",
+"AIS": "Aeronautical Information Services",
+"ALS": "approach light system",
+"ALSTG": "altimeter setting",
+"ALT": "altitude",
+"ALTM": "altimeter",
+"ALTN": "alternate",
+"AMDT": "amendment",
+"APCH": "approach",
+"APCHG": "approaching",
+"APRX": "approximate",
+"APV": "approve or approved or approval",
+"ARAC": "Army Radar Approach Control facility (US Army)",
+"ARPT": "airport",
+"ARR": "arrive or arrival",
+"ARSR": "air route surveillance radar",
+"ARTCC": "air route traffic control center",
+"ASDE": "airport surface detection equipment",
+"ASPH": "asphalt",
+"ASR": "airport surveillance radar",
+"ASSC": "Airport Surface Surveillance Capability",
+"ATCT": "air traffic control tower",
+"ATD": "along-track distance",
+"ATIS": "automatic terminal information service",
+"ATO": "Air Traffic Organization",
+"AVBL": "available",
+"AWY": "airway",
+"BC": "back course",
+"BCN": "beacon",
+"BCST": "broadcast",
+"BLDG": "building",
+"BRG": "bearing",
+"BTN": "between",
+"BVLOS": "Beyond Visual Line of Sight",
+"BYD": "beyond",
+"CAT": "category",
+"CBO": "Community-Based Organization",
+"CFR": "Code of Federal Regulations",
+"CLNC": "clearance",
+"CLSD": "close or closed or closing",
+"CMSND": "commissioned",
+"CNTR": "center",
+"CNTRLN": "centerline",
+"COA": "Certificate of Waiver or Authorization",
+"COMLO": "compass locator",
+"CONST": "construction",
+"CPTY": "capacity",
+"CRS": "course",
+"CTC": "contact",
+"DALGT": "daylight",
+"DCMSND": "decommissioned",
+"DDT": "runway weight bearing capacity for aircraft with double dual-tandem type landing gear",
+"DEGS": "degrees",
+"DEP": "depart; departure",
+"DF": "direction finder",
+"DH": "decision height",
+"DME": "UHF standard (TACAN compatible distance measuring equipment)",
+"DSPLCD": "displaced",
+"DSTC": "distance",
+"DT": "runway weight bearing capacity for aircraft with dual-tandem type landing gear",
+"DURG": "during",
+"DVFR": "defense visual flight rule",
+"DW": "runway weight bearing capacity for aircraft with dual-wheel type landing gear",
+"EQUIP": "equipment",
+"ETA": "estimated time of arrival",
+"ETE": "estimated time en route",
+"EXCP": "except",
+"EXTD": "extend or extended",
+"FAF": "final approach fix",
+"FAR": "Federal Aviation Regulation",
+"FDC": "flight data center",
+"FL": "flight level",
+"FL/P": "flight information (permanent)",
+"FL/T": "flight information (temporary)",
+"FM": "fan marker",
+"FREQ": "frequency",
+"FRIA": "FAA-Recognized Identification Area",
+"FRQ": "frequent",
+"FSS": "Flight Service Station",
+"FT": "feet",
+"GOVT": "government",
+"GP": "glide path",
+"GS": "glide slope",
+"GWT": "gross weight",
+"HAA": "height above airport",
+"HAT": "height above touchdown",
+"HAZMAT": "Hazardous Material",
+"HIRL": "High intensity runway lights",
+"HOL": "holiday",
+"HWY": "highway",
+"IAF": "initial approach fix",
+"IAP": "instrument approach procedure",
+"IDENT": "identification",
+"IF": "intermediate fix",
+"IFR": "instrument flight rules",
+"IFSS": "international flight service station",
+"ILS": "instrument landing system",
+"INFO": "information",
+"INOP": "inoperative",
+"INS": "Inertial Navigation System",
+"INT": "intersection",
+"INTL": "international",
+"INTST": "intensity",
+"IRU": "Inertial Reference Unit",
+"J-BAR": "jet runway barrier",
+"KHZ": "kilohertz",
+"LAANC": "Low Altitude Authorization and Notification Capability",
+"LAT": "latitude",
+"LB": "pounds (weight)",
+"LCTD": "located",
+"LDA": "localizer type directional aid",
+"LGTD": "lighted",
+"LMM": "compass locator at ILS middle marker",
+"LNDG": "landing",
+"LOC": "localizer",
+"LOM": "compass locator at ILS outer marker",
+"LONG": "longitude",
+"LRCO": "limited remote communications outlet",
+"MAA": "maximum authorized altitude",
+"MAG": "magnetic",
+"MAINT": "maintain, maintenance",
+"MALS": "medium intensity approach light system",
+"MALSR": "medium intensity approach light system with runway alignment indicator lights",
+"MAP": "missed approach point",
+"MAX": "maximum",
+"MCA": "minimum crossing altitude",
+"MDA": "minimum descent altitude",
+"MEA": "minimum en route IFR altitude",
+"MGOW": "Maximum Gross Operating Weight",
+"MHZ": "megahertz",
+"MIN": "minimum or minute",
+"MIRL": "medium intensity runway edge lights",
+"MM": "middle marker ILS",
+"MOCA": "minimum obstruction clearance altitude",
+"MRA": "minimum reception altitude",
+"MSA": "minimum safe altitude",
+"MSL": "mean sea level",
+"MUNI": "municipal",
+"NA": "not authorized",
+"NATL": "national",
+"NAVAID": "navigational aid",
+"NDB": "nondirectional radio beacon",
+"NM": "nautical mile(s)",
+"NOPT": "no procedure turn required",
+"NR": "number",
+"OBSTN": "obstruction",
+"OCA": "Oceanic Control Area",
+"ODALS": "omnidirectional approach lighting system",
+"OM": "outer marker ILS",
+"OOP": "Operations Over People",
+"OPER": "operate",
+"OPN": "operation",
+"ORIG": "original",
+"OTS": "out of service",
+"OVRN": "overrun",
+"PAO": "Public Aircraft Operation",
+"PAR": "precision approach radar",
+"PAT": "pattern",
+"PBCS": "Performance-Based Communication and Surveillance",
+"PCN": "pavement classification number",
+"PERMLY": "permanently",
+"PIC": "Pilot-in-Command",
+"POB": "persons on board",
+"PPR": "prior permission required",
+"PROC": "procedure",
+"QUAD": "quadrant",
+"RADAR": "radio detection and ranging",
+"RAPCON": "Radar Approach Control facility (USAF, USN and USMC)",
+"RATCF": "Radar Air Traffic Control Facility (USN and USMC)",
+"RC": "Radio-Controlled",
+"RCAG": "remote center air/ground",
+"RCLS": "runway centerline lights system",
+"RCO": "remote communications outlet",
+"RCV": "receive",
+"RCVG": "receiving",
+"REIL": "runway end identifier lights",
+"REL": "runway entrance lights",
+"REQ": "request",
+"RID": "Remote Identification",
+"RLLS": "Runway Lead-in Light System",
+"RNAV": "area navigation",
+"RPIC": "Remote Pilot-in-Command",
+"RRP": "runway reference point",
+"RSTRD": "restricted",
+"RTS": "returned to service",
+"RVR": "runway visual range",
+"RVRM": "runway visual range midpoint",
+"RVRR": "runway visual range rollout",
+"RVRT": "runway visual range touchdown",
+"RWSL": "runway status light",
+"RWY": "runway",
+"SAA": "Sense and Avoid",
+"SDF": "simplified directional facility",
+"SEC": "second",
+"SFC": "surface",
+"SFL": "sequenced flashing lights",
+"SGI": "Special Government Interest",
+"SI": "straight-in approach",
+"SM": "statute mile(s)",
+"SR": "sunrise",
+"SS": "sunset",
+"SSALF": "simplified short approach lighting system with sequenced flashers",
+"SSALR": "simplified short approach lighting system with runway alignment indicator lights",
+"SSALS": "simplified short approach lighting system",
+"STOL": "short take-off and landing runway",
+"SUAS": "Small UAS",
+"SVC": "service",
+"TAC": "terminal area chart",
+"TACAN": "UHF navigational facility - omnidirectioal course and distance information",
+"TAS": "true air speed",
+"TCH": "threshold crossing height",
+"TEMPRLY": "temporarily",
+"TFC": "traffic",
+"THL": "takeoff hold lights",
+"THR": "threshold",
+"THRU": "through",
+"TKOF": "take-off",
+"TMPRY": "temporary/temporarily",
+"TPA": "traffic pattern altitude",
+"TRACON": "terminal radar approach control",
+"TRML": "terminal",
+"TRSA": "terminal radar service area",
+"TRUST": "The Recreational UAS Safety Test",
+"TSNT": "transient",
+"TWR": "tower",
+"TWY": "taxiway",
+"UAM": "Urban Air Mobility",
+"UAS": "Unmanned Aircraft System",
+"UASFM": "UAS Facility Map",
+"UAVBL": "unavailable",
+"UHF": "ultra high frequency",
+"UNLGTD": "unlighted",
+"UNMON": "unmonitored",
+"UNSKED": "unscheduled",
+"UNUSBL": "unusable",
+"UTM": "UAS Traffic Management",
+"VASI": "visual approach slope indicator",
+"VCNTY": "vicinity",
+"VDP": "visual descent point",
+"VFR": "visual flight rules",
+"VHF": "very high frequency",
+"VLOS": "Visual Line of Sight",
+"VO": "Visual Observer",
+"VOR": "VHF omni-directional radio range",
+"VORTAC": "Combined VOR and TACAN system (collocated)",
+"VOT": "a VOR Receiver testing facility",
+"VSBY": "visibility",
+"WEA": "weather",
+"WKDAY": "weekday",
+"WKEND": "weekend",
+"WPT": "waypoint",
+"WS": "Weather Service",
+"WT": "weight"
+},
+"notam_text": [
+"",
+"A",
+"AA",
+"AAF",
+"ABANDONED",
+"ABLE",
+"ABN",
+"ABOVE",
+"ABQ",
+"AC",
+"ACCORDANCE",
+"ACFT",
+"ACT",
+"ACTIVE",
+"ACTIVITY",
+"AD",
+"ADIZ",
+"ADJ",
+"ADMINISTRATOR",
+"ADS",
+"ADS-B",
+"ADS-R",
+"ADSA",
+"ADVISED",
+"ADVISORY",
+"ADZ",
+"AERIAL",
+"AEROBATIC",
+"AERONAUTICAL",
+"AFFECTED",
+"AFTER",
+"AGL",
+"AGUADILLA",
+"AID",
+"AIM",
+"AIP",
+"AIR",
+"AIRBORNE",
+"AIRCRAFT",
+"AIRSPACE",
+"AIRWAY",
+"AIS",
+"ALASKAN",
+"ALERT",
+"ALL",
+"ALLOWED",
+"ALS",
+"ALT",
+"ALTIMETER",
+"ALTITUDE",
+"ALTN",
+"AMDT",
+"AMENDED",
+"AMERICA",
+"AML",
+"AN",
+"AND",
+"AND/OR",
+"ANGLE",
+"ANTICIPATED",
+"ANY",
+"AP",
+"APCH",
+"APN",
+"APP",
+"APPLY",
+"APPROACH",
+"APPROVED",
+"APRIL",
+"APRON",
+"ARE",
+"AREA",
+"AREAS",
+"ARFF",
+"ARINC",
+"ARMEL",
+"ARR",
+"ARRIVAL",
+"ARST",
+"ARTCC",
+"AS",
+"ASDA",
+"ASH",
+"ASN",
+"ASR",
+"ASSIGNED",
+"ASSIGNMENT",
+"AT",
+"ATC",
+"ATCSCC",
+"ATIS",
+"ATLANTIC",
+"ATTENDED",
+"AUNICOM",
+"AUTH",
+"AUTHORIZED",
+"AUTO",
+"AUTOMATED",
+"AVAILABILITY",
+"AVBL",
+"AVOID",
+"AVOIDANCE",
+"AWAITING",
+"AWOS",
+"AWOS-C",
+"AXH",
+"AZM",
+"B",
+"BA",
+"BALLOON",
+"BANK",
+"BAR",
+"BAROMETRIC",
+"BASE",
+"BC",
+"BCE",
+"BCN",
+"BCST",
+"BE",
+"BEAM",
+"BEEN",
+"BEFORE",
+"BELOW",
+"BERMS",
+"BET",
+"BETWEEN",
+"BEYOND",
+"BILOXI",
+"BIRD",
+"BISBEE",
+"BISBEE-DOUGLAS",
+"BLD",
+"BLINDNESS",
+"BLW",
+"BNA",
+"BOIRE",
+"BORDER",
+"BQN",
+"BRYCE",
+"BTN",
+"BTV",
+"BTW",
+"BUILDING",
+"BUR",
+"BY",
+"BYD",
+"BYEOND",
+"BZB",
+"C",
+"CANYON",
+"CAPACITY",
+"CAPITAL",
+"CARGO",
+"CARIBOU",
+"CARRIER",
+"CARRIERS",
+"CAT",
+"CATS",
+"CDN",
+"CEILING",
+"CEILING/WIND",
+"CENTER",
+"CENTERED",
+"CEOLA",
+"CFR",
+"CHANGE",
+"CHANGED",
+"CHARGE",
+"CHART",
+"CHECK",
+"CHECKPOINT",
+"CHERN",
+"CHICAGO",
+"CHICAGO/PROSPECT",
+"CHRISTI",
+"CIRCLE",
+"CIRCLING",
+"CITY",
+"CIVIL",
+"CL",
+"CLASS",
+"CLASSIFICATION",
+"CLEARING",
+"CLIMB",
+"CLIMBING",
+"CLR",
+"CLSD",
+"COAL",
+"COASTAL",
+"COCKPIT",
+"CODE",
+"COM",
+"COMMISSIONED",
+"COMMUNICATION",
+"COMMUNICATIONS",
+"COMPACTED",
+"COMPLEXES",
+"COMPLIANCE",
+"COMPLY",
+"CONC",
+"COND",
+"CONFIRM",
+"CONS",
+"CONTAINED",
+"CONTROL",
+"CONTROLLED",
+"CONTROLLING",
+"CORPUS",
+"CORRECT",
+"COURSE",
+"CPDLC",
+"CRACKS",
+"CRAIG",
+"CRANE",
+"CRG",
+"CRITERIA",
+"CRYPT",
+"CS",
+"CTAF",
+"CTC",
+"CTL",
+"CURRENT",
+"CUST",
+"CVE",
+"D",
+"D/E",
+"DAL",
+"DALLAS",
+"DALLAS-FORT",
+"DALLAS/FORT",
+"DAMS",
+"DATA",
+"DAYS",
+"DCA",
+"DD",
+"DECLARED",
+"DEFENSE",
+"DEFINED",
+"DEG",
+"DEICED",
+"DELIVERY",
+"DEMONSTRATION",
+"DEP",
+"DEPARTURE",
+"DEPENDENT",
+"DETECTION",
+"DETERMINE",
+"DEWIZ",
+"DFW",
+"DICKINSON",
+"DIEGO",
+"DIK",
+"DIRECT",
+"DIRECTION",
+"DIRECTIONAL",
+"DISABLED",
+"DISCRETE",
+"DISPATCH",
+"DISPLACED",
+"DIST",
+"DISTANCES",
+"DIVERSE",
+"DLA",
+"DLH",
+"DLY",
+"DME",
+"DME/",
+"DNRC",
+"DO",
+"DOMESTIC",
+"DOUGLAS",
+"DPT",
+"DRAKE",
+"DRIFTS",
+"DRK",
+"DRUZZ",
+"DRY",
+"DUE",
+"DUG",
+"DULUTH",
+"DVA",
+"E",
+"EAGLECREST",
+"EAST",
+"EAST/WEST",
+"EDGE",
+"EFFECT",
+"EFFECTIVE",
+"EITHER",
+"EL",
+"ELECTRIC",
+"ELK",
+"EMAIL",
+"EMERG",
+"EMERGENCY",
+"EN",
+"END",
+"ENGINEERED",
+"ENR",
+"ENTERING",
+"ENTRANCE",
+"EQUIPPED",
+"ER",
+"ESCAT",
+"EST",
+"EWING",
+"EXAMPLE",
+"EXAMPLE-",
+"EXAMPLES",
+"EXAMPLES-",
+"EXC",
+"EXCEED",
+"EXCEPT",
+"EXECUTIVE",
+"EXITING",
+"EXPECT",
+"EXPERIENCE",
+"EXTENT",
+"EYES",
+"F",
+"FAA",
+"FAC",
+"FACILITIES",
+"FAF",
+"FALLING",
+"FAN",
+"FDC",
+"FEDEX",
+"FEEDER",
+"FICON",
+"FIELD",
+"FIELDS",
+"FIGHTING",
+"FILED",
+"FINGR",
+"FIRE",
+"FIS",
+"FIS-B",
+"FIVE",
+"FIX",
+"FLAGGED",
+"FLASH",
+"FLG",
+"FLIGHT",
+"FLT",
+"FLTCK",
+"FLV",
+"FLY",
+"FM",
+"FOLLOWING",
+"FOOT",
+"FOR",
+"FORMAT",
+"FORT",
+"FREQ",
+"FRI",
+"FROM",
+"FROST",
+"FSS",
+"FST",
+"FT",
+"FUEL",
+"FURTHER",
+"G",
+"GAG",
+"GAGE",
+"GATE",
+"GATHERINGS",
+"GBAS",
+"GG",
+"GLS",
+"GMA",
+"GND",
+"GOOD",
+"GOVERNMENT",
+"GP",
+"GP/",
+"GPA",
+"GPS",
+"GPT",
+"GRAND",
+"GREATER",
+"GREEN",
+"GTK",
+"GUAM",
+"GUARD",
+"GUIDANCE",
+"GULF",
+"GULFPORT",
+"GULFPORT-BILOXI",
+"HAA",
+"HAR",
+"HARRY",
+"HARTFORD",
+"HAS",
+"HAT",
+"HAVE",
+"HAWAIIAN",
+"HAZARD",
+"HEADING",
+"HEAVES",
+"HEIGHTS",
+"HEIGHTS/WHEELING",
+"HELIPAD",
+"HFD",
+"HGT",
+"HIE",
+"HIGH",
+"HIRL",
+"HLDG",
+"HLP",
+"HOLD",
+"HOLDING",
+"HOOVER",
+"HOURS",
+"HOUSTON",
+"HOUSTON-SOUTHWEST",
+"HOUSTON/ZHU/ARTCC",
+"HR",
+"HUGGY",
+"HYDRANT",
+"HYDRO",
+"HYDRO-ELECTRIC",
+"IAP",
+"ICE",
+"ICT",
+"ID",
+"ID/ATC",
+"IDENTIFIER",
+"IFR",
+"II",
+"II/III",
+"III",
+"IIIE",
+"ILLUMINATION",
+"ILS",
+"IMPLMENTED",
+"IN",
+"INBOUND",
+"INCLUDE",
+"INCREASED",
+"INDEX",
+"INDUSTRIAL",
+"INFO",
+"INFORMATION",
+"INJURIOUS",
+"INSIDE",
+"INT",
+"INT/CVE",
+"INTEREST",
+"INTERNATIONAL",
+"INTL",
+"INTST",
+"INVOLVING",
+"INW",
+"IRREGULAR",
+"IS",
+"ISLAND",
+"ISLE",
+"ISSUED",
+"J",
+"JET",
+"JFK",
+"JLI",
+"JNU",
+"JOHN",
+"JOSHUA",
+"JOSIE",
+"JUNEAU",
+"K",
+"KDZZNAXX",
+"KENNEDY",
+"KEY",
+"KITE",
+"KMART",
+"KSEAYFYX",
+"KT",
+"KUMBA",
+"KUSA",
+"KZSE",
+"KZSE/QRRCA//////",
+"L",
+"L/L",
+"LAKE",
+"LAKE/ZLC/",
+"LAN",
+"LANSING",
+"LARGE",
+"LARRN",
+"LAS",
+"LASER",
+"LATERALLY",
+"LAX",
+"LDA",
+"LDG",
+"LEAD",
+"LEFT",
+"LEN",
+"LESS",
+"LGT",
+"LGTD",
+"LIGHT",
+"LINE",
+"LIQUID",
+"LIST",
+"LOC",
+"LOC/DME",
+"LOCAL",
+"LOGON",
+"LOITER",
+"LOM",
+"LOVE",
+"LOW",
+"LP",
+"LPV",
+"MAGNETIC",
+"MAIN",
+"MAINT",
+"MALSR",
+"MANAGEMENT",
+"MANUAL",
+"MARKING",
+"MATERIAL",
+"MAY",
+"MAYNOT",
+"MBST",
+"MBST/WS",
+"MCI",
+"MDA",
+"MEA",
+"MEDIUM",
+"MEDIUM/HIGH",
+"MEET",
+"MHV",
+"MIL",
+"MILES",
+"MILITARY",
+"MINIMA",
+"MINIMUM",
+"MINIMUMS",
+"MISSED",
+"MISSISSIPPI",
+"MISSOULA",
+"MKR",
+"MNT",
+"MOA",
+"MOBILE",
+"MOCA",
+"MOGAS",
+"MON",
+"MON-FRI",
+"MONTANA",
+"MONTGOMERY",
+"MOORED",
+"MORE",
+"MOUNT",
+"MOV",
+"MOVEMENT",
+"MOWING",
+"MSG",
+"MSL",
+"MUD",
+"MUST",
+"MYF",
+"N",
+"NA",
+"NASHUA",
+"NASHUA/BOIRE",
+"NATIONAL",
+"NAV",
+"NAVAID",
+"NDB",
+"NE",
+"NE/SW",
+"NEAR",
+"NEAREST",
+"NEW",
+"NM",
+"NO",
+"NONMOVEMENT",
+"NORTH",
+"NORTHEAST",
+"NOT",
+"NOTAM",
+"NOTE",
+"NOTE-",
+"NOTES",
+"NOTICE",
+"NOTICES",
+"NOW",
+"NS",
+"NUCLEAR",
+"NUMEROUS",
+"NW",
+"OAKLAND",
+"OBSC",
+"OBST",
+"OBSTACLE",
+"OBTAIN",
+"OCCUR",
+"ODP",
+"OF",
+"OFF",
+"OK",
+"OM",
+"ON",
+"ONE",
+"ONLY",
+"ONT",
+"OPERATION",
+"OPERATIONAL",
+"OPN",
+"OPR",
+"OPS",
+"OR",
+"ORD",
+"ORIG",
+"ORIG-B",
+"ORIGIN",
+"OTHER",
+"OUTLET",
+"OVER",
+"OVERLYING",
+"OVERSIGHT",
+"P",
+"PACIFIC",
+"PAD",
+"PAINTED",
+"PAJN",
+"PANEL",
+"PANHANDLE",
+"PAPI",
+"PARKWAY",
+"PARL",
+"PATCHY",
+"PATTERN",
+"PAYLOAD",
+"PCL",
+"PCR",
+"PCT",
+"PEACH",
+"PER",
+"PERIODIC",
+"PERLS",
+"PERM",
+"PERMITTED",
+"PERSL",
+"PERSON",
+"PGS",
+"PILES",
+"PILOTS",
+"PJE",
+"PLAN",
+"PLANTS",
+"PLOWED",
+"PLUS",
+"PNH",
+"PODDE",
+"POINT",
+"POLICY",
+"POLICY/CRITERIA",
+"POOR",
+"POSSESSIONS",
+"POWER",
+"PPR",
+"PRACTICABLE",
+"PRCT",
+"PRECISION",
+"PREDICTION",
+"PREFLIGHT",
+"PRESENT",
+"PRESSURE",
+"PREVIOUSLY",
+"PRIORITY",
+"PRIVATE",
+"PRN",
+"PROC",
+"PROCEDURE",
+"PROCEDURES",
+"PROCEEDING",
+"PROCESSING",
+"PROFILER",
+"PROGRAM",
+"PROHIBITED",
+"PROJECTING",
+"PROPOSING",
+"PROSPECT",
+"PROTECTION",
+"PROXIMITY",
+"PSN",
+"PT",
+"PUBLIC",
+"PUBLICATION",
+"PUBLISHED",
+"PURPOSES",
+"PURSUANT",
+"PVB",
+"PWK",
+"Q",
+"QRRCA",
+"R",
+"R/B/W/T",
+"RADAR",
+"RADIO",
+"RADIUS",
+"RAI",
+"RAIM",
+"RAMP",
+"RCL",
+"RCLL",
+"READ",
+"REAGAN",
+"REASON",
+"REAUTHORIZATION",
+"REBROADCAST",
+"REC",
+"REDESIGNATION",
+"REDL",
+"REDUCED",
+"REFERENCE",
+"REFINERIES",
+"REFUELING",
+"REGAN",
+"REGARDLESS",
+"REGIONAL",
+"REID",
+"RELIEF",
+"REMAIN",
+"REMAINDER",
+"REMAINING",
+"REMAINS",
+"REMINDED",
+"REMOTE",
+"REMOVAL",
+"RENL",
+"RENUMBERED",
+"REP",
+"REPLACEMENT",
+"REQUIRED",
+"REQUIRES",
+"RESEARCH",
+"RESERVATION",
+"RESPONSE",
+"RESTATEMENT",
+"RESTRICTION",
+"RESTRICTIONS",
+"RESURFACING",
+"REVEILLE",
+"REVIEW",
+"RGNL",
+"RIGHT",
+"RIVERSIDE",
+"RLLS",
+"RNAV",
+"RNGB",
+"ROA",
+"ROCKET",
+"ROLLOUT",
+"RONALD",
+"ROOSEVELT",
+"ROUTE",
+"ROUTES",
+"ROUTING",
+"RQ",
+"RTHL",
+"RTS",
+"RTZL",
+"RUBBER",
+"RULEMAKING",
+"RUNUP",
+"RUNWAYS",
+"RVR",
+"RVRT",
+"RWY",
+"RWYS",
+"S",
+"S-ILS",
+"SAFETY",
+"SALT",
+"SAN",
+"SANDED",
+"SAPT",
+"SAT",
+"SAYRE",
+"SCENE",
+"SE",
+"SEAPLANE",
+"SECTION",
+"SECTOR",
+"SECURITY",
+"SEE",
+"SELF",
+"SEPARATE",
+"SEPT",
+"SEQUENCED",
+"SER",
+"SERVE",
+"SERVICE",
+"SETTING",
+"SFC",
+"SFC-UNL",
+"SHAAR",
+"SHOULD",
+"SHV",
+"SIAP",
+"SID",
+"SIDE",
+"SIGN",
+"SIGNAL",
+"SIGNIFICANT",
+"SIGNS",
+"SIMILAR",
+"SIMPLIFIED",
+"SIMULTANEOUS",
+"SITES",
+"SJT",
+"SJU",
+"SKI",
+"SLIPPERY",
+"SLUSH",
+"SMR",
+"SN",
+"SNOOP",
+"SNOWBANKS",
+"SOFT",
+"SOURCE",
+"SOUTH",
+"SOUTHERN",
+"SOUTHWEST",
+"SPA",
+"SPECIAL",
+"SPECIFICALLY",
+"SPECIFIED",
+"SPOT",
+"SPRINGS",
+"SQUAWKING",
+"SR",
+"SS",
+"SS-SR",
+"SSALR",
+"SSW",
+"STAR",
+"STATES",
+"STATUS",
+"STD",
+"STEPDOWN",
+"STNR",
+"STOP",
+"STRONGLY",
+"SUA",
+"SUCH",
+"SUITABLE",
+"SUN",
+"SUPPLEMENT",
+"SURVEILLANCE",
+"SURVEILLANCE-REBROADCAST",
+"SVC",
+"SW",
+"SWEPT",
+"SYO",
+"SYR",
+"SYSTEM",
+"T",
+"T-ROUTES",
+"T/PRESENT",
+"TACAN",
+"TAIL",
+"TAKEOFF",
+"TAX",
+"TEL",
+"TEMPO",
+"TEMPORARY",
+"TERMINAL",
+"TFC",
+"TFR",
+"TGL",
+"THAN",
+"THAT",
+"THE",
+"THEN",
+"THEODORE",
+"THESE",
+"THIS",
+"THR",
+"THREE",
+"THROUGHOUT",
+"TIME",
+"TIMES",
+"TIS",
+"TIS-B",
+"TITLE",
+"TKOF",
+"TO",
+"TODA",
+"TOOL",
+"TORA",
+"TOWER",
+"TRANS",
+"TRANS/REC",
+"TRANSIENT",
+"TRANSITION",
+"TRENCHING",
+"TROY",
+"TROY/OAKLAND",
+"TUL",
+"TULSA",
+"TURK",
+"TURN",
+"TURNING",
+"TURNS",
+"TWO",
+"TWR",
+"TWY",
+"TXL",
+"TYPE",
+"TYPES",
+"U",
+"U/S",
+"UAS",
+"UNCHANGED",
+"UNDER",
+"UNICOM",
+"UNITED",
+"UNKNOWN",
+"UNL",
+"UNLESS",
+"UNMANNED",
+"UNREL",
+"UNSAFE",
+"UNTIL",
+"UNUSABLE",
+"UP",
+"UPDATED",
+"USC",
+"USERS",
+"VARIATION",
+"VASI",
+"VECTOR",
+"VECTORS",
+"VEGAS",
+"VEHICLE",
+"VEHICLES",
+"VERTICALLY",
+"VFP",
+"VFR",
+"VHW",
+"VIA",
+"VICE",
+"VICINITY",
+"VICTOR",
+"VIS",
+"VIS/PRESENT",
+"VISIBILITY",
+"VISUAL",
+"VLL",
+"VNAV",
+"VNAV/LPV",
+"VNAV/LPV/LP",
+"VOICE",
+"VOR",
+"VOR-A",
+"VOR/",
+"VORTAC",
+"VOT",
+"VS",
+"W",
+"WAAS",
+"WAIVED",
+"WAM",
+"WARNING",
+"WARTIME",
+"WASHINGTON",
+"WASHINGTON/RONALD",
+"WDI",
+"WEST",
+"WET",
+"WHEELING",
+"WHEN",
+"WHICH",
+"WHILE",
+"WHITEFIELD",
+"WI",
+"WID",
+"WILL",
+"WIND",
+"WINDCONE",
+"WINGSPAN",
+"WIP",
+"WITH",
+"WORTH",
+"WS",
+"WSW",
+"WX",
+"WZRRD",
+"X",
+"X/XXXX",
+"XNG",
+"XNM",
+"XX",
+"XX/XXX",
+"XXX",
+"XXX-XXX-XXXX",
+"XXXDEG",
+"XXXFT",
+"XXXX",
+"XXXXXX",
+"XXXXXXNXXXXXXXW",
+"XXXXXXXX",
+"Y",
+"YEAR",
+"YORK",
+"YY",
+"YYMMDDHHMM",
+"YYMMDDHHMM-",
+"YYMMDDHHMM-PERM",
+"YYMMDDHHMM-YYMMDDHHMM",
+"YYMMDDHHMM-YYMMDHHMMEST",
+"YYMMDDHHMMEST",
+"YYMMDHHMMEST",
+"ZAB",
+"ZAN",
+"ZBW",
+"ZDC",
+"ZFW",
+"ZHU",
+"ZJX",
+"ZKC",
+"ZLA",
+"ZLC",
+"ZNY"
+],
+"runway_reports": {
+"RSC": [
+"runway surface condition",
+"Transport Canada AC 300-019"
+]
+},
+"short_words": [
+"add",
+"aid",
+"air",
+"all",
+"an",
+"and",
+"any",
+"arc",
+"are",
+"as",
+"ask",
+"at",
+"bar",
+"be",
+"box",
+"but",
+"by",
+"can",
+"day",
+"dew",
+"dip",
+"do",
+"dry",
+"due",
+"en",
+"end",
+"etc",
+"ex",
+"fix",
+"fly",
+"for",
+"get",
+"go",
+"has",
+"he",
+"his",
+"hot",
+"ice",
+"if",
+"in",
+"is",
+"it",
+"its",
+"jet",
+"law",
+"lbs",
+"leg",
+"log",
+"low",
+"map",
+"may",
+"mph",
+"mud",
+"new",
+"nil",
+"no",
+"nor",
+"not",
+"now",
+"of",
+"off",
+"old",
+"on",
+"one",
+"or",
+"out",
+"own",
+"pad",
+"per",
+"run",
+"rut",
+"sea",
+"see",
+"set",
+"she",
+"ski",
+"so",
+"the",
+"to",
+"top",
+"two",
+"up",
+"use",
+"via",
+"was",
+"way",
+"we",
+"wet",
+"who",
+"why",
+"you"
+],
+"side_by_side": {
+"CLR DELIVERY": "Clearance Delivery",
+"GND CTL": "Ground Control",
+"LOCAL AP ADVISORY": "Local Airport Advisory",
+"LOCAL CTL": "Local Control",
+"NOT AVBL": "Not Available",
+"REMOTE CENTER A/G": "Remote Center Air-to-Ground",
+"REMOTE COM OUTLET": "Remote Communication Outlet",
+"RWY END ID LGT": "Runway end identifier light",
+"RWY ENTRANCE LGT": "Runway entrance light",
+"RWY STATUS LGT SYSTEM": "Runway status light system",
+"SEQUENCED FLG LGT": "Sequence flashing light",
+"TKOF HOLD LGT": "Take-off hold light"
+},
+"source": "What the generator read beside the FAA tables, for the tests to check its rules against: the abbreviations each state AIP lists without the mark for a difference from ICAO Doc 8400, the FAA AIP's list, and what the FAA's NOTAM documents write out, print as NOTAM text or write as words.",
+"written_out": {
+"AC": [
+"Advisory Circular"
+],
+"ACM": [
+"Airport Certification Manual"
+],
+"ADIZ": [
+"Air Defense Identification Zone"
+],
+"ADP": [
+"Automatic Data Processing"
+],
+"AFTN": [
+"Aeronautical Fixed Telecommunication Network"
+],
+"AGL": [
+"above ground level"
+],
+"AIM": [
+"Aeronautical Information Manual"
+],
+"AIP": [
+"Aeronautical Information Publication"
+],
+"AIRAC": [
+"Aeronautical Information Regulation and Control"
+],
+"AIS": [
+"Aeronautical Information Services",
+"Aeronautical Information System"
+],
+"ALS": [
+"Approach lighting systems"
+],
+"ARFF": [
+"Airport Rescue Fire Fighting",
+"Aircraft Rescue and Fire Fighting"
+],
+"ARTCC": [
+"Air Route Traffic Control Center"
+],
+"ASDA": [
+"accelerate stop distance available"
+],
+"ASN": [
+"Aeronautical Study Number"
+],
+"ASOS": [
+"Automated Surface Observing System"
+],
+"ASR": [
+"Antenna Structure Registration"
+],
+"ATC": [
+"air traffic control"
+],
+"ATCSCC": [
+"Air Traffic Control System Command Center"
+],
+"ATCT": [
+"Air Traffic Control Towers"
+],
+"ATIS": [
+"Automatic Terminal Information Service"
+],
+"ATS": [
+"Air Traffic Services"
+],
+"AWOS": [
+"Automated Weather Observation System"
+],
+"BA": [
+"Braking Action"
+],
+"CARF": [
+"Central Altitude Reservation Function"
+],
+"CFA": [
+"Controlled Firing Area"
+],
+"CFR": [
+"Code of Federal Regulations"
+],
+"CMHP": [
+"Common Message Handling Protocol"
+],
+"CPDLC": [
+"Controller Pilot Data Link Communication"
+],
+"CTA": [
+"Cold Temperature Airport"
+],
+"CTAF": [
+"Common Traffic Advisory Frequency"
+],
+"CW": [
+"clock wise"
+],
+"DOD": [
+"Department of Defense"
+],
+"DP": [
+"Departure Procedure"
+],
+"DTG": [
+"date time group"
+],
+"DVA": [
+"Diverse Vector Areas"
+],
+"EDCT": [
+"Expect Departure Clearance Time"
+],
+"ESCAT": [
+"Emergency Security Control of Air Traffic"
+],
+"ESV": [
+"Expanded Service Volume"
+],
+"ETD": [
+"estimated time of departure"
+],
+"FAS": [
+"Final Approach Segment"
+],
+"FCFSS": [
+"Federal Contract Flight Service Station"
+],
+"FCT": [
+"Federal Contract Tower"
+],
+"FDC": [
+"Flight Data Center"
+],
+"FIR": [
+"Flight Information Region"
+],
+"FL": [
+"flight levels"
+],
+"FNS": [
+"Federal NOTAM System"
+],
+"FSS": [
+"Flight Service Station"
+],
+"GBAS": [
+"Ground Based Augmentation System"
+],
+"GIS": [
+"Geographic Information System"
+],
+"GLS": [
+"GBAS Landing System"
+],
+"GNSS": [
+"Global Navigation Satellite Systems"
+],
+"GPS": [
+"Global Positioning System"
+],
+"GS": [
+"glide slope"
+],
+"HDTA": [
+"High Density Traffic Airports"
+],
+"IAP": [
+"Instrument Approach Procedures"
+],
+"IFP": [
+"Instrument Flight Procedures"
+],
+"ILS": [
+"Instrument Landing System"
+],
+"IRU": [
+"inertial reference unit"
+],
+"LDA": [
+"landing distance available"
+],
+"LOB": [
+"line of business"
+],
+"LOM": [
+"locator outer marker"
+],
+"MOA": [
+"military operations area"
+],
+"MSL": [
+"mean sea level"
+],
+"MSN": [
+"Message Switch Network"
+],
+"NADIN": [
+"National Airspace Data Interchange Network"
+],
+"NAS": [
+"National Airspace System"
+],
+"NMR": [
+"NAS Messaging Replacement"
+],
+"NOCC": [
+"National Operations Control Center"
+],
+"NRS": [
+"Navigation Reference System"
+],
+"NS": [
+"NOTAM System"
+],
+"OCC": [
+"Operations Control Center"
+],
+"ODP": [
+"Obstacle Departure Procedures"
+],
+"OIS": [
+"Operational Information System"
+],
+"PAPI": [
+"Precision approach path indicator"
+],
+"PBN": [
+"Performance Based Navigation"
+],
+"PCR": [
+"Pavement Classification Rating"
+],
+"PPR": [
+"Prior Permission Required"
+],
+"PRN": [
+"pseudo random noise"
+],
+"RLLS": [
+"Runway lead in light system"
+],
+"RMT": [
+"Route Management Tool"
+],
+"RTS": [
+"returned to service"
+],
+"RTZL": [
+"Runway touchdown zone lights"
+],
+"RVR": [
+"Runway Visual Range"
+],
+"SAA": [
+"special activity airspace"
+],
+"SAPT": [
+"Service Availability Prediction Tool"
+],
+"SBS": [
+"surveillance broadcast systems"
+],
+"SIAP": [
+"standard instrument approach procedures"
+],
+"SID": [
+"Standard Instrument Departures"
+],
+"SOC": [
+"Service Operations Center"
+],
+"SOSC": [
+"System Operations Support Center"
+],
+"STAR": [
+"standard terminal arrival routes"
+],
+"SUA": [
+"special use airspace"
+],
+"TALPA": [
+"Takeoff and Landing Performance Assessment"
+],
+"TFR": [
+"Temporary Flight Restrictions"
+],
+"TGL": [
+"touch and go landings"
+],
+"TL": [
+"Transmittal Letter"
+],
+"TMI": [
+"traffic management initiatives"
+],
+"TODA": [
+"take off distance available"
+],
+"TORA": [
+"take off run available"
+],
+"UAS": [
+"Unmanned Aircraft Systems"
+],
+"VASI": [
+"Visual approach slope indicator"
+],
+"WAAS": [
+"Wide Area Augmentation System"
+],
+"WAM": [
+"Wide Area Multilateration"
+],
+"WIP": [
+"Work in Progress"
+],
+"WRA": [
+"Weather Reconnaissance Area"
+]
+}
+}

@@ -91,6 +91,69 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 .cam-tile.waiting .cam-nosignal { display: flex; }
 .cam-tile.waiting video { visibility: hidden; }
 
+/* NOTAM view: an overlay like the satellite loop. Cards flow down columns that
+   continue to the right of the screen; a page is one screenful of columns and
+   the list is shifted a page at a time. Sizes are multiples of --u, which is
+   larger on a high-resolution panel. */
+#notams { --u: 1px; display: none; position: absolute; inset: 0; z-index: 6; background: var(--bg);
+  flex-direction: column; padding: calc(12 * var(--u)) calc(20 * var(--u)) calc(10 * var(--u)); }
+#notams.active { display: flex; }
+.stage-notams #map, .stage-notams #side { visibility: hidden; }
+#notams-banner { flex: none; text-align: center; font-weight: 800; letter-spacing: calc(2 * var(--u));
+  font-size: calc(15 * var(--u)); color: #0b0f14; background: var(--warn); border-radius: calc(5 * var(--u));
+  padding: calc(3 * var(--u)) 0; margin-bottom: calc(8 * var(--u)); }
+#notams-banner:empty { display: none; }
+#notams-head { flex: none; display: flex; align-items: baseline; gap: calc(22 * var(--u));
+  padding-bottom: calc(8 * var(--u)); margin-bottom: calc(10 * var(--u)); border-bottom: 1px solid #1b242e; }
+.nt-title { font-size: calc(26 * var(--u)); font-weight: 800; }
+.nt-title span { font-size: calc(18 * var(--u)); font-weight: 600; color: var(--muted); margin-left: calc(6 * var(--u)); }
+.nt-summary { font-size: calc(17 * var(--u)); color: var(--text); }
+.nt-meta { margin-left: auto; font-size: calc(15 * var(--u)); color: var(--muted); font-variant-numeric: tabular-nums;
+  display: flex; align-items: baseline; gap: calc(16 * var(--u)); }
+.nt-meta.old { color: var(--warn); }
+.nt-trouble { background: var(--warn); color: #0b0f14; font-weight: 800; border-radius: calc(4 * var(--u));
+  padding: 0 calc(7 * var(--u)); }
+.nt-page { color: var(--accent); font-weight: 700; }
+#notams-body { flex: 1; min-height: 0; overflow: hidden; }
+#notams-list { height: 100%; column-count: 2; column-gap: calc(20 * var(--u)); column-fill: auto; }
+.nt-note { column-span: all; text-align: center; color: var(--muted); font-size: calc(24 * var(--u));
+  padding-top: calc(120 * var(--u)); }
+.nt-note.bad { color: var(--warn); }
+.nt-note small { display: block; font-size: calc(15 * var(--u)); margin-top: calc(10 * var(--u)); color: var(--muted); }
+.nt-group { break-after: avoid; margin: 0 0 calc(5 * var(--u)); font-size: calc(13 * var(--u)); letter-spacing: calc(1.5 * var(--u));
+  text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.nt-group span { color: var(--accent); margin-left: calc(4 * var(--u)); }
+.nt-card { break-inside: avoid; background: var(--panel); border-radius: calc(7 * var(--u));
+  border-left: calc(5 * var(--u)) solid var(--warn); padding: calc(8 * var(--u)) calc(12 * var(--u));
+  margin-bottom: calc(9 * var(--u)); }
+.nt-card.long { break-inside: auto; }
+.nt-card.upcoming { border-left-color: var(--accent); }
+.nt-top { display: flex; align-items: center; gap: calc(10 * var(--u)); }
+.nt-type { font-size: calc(12 * var(--u)); font-weight: 800; letter-spacing: calc(1 * var(--u)); text-transform: uppercase;
+  background: var(--panel-2); border: 1px solid #2b3641; border-radius: calc(4 * var(--u)); padding: calc(1 * var(--u)) calc(7 * var(--u)); }
+.nt-id { font-size: calc(14 * var(--u)); color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 600; }
+.nt-status { margin-left: auto; font-size: calc(14 * var(--u)); color: var(--muted); font-variant-numeric: tabular-nums; }
+.nt-status b { color: var(--warn); letter-spacing: calc(0.5 * var(--u)); }
+.nt-card.upcoming .nt-status b { color: var(--accent); }
+.nt-plain { font-size: calc(19 * var(--u)); font-weight: 600; line-height: 1.25; margin-top: calc(5 * var(--u)); overflow-wrap: anywhere; }
+.nt-origin { font-size: calc(10.5 * var(--u)); letter-spacing: calc(0.8 * var(--u)); text-transform: uppercase;
+  color: var(--muted); margin-top: calc(2 * var(--u)); }
+.nt-warn { margin-top: calc(6 * var(--u)); font-size: calc(13 * var(--u)); font-weight: 800; color: #0b0f14;
+  background: var(--warn); border-radius: calc(4 * var(--u)); padding: calc(2 * var(--u)) calc(8 * var(--u)); }
+.nt-raw { font-family: ui-monospace, monospace; font-size: calc(12.5 * var(--u)); color: var(--muted); line-height: 1.3;
+  margin-top: calc(4 * var(--u)); overflow-wrap: anywhere; }
+.nt-sched { font-size: calc(14 * var(--u)); margin-top: calc(4 * var(--u)); font-variant-numeric: tabular-nums; }
+.nt-sched .k { color: var(--muted); font-size: calc(11 * var(--u)); letter-spacing: calc(1 * var(--u)); margin-right: calc(4 * var(--u)); }
+.nt-times { display: grid; grid-template-columns: auto 1fr auto; gap: calc(18 * var(--u)); margin-top: calc(7 * var(--u));
+  padding-top: calc(6 * var(--u)); border-top: 1px solid #1b242e; }
+/* label and "how long" on one line, the time itself beneath */
+.nt-time { display: grid; grid-template-columns: auto 1fr; column-gap: calc(8 * var(--u)); align-items: baseline;
+  font-variant-numeric: tabular-nums; min-width: 0; }
+.nt-time .k { font-size: calc(10.5 * var(--u)); letter-spacing: calc(1.2 * var(--u)); color: var(--muted); font-weight: 700; }
+.nt-time .s { font-size: calc(12 * var(--u)); color: var(--muted); white-space: nowrap; }
+.nt-time .v { grid-column: 1 / -1; font-size: calc(15.5 * var(--u)); font-weight: 700; white-space: nowrap; }
+.nt-time.wide .v { color: #fff; }
+
 #side { background: var(--panel); border-left: 1px solid #000; padding: 12px;
   overflow: hidden; display: flex; flex-direction: column; gap: 10px; }
 #side-header { flex: none; max-height: 46%; overflow: hidden; }
@@ -245,6 +308,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
   .ac-label { font-size: 24px; top: 34px;
     text-shadow: -2.5px -2.5px 0 #000, 2.5px -2.5px 0 #000, -2.5px 2.5px 0 #000, 2.5px 2.5px 0 #000,
       0 0 4px #000, 0 0 4px #000; }
+  #notams { --u: 1.85px; }
   #sat-caption { font-size: 26px; padding: 8px 18px; }
   .cam-caption { font-size: 26px; padding: 8px 18px; }
   .cam-nosignal { font-size: 40px; }

@@ -1,0 +1,68 @@
+<!doctype html><html><body><pre id="out"></pre><script type="module">
+import { check, done } from "./harness.js";
+import { cardHtml, counts, current, effective, fmtSpan, fmtZ, groupByType, listHtml, pageCount, statusOf, visitSeconds, MAX_PAGES } from "../src/lib/notams.js";
+// The NOTAM view must state times exactly and unmistakably: UTC with the Z
+// designator, from the seconds the FAA gave, and say plainly what is not stated.
+const NOW = Date.UTC(2026, 10, 8, 15, 0) / 1000; // 08 NOV 2026 1500Z
+const H = 3600;
+const n = (over) => ({ id: "1", number: "11/012", accountability: "SEA", location: "S50", type: "RWY", type_label: "Runway",
+  issued: NOW - 26 * H, updated: NOW - 5 * H, start: NOW - 2 * H, end: NOW + 30 * H, permanent: false, end_estimated: false,
+  schedule: "", text: "RWY 16/34 CLSD", raw: "!SEA 11/012 S50 RWY 16/34 CLSD 2611081300-2611092100",
+  plain: { text: "Runway 16/34 closed", source: "rules" }, ...over });
+
+check("a time is day, month, year and four-digit UTC time with Z", fmtZ(NOW) === "08 NOV 2026 1500Z");
+check("the day and time are UTC, not the browser's zone", fmtZ(Date.UTC(2026, 0, 1, 0, 5) / 1000) === "01 JAN 2026 0005Z" && fmtZ(Date.UTC(2026, 11, 31, 23, 59) / 1000) === "31 DEC 2026 2359Z");
+check("no time gives no text rather than a made-up one", fmtZ(null) === null && fmtZ(undefined) === null && fmtZ(NaN) === null);
+check("spans use at most two units", fmtSpan(20) === "under 1 min" && fmtSpan(45 * 60) === "45 min" && fmtSpan(3 * H + 20 * 60) === "3 h 20 min" && fmtSpan(5 * H) === "5 h" && fmtSpan(52 * H) === "2 d 4 h" && fmtSpan(72 * H) === "3 d" && fmtSpan(44 * 24 * H) === "6 wk 2 d");
+
+let s = statusOf(n({}), NOW);
+check("a NOTAM in effect says so and when it ends", s.kind === "active" && s.label === "IN EFFECT" && s.detail === "ends in 30 h");
+s = statusOf(n({ start: NOW + 5 * H, end: NOW + 13 * H }), NOW);
+check("an upcoming NOTAM says when it starts", s.kind === "upcoming" && s.label === "STARTS IN 5 h");
+s = statusOf(n({ end: NOW + 4 * 24 * H, end_estimated: true }), NOW);
+check("an estimated end is marked estimated", s.detail === "ends in 4 d (estimated)");
+check("permanent only when the NOTAM is permanent", statusOf(n({ end: null, permanent: true }), NOW).detail === "permanent" && statusOf(n({ end: null, permanent: false }), NOW).detail === "end not stated");
+check("a start that is not stated counts as in effect", statusOf(n({ start: null }), NOW).kind === "active");
+
+let e = effective(n({}));
+check("the effective period shows both ends in Z and its length", e.from === "08 NOV 2026 1300Z" && e.until === "09 NOV 2026 2100Z" && e.span === "32 h");
+e = effective(n({ end: NOW + H, end_estimated: true }));
+check("an estimated end carries EST", e.until === "08 NOV 2026 1600Z EST");
+e = effective(n({ end: null, permanent: true }));
+check("a permanent NOTAM has no end time and no length", e.until === "PERMANENT" && e.span === null);
+e = effective(n({ start: null, end: null }));
+check("missing times are shown as not stated", e.from === "not stated" && e.until === "not stated" && e.span === null);
+
+const list = [n({ id: "a", type: "AD", type_label: "Aerodrome" }), n({ id: "b" }), n({ id: "c", start: NOW + H }), n({ id: "d", type: "OBST", type_label: "Obstruction" })];
+const groups = groupByType(list);
+check("consecutive NOTAMs of a type form one group, in the order given", groups.map((g) => `${g.label}:${g.items.length}`).join() === "Aerodrome:1,Runway:2,Obstruction:1");
+const c = counts(list, NOW);
+check("counts split in effect from upcoming", c.total === 4 && c.active === 3 && c.upcoming === 1);
+check("a NOTAM that ended since it was fetched is not shown", current([n({ id: "x", end: NOW - 1 }), n({ id: "y" }), n({ id: "z", end: null })], NOW).map((x) => x.id).join() === "y,z");
+
+check("pages are screenfuls of columns", pageCount(1880, 1880, 20) === 1 && pageCount(3780, 1880, 20) === 2 && pageCount(4730, 1880, 20) === 3 && pageCount(0, 0, 20) === 1);
+check("the view stays up one dwell per page, up to the page limit", visitSeconds(1, 30) === 30 && visitSeconds(3, 30) === 90 && visitSeconds(50, 30) === MAX_PAGES * 30 && visitSeconds(0, 30) === 30);
+
+const html = cardHtml(n({ schedule: "MON-FRI 0330-1430" }), NOW);
+const box = document.createElement("div");
+box.innerHTML = html;
+const text = box.textContent.replace(/\s+/g, " ");
+const times = [...box.querySelectorAll(".nt-time")].map((t) => [".k", ".v", ".s"].map((q) => t.querySelector(q).textContent).join("|"));
+check("a card shows when the NOTAM was issued, in Z, and how long ago", times[0] === "ISSUED|07 NOV 2026 1300Z|26 h ago", times[0]);
+check("a card shows the effective period, both ends in Z, and its length", times[1] === "EFFECTIVE|08 NOV 2026 1300Z \u2192 09 NOV 2026 2100Z|for 32 h", times[1]);
+check("a card shows when the NOTAM was last updated, in Z, and how long ago", times[2] === "UPDATED|08 NOV 2026 1000Z|5 h ago", times[2]);
+check("a card shows the plain text, the raw NOTAM, its number and its type", text.includes("Runway 16/34 closed") && text.includes("!SEA 11/012 S50 RWY 16/34 CLSD") && text.includes("SEA 11/012") && box.querySelector(".nt-type").textContent === "Runway");
+check("a schedule is shown as UTC", text.includes("SCHEDULE (Z) MON-FRI 0330-1430"));
+check("an upcoming card is marked as such", cardHtml(n({ start: NOW + H }), NOW).includes('class="nt-card upcoming"'));
+const evil = cardHtml(n({ raw: '<img src=x onerror="alert(1)">', plain: { text: "<b>bold</b>" }, type_label: "<i>x</i>", accountability: "<u>" }), NOW);
+box.innerHTML = evil;
+check("NOTAM text is escaped, never rendered as markup", !box.querySelector(".nt-raw img, .nt-plain b, .nt-type i, .nt-id u") && box.querySelector(".nt-raw").textContent.includes("<img") && box.querySelector(".nt-plain").textContent === "<b>bold</b>");
+box.innerHTML = cardHtml(n({}), NOW);
+check("a card says its plain line is FAA terms spelled out", box.querySelector(".nt-origin").textContent === "FAA contractions spelled out" && !box.querySelector(".nt-warn"));
+box.innerHTML = cardHtml(n({ plain: { text: "Runway 16/34 is closed", source: "model", model: "qwen" }, times_differ: true }), NOW);
+check("a card says when its plain line is a checked model rewrite", box.querySelector(".nt-origin").textContent === "Model rewrite, checked against the NOTAM" && box.querySelector(".nt-plain").textContent === "Runway 16/34 is closed");
+check("a card warns when the time fields differ from the NOTAM text", box.querySelector(".nt-warn").textContent.includes("DIFFER FROM THE NOTAM TEXT"));
+box.innerHTML = listHtml(list, NOW);
+check("the list has a heading per type and a card per NOTAM", box.querySelectorAll(".nt-group").length === 3 && box.querySelectorAll(".nt-card").length === 4);
+done();
+</script></body></html>

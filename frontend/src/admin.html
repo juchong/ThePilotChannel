@@ -70,6 +70,21 @@
         <div id="cameras"></div>
       </section>
 
+      <section class="card" data-section="notams">
+        <h2>NOTAMs</h2>
+        <p class="hint" style="margin-top:0">One view per location, showing the NOTAMs that affect it: those in effect now and
+          those taking effect within the look-ahead, grouped by type with issue and effective times in UTC (Z). A location is the
+          identifier of an airport, NAVAID or ARTCC (S50 or KS50, KSEA, ZSE). Live data comes from the FAA NOTAM Management
+          Service; its client ID and secret go in <code>.env</code> (see the README).</p>
+        <div id="notam-settings"></div>
+        <div class="row-actions" style="justify-content:flex-start;margin-top:10px">
+          <input id="notam-new" type="text" style="width:16em" placeholder="KS50, KBFI, ZSE" autocapitalize="characters"
+            spellcheck="false" aria-label="Location identifiers to add">
+          <button id="notam-add" type="button" class="btn sm primary" data-add="notams.locations" data-from="notam-new">Add locations</button>
+          <span class="status">type one or more identifiers, then Enter</span>
+        </div>
+      </section>
+
       <section class="card" data-section="screen">
         <h2>Screen</h2>
         <p class="hint" style="margin-top:0">Step the display through its views or black out the picture, from here or from an
@@ -92,6 +107,7 @@
       <p class="hint">Saving writes <code>config.yaml</code> (keeping the previous versions as <code>config.yaml.bak.1..3</code>) and pushes a reload to the kiosk.</p>
     </div>
     <datalist id="tz-list"></datalist>
+    <datalist id="llm-models"></datalist>
     <script type="module" src="./admin.js"></script>
   </body>
 </html>

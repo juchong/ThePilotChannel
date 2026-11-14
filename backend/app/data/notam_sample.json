@@ -1,0 +1,21 @@
+{
+  "note": "Sample NOTAMs for previewing the NOTAM view. The bodies are examples from FAA Order 7930.2; numbers, accountability and times are invented. Times are offsets from the moment of the request (m, h, d); {LOC} is the requested location. Not real NOTAMs.",
+  "notams": [
+    {"accountId": "SEA", "number": "11/012", "classification": "DOM", "text": "RWY 16/34 CLSD TO ACFT WINGSPAN MORE THAN 70FT AND TAIL HGT MORE THAN 49FT", "issued": "-26h", "updated": "-26h", "start": "-20h", "end": "+52h"},
+    {"accountId": "SEA", "number": "11/004", "classification": "DOM", "text": "RWY 18 RWY END ID LGT U/S", "issued": "-3d", "updated": "-5h", "start": "-3d", "end": "+4d", "estimated": true},
+    {"accountId": "SEA", "number": "11/019", "classification": "DOM", "text": "RWY 01L/19R WIP", "issued": "-6h", "updated": "-6h", "start": "+5h", "end": "+13h"},
+    {"accountId": "SEA", "number": "11/021", "classification": "DOM", "text": "TWY C BTN APCH END RWY 04R AND APCH END RWY 04L CLSD", "issued": "-2h", "updated": "-2h", "start": "-1h", "end": "+7h"},
+    {"accountId": "SEA", "number": "11/022", "classification": "DOM", "text": "TWY B CL LGT U/S", "issued": "-1h", "updated": "-1h", "start": "+60h", "end": "+84h"},
+    {"accountId": "SEA", "number": "11/023", "classification": "DOM", "text": "APRON MAIN RAMP BTN RWY 13/31 AND TWY C FICON 1IN DRY SN", "issued": "-40m", "updated": "-40m", "start": "-40m", "end": "+23h"},
+    {"accountId": "SEA", "number": "11/009", "classification": "DOM", "text": "AD AP CLSD EXC PPR MON-FRI 0330-1430", "issued": "-2d", "updated": "-2d", "start": "+10h", "end": "+10d", "schedule": "MON-FRI 0330-1430"},
+    {"accountId": "SEA", "number": "09/031", "classification": "DOM", "text": "NAV VOR 010-035 BEYOND 35NM SFC-2000FT UNUSABLE", "issued": "-45d", "updated": "-45d", "start": "-45d", "end": "PERM"},
+    {"accountId": "SEA", "number": "11/017", "classification": "DOM", "text": "NAV ILS RWY 14 LOC U/S", "issued": "-9h", "updated": "-9h", "start": "-9h", "end": "+15h", "estimated": true},
+    {"accountId": "SEA", "number": "11/011", "classification": "DOM", "text": "COM REMOTE COM OUTLET 122.6 U/S", "issued": "-30h", "updated": "-30h", "start": "-30h", "end": "+5d"},
+    {"accountId": "SEA", "number": "11/020", "classification": "DOM", "text": "SVC ATIS NOT AVBL", "issued": "-3h", "updated": "-3h", "start": "-3h", "end": "+3h"},
+    {"accountId": "SEA", "number": "11/015", "classification": "DOM", "text": "AIRSPACE UAS WI AN AREA DEFINED AS 13NM RADIUS OF {LOC} SFC-17999FT", "issued": "-1d", "updated": "-1d", "start": "+2h", "end": "+6h"},
+    {"accountId": "FDC", "number": "6/4821", "classification": "FDC", "text": "IAP NASHUA/BOIRE FIELDS, NH. ILS OR LOC RWY 14, AMDT 5B... PROCEDURE NA EXCEPT FOR AIRCRAFT EQUIPPED WITH SUITABLE RNAV SYSTEM WITH GPS, CHERN LOM U/S.", "issued": "-12d", "updated": "-12d", "start": "-12d", "end": "+48d", "estimated": true},
+    {"accountId": "SEA", "number": "10/044", "classification": "DOM", "text": "OBST CRANE (ASN 20YY-ACE-5-NRA) 345140N0804506W (1.44NM SW N52) 580FT (195FT AGL) NOT LGTD", "issued": "-20d", "updated": "-20d", "start": "-20d", "end": "+70d"},
+    {"accountId": "SEA", "number": "10/061", "classification": "DOM", "text": "OBST TOWER LGT (ASR 1234567) 345313.12N0815744.34W (3NM SSW SPA) 1528FT (564FT AGL) U/S", "issued": "-8d", "updated": "-8d", "start": "-8d", "end": "+7d"},
+    {"accountId": "SEA", "number": "11/002", "classification": "DOM", "text": "OBST MOORED BALLOON WI AN AREA DEFINED AS 1NM RADIUS OF SJT 2430FT (510FT AGL) FLAGGED", "issued": "-2d", "updated": "-2d", "start": "-2d", "end": "+5d"}
+  ]
+}

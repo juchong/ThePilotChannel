@@ -55,6 +55,9 @@ export const api = {
       {},
       20000
     ),
+  getNotams: (location) => j(`/api/notams?location=${encodeURIComponent(location)}`),
+  checkNotamLocation: (ident, source) => j("/api/notams/check", json("POST", { ident, source }), 30000),
+  testNotamModel: (body) => j("/api/notams/model-test", json("POST", body), 150000),
   getStatus: () => j("/api/status"),
   health: () => j("/healthz", {}, 4000),
   // remote display control
@@ -69,7 +72,7 @@ export const api = {
   testSource: (payload) => j("/api/test-source", json("POST", payload), 30000),
 };
 
-// SSE for connected / config_changed / weather_updated events. EventSource
+// SSE for connected / config_changed / weather_updated / notams_updated / display events. EventSource
 // reconnects on its own; each (re)connection delivers a `connected` event that
 // carries the backend boot id, so the caller can detect a rebuilt backend.
 export function subscribeEvents(onEvent) {

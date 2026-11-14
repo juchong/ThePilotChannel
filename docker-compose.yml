@@ -17,6 +17,13 @@ services:
       # The camera stream relay (the go2rtc service below), reached over the
       # compose network only.
       HANGAR_GO2RTC: http://go2rtc:1984
+      # FAA NOTAM Management Service credentials for the NOTAM views (issued by the
+      # FAA on request, see the README). Set both in .env.
+      HANGAR_NMS_CLIENT_ID: ${HANGAR_NMS_CLIENT_ID:-}
+      HANGAR_NMS_CLIENT_SECRET: ${HANGAR_NMS_CLIENT_SECRET:-}
+      # API key of the OpenAI-compatible endpoint that rewrites NOTAMs (optional; the
+      # endpoint and model name are set on the admin page).
+      HANGAR_LLM_API_KEY: ${HANGAR_LLM_API_KEY:-}
     volumes:
       # bind-mount the data DIRECTORY (not a single file) so atomic writes work
       - ./data:/data

@@ -27,6 +27,7 @@ async function boot() {
     satellite: el("satellite"),
     radar: el("radar"),
     cameras: el("cameras"),
+    notams: el("notam-settings"),
   };
   fillTimezones();
   await load();
@@ -49,6 +50,9 @@ async function boot() {
   // One delegated listener for every add / delete / move button, so re-rendering
   // rows can never double-bind handlers.
   root.addEventListener("click", (ev) => {
+    const check = ev.target.closest("[data-check-notam]");
+    if (check) return checkNotam(+check.dataset.checkNotam);
+    if (ev.target.closest("[data-test-model]")) return testModel();
     const btn = ev.target.closest("[data-add],[data-del],[data-move]");
     if (!btn || btn.disabled) return;
     ev.preventDefault();
@@ -59,8 +63,14 @@ async function boot() {
     }
   });
   root.addEventListener("input", (ev) => {
+    if (ev.target.id === "notam-new") return; // typing identifiers to add changes nothing yet
     syncRange(ev.target);
     markDirty();
+  });
+  root.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Enter" || ev.target.id !== "notam-new") return;
+    ev.preventDefault();
+    el("notam-add").click();
   });
   root.addEventListener("change", markDirty);
   window.addEventListener("beforeunload", (e) => {
@@ -126,8 +136,66 @@ async function showStatusPanel() {
       `backend up ${esc(fmtUptime(s.uptime_s))} · traffic source: ${src}` +
       (s.last_error ? ` · last error: <code>${esc(s.last_error)}</code>` : "") +
       (s.weather && s.weather.error ? ` · weather: <code>${esc(s.weather.error)}</code>` : "") +
-      cameraStatus(s.cameras);
+      cameraStatus(s.cameras) +
+      notamStatus(s.notams);
   } catch (_) {}
+}
+
+// The NOTAM feed's state for the status line: the source, whether the FAA
+// credentials are set, and the last refresh error.
+function notamStatus(n) {
+  if (!n || !n.enabled) return "";
+  if (n.source === "sample") return ` · NOTAMs: sample data${rewriteStatus(n.translate)}`;
+  const creds = n.credentials ? "" : " (credentials missing in .env)";
+  const err = n.error && n.credentials ? ` <code>${esc(n.error)}</code>` : "";
+  return ` · NOTAMs: FAA${creds}${err}${rewriteStatus(n.translate)}`;
+}
+
+// The model rewrite's state: how many NOTAMs show a checked rewrite, how many
+// answers the check refused, how many are still to be asked.
+function rewriteStatus(t) {
+  if (!t || !t.enabled) return "";
+  const key = t.key ? "" : ", no API key in .env";
+  const err = t.error ? ` <code>${esc(t.error)}</code>` : "";
+  return ` · model ${esc(t.model)}: ${t.shown} shown, ${t.refused} refused, ${t.pending} waiting${key}${err}`;
+}
+
+// Ask the model endpoint typed into the form to rewrite one FAA example NOTAM
+// and show the answer with the check's verdict.
+async function testModel() {
+  collect(root, cfg);
+  const t = (cfg.notams && cfg.notams.translate) || {};
+  const id = "model-test-result";
+  if (!t.base_url || !t.model) return setStatus(id, "enter the endpoint URL and the model name first", "err");
+  setStatus(id, "asking the model…");
+  try {
+    const r = await api.testNotamModel({ base_url: t.base_url, model: t.model, timeout_s: t.timeout_s || 60 });
+    if (Array.isArray(r.models)) el("llm-models").innerHTML = r.models.map((m) => `<option value="${esc(m)}"></option>`).join("");
+    const key = r.key ? "" : " (no HANGAR_LLM_API_KEY in .env)";
+    if (r.error) return setStatus(id, r.error + key, "err");
+    if (r.ok) return setStatus(id, `${r.notam} → “${r.answer}” passed the check (${r.ms} ms)`, "ok");
+    setStatus(id, `the model answered, but its answer failed the check: ${(r.refused || []).join("; ")}`, "err");
+  } catch (e) {
+    setStatus(id, e.status === 401 ? "not authorized: reload and enter the admin password" : "error: " + (typeof e.detail === "string" ? e.detail : e.message), "err");
+  }
+}
+
+// Ask the configured source for one location now and show what it returns.
+async function checkNotam(i) {
+  collect(root, cfg);
+  const loc = ((cfg.notams && cfg.notams.locations) || [])[i];
+  const id = `notam-check-${i}`;
+  if (!loc || !el(id)) return;
+  setStatus(id, "checking…");
+  try {
+    const r = await api.checkNotamLocation(loc.ident, cfg.notams.source);
+    if (r.ok) {
+      const from = r.source === "sample" ? "sample data" : "FAA";
+      setStatus(id, `${from}: ${r.total} NOTAMs for ${r.asked_as.join(" / ")}, ${r.shown} shown with the saved look-ahead`, "ok");
+    } else setStatus(id, r.error, "err");
+  } catch (e) {
+    setStatus(id, e.status === 401 ? "not authorized: reload and enter the admin password" : "error: " + (typeof e.detail === "string" ? e.detail : e.message), "err");
+  }
 }
 
 // The camera relay's state for the status line: whether go2rtc answers, which tile

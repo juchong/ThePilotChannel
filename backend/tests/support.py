@@ -3,6 +3,7 @@ DataManager reads a throwaway config, a stub static dir, a temp tile cache,
 and an admin password."""
 import os
 import tempfile
+import time
 
 TMP = tempfile.mkdtemp(prefix="tpc-test-")
 CFG = os.path.join(TMP, "config.yaml")
@@ -19,6 +20,9 @@ os.environ["HANGAR_STATIC"] = STATIC
 os.environ["HANGAR_ADMIN_PASSWORD"] = "hunter2"
 os.environ["HANGAR_TILE_CACHE"] = os.path.join(TMP, "tiles")
 os.environ["HANGAR_GO2RTC"] = "http://127.0.0.1:9"  # a closed port: the relay is unreachable in tests
+# no FAA credentials: the NOTAM source raises before it would reach the network
+os.environ.pop("HANGAR_NMS_CLIENT_ID", None)
+os.environ.pop("HANGAR_NMS_CLIENT_SECRET", None)
 
 AUTH = ("admin", "hunter2")
 
@@ -32,3 +36,11 @@ def base_cfg():
 
 def put(client, body, **kw):
     return client.put("/api/config", json=body, auth=AUTH, **kw)
+
+
+def wait_until(cond, timeout: float) -> bool:
+    """Poll `cond` every 100 ms until it holds or `timeout` seconds pass."""
+    deadline = time.time() + timeout
+    while not cond() and time.time() < deadline:
+        time.sleep(0.1)
+    return cond()

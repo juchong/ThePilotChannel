@@ -1,14 +1,14 @@
 <!doctype html><html><body>
-<div id="root"><div id="airports"></div><div id="regions"></div><div id="cycle"></div><div id="datasource"></div><div id="display"></div><div id="satellite"></div><div id="radar" data-section="radar"></div><div id="cameras" data-section="cameras"></div></div>
+<div id="root"><div id="airports"></div><div id="regions"></div><div id="cycle"></div><div id="datasource"></div><div id="display"></div><div id="satellite"></div><div id="radar" data-section="radar"></div><div id="cameras" data-section="cameras"></div><div id="notam-settings" data-section="notams"></div><input id="notam-new"><button id="notam-add" data-add="notams.locations" data-from="notam-new">add</button></div>
 <pre id="out"></pre><script type="module">
 import { check, done } from "./harness.js";
-import { renderAll, collect, applyAction, applyErrors, clearErrors, validateNative, syncRange } from "../src/lib/adminForm.js";
+import { renderAll, collect, applyAction, applyErrors, clearErrors, validateNative, syncRange, addNotamLocations } from "../src/lib/adminForm.js";
 // The admin form must never lose or mangle data: one delegated handler, typed
 // collection (a name of "2024" stays a string), escaping, and server errors
 // mapped to fields.
 const el = (id) => document.getElementById(id);
 const root = el("root");
-const roots = { airports: el("airports"), regions: el("regions"), cycle: el("cycle"), datasource: el("datasource"), display: el("display"), satellite: el("satellite"), radar: el("radar"), cameras: el("cameras") };
+const roots = { airports: el("airports"), regions: el("regions"), cycle: el("cycle"), datasource: el("datasource"), display: el("display"), satellite: el("satellite"), radar: el("radar"), cameras: el("cameras"), notams: el("notam-settings") };
 let cfg = {
   airports: [{ icao: "KS50", name: "Auburn", lat: 47.3, lon: -122.2, local_radius_mi: 5, enabled: true }, { icao: "KBFI", name: "Boeing", lat: 47.5, lon: -122.3, local_radius_mi: 5, enabled: true }, { icao: "KSEA", name: "Seattle", lat: 47.4, lon: -122.3, local_radius_mi: 5, enabled: true }, { icao: "KPAE", name: "Paine", lat: 47.9, lon: -122.2, local_radius_mi: 5, enabled: false }],
   regions: [{ name: "Puget Sound", center_lat: 47.4, center_lon: -122.3, radius_mi: 30, enabled: true }],
@@ -19,6 +19,7 @@ let cfg = {
   satellite: { enabled: true, sat: "G18", sector: "pnw", band: "GEOCOLOR", frames: 24, size: "1200x1200", dwell_s: 25, label: "GOES <b>West</b>" },
   radar: { enabled: true, label: "NEXRAD", frames: 10, interval_min: 5, opacity: 0.75, product: "n0q", crossfade: false },
   cameras: { enabled: true, label: "Cameras", dwell_s: 30, tiles: [{ name: "Gate", stream: "cam1", cols: 2 }, { name: "Runway", stream: "cam3", cols: 4 }] },
+  notams: { enabled: true, source: "faa", label: "NOTAMs", dwell_s: 30, lookahead_h: 24, refresh_s: 600, locations: [{ ident: "KBFI", name: "Boeing", enabled: true }], translate: { enabled: false, base_url: "", model: "", timeout_s: 60 } },
 };
 renderAll(cfg, roots);
 root.addEventListener("click", (ev) => { const btn = ev.target.closest("[data-add],[data-del],[data-move]"); if (!btn || btn.disabled) return; collect(root, cfg); if (applyAction(cfg, btn)) renderAll(cfg, roots); });
@@ -63,5 +64,37 @@ root.querySelector('[data-del="cameras.tiles.2"]').click();
 root.querySelector('[data-f="cameras.tiles.0.cols"]').value = "4";
 collect(root, cfg);
 check("delete removes one tile and columns collect as a number", cfg.cameras.tiles.length === 2 && cfg.cameras.tiles[0].cols === 4);
+// NOTAM locations: typed identifiers, one-click airports, never a duplicate.
+const idents = () => cfg.notams.locations.map((l) => l.ident).join();
+const suggested = () => [...root.querySelectorAll('#notam-settings [data-preset]')].map((b) => b.textContent.trim()).join();
+check("display airports not yet monitored are offered with one click", suggested() === "+ KS50,+ KSEA,+ KPAE");
+root.querySelector('#notam-settings [data-preset]').click();
+check("a suggested airport is added with its name and leaves the suggestions", idents() === "KBFI,KS50" && cfg.notams.locations[1].name === "2024" && cfg.notams.locations[1].enabled === true && suggested() === "+ KSEA,+ KPAE");
+el("notam-new").value = "zse, ksea  kbfi not-an-id S50";
+el("notam-add").click();
+check("typed identifiers are added upper-cased, one already monitored is skipped", idents() === "KBFI,KS50,ZSE,KSEA,S50");
+check("what is not an identifier stays in the box to be corrected", el("notam-new").value === "NOT-AN-ID");
+check("each location has a row with its identifier and a check button", root.querySelectorAll("#notam-settings .row").length === 5 && root.querySelector('[data-f="notams.locations.2.ident"]').value === "ZSE" && !!root.querySelector('[data-check-notam="2"]'));
+el("notam-new").value = "KBFI";
+el("notam-add").click();
+check("adding only what is already monitored changes nothing", idents() === "KBFI,KS50,ZSE,KSEA,S50" && el("notam-new").value === "");
+root.querySelector('[data-f="notams.lookahead_h"]').value = "48";
+root.querySelector('[data-f="notams.source"]').value = "sample";
+root.querySelector('[data-del="notams.locations.0"]').click();
+check("deleting a location keeps the other settings typed in the card", idents() === "KS50,ZSE,KSEA,S50" && cfg.notams.lookahead_h === 48 && cfg.notams.source === "sample");
+root.querySelector('[data-f="notams.translate.enabled"]').checked = true;
+root.querySelector('[data-f="notams.translate.base_url"]').value = " https://llm.example.net/v1 ";
+root.querySelector('[data-f="notams.translate.model"]').value = "qwen-local";
+root.querySelector('[data-f="notams.translate.timeout_s"]').value = "90";
+collect(root, cfg);
+check("the model settings collect into notams.translate with their types", cfg.notams.translate.enabled === true && cfg.notams.translate.base_url === "https://llm.example.net/v1" && cfg.notams.translate.model === "qwen-local" && cfg.notams.translate.timeout_s === 90);
+check("the model settings offer a test button and no field for the API key", !!root.querySelector("[data-test-model]") && !!root.querySelector("#model-test-result") && !root.querySelector('[data-f*="key"]:not([data-f="data_source.api_key"])'));
+root.querySelector('[data-f="notams.translate.base_url"]').value = "not a url";
+check("an endpoint that is not a URL is caught before saving", validateNative(root) >= 1);
+clearErrors(root);
+root.querySelector('[data-f="notams.translate.base_url"]').value = "https://llm.example.net/v1";
+const scratch = { notams: { locations: [] } };
+const res = addNotamLocations(scratch, "<b>x</b>; KSEA;KSEA TOOLONG");
+check("identifiers are validated before they become locations", scratch.notams.locations.length === 1 && res.added === 1 && res.rest === "<B>X</B> TOOLONG");
 done();
 </script></body></html>

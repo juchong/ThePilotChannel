@@ -3,8 +3,9 @@
 A wall-mounted information display for an airplane hangar. A Raspberry Pi 5 or 4 drives an
 HDMI TV that cycles through live ADS-B air traffic around your airports, METAR weather with
 flight-category wind barbs, an animated NEXRAD precipitation radar loop, a NOAA GOES
-satellite loop, live video from your security cameras, and local and UTC clocks. Everything
-is configured from a phone or laptop on the hangar Wi-Fi.
+satellite loop, live video from your security cameras, the NOTAMs for the airports you
+choose, and local and UTC clocks. Everything is configured from a phone or laptop on the
+hangar Wi-Fi.
 
 Local airport view (live traffic, METAR, and wind barb):
 
@@ -21,6 +22,10 @@ Satellite loop view (animated NOAA GOES imagery):
 Camera view (live video from UniFi Protect cameras):
 
 ![Camera view](docs/display-cameras.jpg)
+
+NOTAM view (one per location; shown here with the built-in sample NOTAMs):
+
+![NOTAM view](docs/display-notams.jpg)
 
 Admin page (remote configuration):
 
@@ -51,7 +56,18 @@ time left on the current view.
   decodes in hardware; the streams are read by go2rtc, so other RTSP cameras it supports can
   be used the same way.
 
-No API keys are needed. Weather comes from the US National Weather Service Aviation Weather
+- **NOTAMs (optional).** One view per location you choose: the NOTAMs that affect it, those
+  in effect now and those taking effect within a number of hours you set, grouped by type
+  (aerodrome, runway, taxiway, apron, airspace, navigation aids, communications, services,
+  instrument procedures, and obstructions last). Each NOTAM shows a plain-language line
+  with the FAA's contractions spelled out, the NOTAM as issued, when it was issued, when it
+  takes effect and ends, how long it runs, and when it was last updated. Every time is UTC
+  with the Z designator. A location with more NOTAMs than fit on the screen is shown a page
+  at a time. A language model you host yourself can rewrite the plain-language line as a
+  sentence; its answer is shown only when a program has checked it against the NOTAM.
+
+No API keys are needed, except for the NOTAM views, which use credentials the FAA issues on
+request, and the key of your own model server if you turn the rewrite on. Weather comes from the US National Weather Service Aviation Weather
 Center, radar from the Iowa Environmental Mesonet, satellite imagery from NOAA STAR, and map
 tiles from OpenStreetMap. Traffic comes from your own ADS-B receiver if you have one, or
 from a free public aggregator (adsb.fi, adsb.lol, or airplanes.live).
@@ -69,6 +85,8 @@ from a free public aggregator (adsb.fi, adsb.lol, or airplanes.live).
 - Optional, for the camera view: a Raspberry Pi 5 (the view uses its hardware H.265
   decoder) and cameras with RTSP streams, for example UniFi Protect cameras with RTSP
   turned on.
+- Optional, for the NOTAM views: a client ID and secret for the FAA NOTAM Management
+  Service API, which the FAA issues on request (see NOTAMs under "Set up your hangar").
 - A phone or laptop on the same network to configure it.
 
 ## Install on the Raspberry Pi
@@ -238,6 +256,148 @@ portrait camera is centered in its tile. Tiles fill the rows in order. The statu
 the top of the admin page says whether the relay is up and names tiles whose stream it does
 not know or whose slot has no link in `.env`.
 
+**NOTAMs.** A view for each location you list, showing the NOTAMs that affect it. NOTAMs
+are selected by the location they affect, not by the office that issued them: a closure at
+a small field is often issued under a larger airport's accountability and still appears
+under the small field.
+
+The data comes from the FAA NOTAM Management Service (NMS) API, the FAA's distribution
+service for NOTAMs. Access is free but not self-serve: email NOTAMS@faa.gov (the address
+behind "API Access" on [nms.aim.faa.gov](https://nms.aim.faa.gov/)) and ask for production
+access to the NMS-API, saying what you will use it for. The FAA replies with a client ID
+(called KEY) and a client secret (SECRET). Put both in `.env` next to `docker-compose.yml`
+on the Pi and run `docker compose up -d`:
+
+```
+HANGAR_NMS_CLIENT_ID=your-key
+HANGAR_NMS_CLIENT_SECRET=your-secret
+```
+
+Then, on the admin page:
+
+- **Locations.** Type one or more identifiers into the box and press Enter, or click one of
+  your airports offered under the list. A location is the identifier of the affected
+  facility: an airport (`S50` or `KS50`, `KSEA`), a NAVAID, or an air route traffic control
+  center (`ZSE`). The FAA files airspace activity more than 5 miles from an airport under
+  the nearest VOR or the center, so add those if you want them. **Check** on a row asks the
+  FAA for that location now and reports how many NOTAMs it has. The optional name appears
+  in the view's heading.
+- **Show NOTAMs starting within.** NOTAMs in effect are always shown; this adds the ones
+  that take effect within this many hours. 0 shows only those in effect.
+- **Seconds per page.** How long each page of a location stays up. A location whose NOTAMs
+  fill three pages stays up three times as long.
+- **Refresh.** How often the NOTAMs are fetched. The display keeps the last set it fetched,
+  also across restarts, and says in the view's heading when it was retrieved.
+- **Source.** `faa` is the live feed. `sample` shows invented NOTAMs under a banner that
+  says so, for seeing the view before your credentials arrive; they are never mixed with
+  FAA data.
+
+The plain-language line spells out the contractions the FAA names for NOTAMs (FAA Order
+7930.2): those of the NOTAM tables in the Aeronautical Information Manual (chapter 5) and
+in the Order itself, those FAA Order JO 7340.2 (Contractions) marks for ICAO usage, and
+those of ICAO's own list (Doc 8400: AMSL, BRG, MAG, AIP and the like, which NOTAMs from
+other countries use throughout). Feet, nautical miles, metres, kilograms and megahertz are
+written out after a number. A leading X is read as "cross" where the FAA gives the word
+(XNG is crossing, XWIND is crosswind); X on its own is left as written.
+
+A NOTAM is all capitals, so plain words are put in lower case: the words of the FAA's own
+documents, and any word of four letters or more that an English dictionary lists as an
+ordinary word ("DO NOT USE FALSE INDICATIONS POSSIBLE" reads "do not use false indications
+possible"). A token made of pieces joined by marks is read piece by piece when every piece
+is known (`RMK/FALSE` is "remark/false", `1.PSN` is "1.position", `RWY01R` is "runway
+01R"); if any piece is not, the whole token stays as written.
+
+Left exactly as written are:
+
+- designators, numbers, and a location identifier where the NOTAM names a place ("RADIUS
+  OF SAT" is San Antonio, not Saturday);
+- a contraction to which the sources give two different meanings (REP is a report or a
+  reporting point) or only a description (QNH, UTC);
+- a group that is both a plain word and a contraction (IF, PER, MAP), since only the
+  sentence tells which;
+- a two-letter group unless an FAA document names it and no publication gives it any other
+  meaning (PN and HJ are spelled out; FL, SA and NR are not);
+- a word of three letters that the FAA's documents do not write (ASH, ELK): three letters
+  are also a location identifier;
+- a word the dictionary also lists as a name (CHINA, GREEN), the words of the phonetic
+  alphabet (taxiway BRAVO), and a five-letter word where it may be the name of a fix: in a
+  procedure or route NOTAM, and next to an airway or another fix;
+- a state code after a comma ("DALLAS, TX"; so OR and IN stay in capitals there), and the
+  letter A except before a distance ("within a 45 nautical miles radius"): it is also a
+  taxiway and an index;
+- in a procedure NOTAM (IAP, SID, STAR and the like), the contractions of the procedure
+  charts.
+
+The capitals of a NOTAM do not tell a name from a word, so a name that is also an ordinary
+word reads in lower case ("drum military operations area" for the DRUM MOA).
+
+Where a contraction stands for several forms of one word (ACT is active, activated or
+activity), the line uses the form the FAA's NOTAM documents write most often, or the one
+they write beside the neighbouring word. That can be the wrong part of speech for the
+sentence ("bird active increased"); the meaning is the FAA's either way. The NOTAM as
+issued is always shown beneath the line, and it is the NOTAM as issued that counts. This
+display is an aid in the hangar, not a preflight briefing.
+
+When the times the FAA's data gives for a NOTAM differ from the times written in the NOTAM
+itself, the card says so in red and the NOTAM text is the one to read.
+
+**Rewriting NOTAMs with your own model (optional).** A language model you host can turn
+the plain-language line into a sentence, for example "Taxiway C between the approach end of
+runway 04R and the approach end of runway 04L is closed". It needs a server with an
+OpenAI-compatible API, such as LiteLLM or vLLM. Nothing is sent anywhere else. Put the
+server's API key in `.env` and run `docker compose up -d`:
+
+```
+HANGAR_LLM_API_KEY=your-key
+```
+
+Then, in the NOTAMs card of the admin page:
+
+- **Model endpoint.** The server's URL, ending in `/v1`.
+- **Model name.** The name the server knows the model by. **Test model** fills in the names
+  the server offers.
+- **Test model.** Sends one FAA example NOTAM to the model and shows its answer, whether the
+  answer passed the check, and how long it took. Nothing is saved.
+- **Rewrite NOTAMs with a local model.** Turns the rewrite on.
+- **Model timeout.** How long one answer may take.
+
+A program checks every answer before it is shown. Each number, designator, identifier and
+word of the NOTAM must be in the answer, in the NOTAM's order. A number, a designator, an
+identifier or a code is written exactly as in the NOTAM; a contraction in a wording its
+source gives, never left as a contraction where the plain-language line spells it out; a
+plain word in its own spelling, and a name in capitals or with a capital initial. The only
+words the model may add are these: a, an, the, is, are, and, of, at, with, that, which,
+there, it, its, this, and "to" after the NOTAM's DUE ("due to maintenance"). The only
+punctuation it may add is commas, periods, colons, semicolons, parentheses, quotes and
+dashes, and none of it where it could change how a number reads: no symbol such as ~ or <,
+no sign or decimal point before a number, nothing joining two numbers. Where the NOTAM
+ends a statement with a full stop, the answer must end it there too, so that two statements
+are never run into one. An answer that
+adds, drops, reorders or rewords anything else goes back to the model once, with what was
+wrong with it; if the second answer fails too, both are discarded and the line with the
+contractions spelled out stays on the card. The check cannot tell whether one of those
+joining words connects two parts of the NOTAM the way the NOTAM means, so each card says
+which line it shows ("Model rewrite, checked against the NOTAM" or "FAA contractions
+spelled out"), and the NOTAM as issued is beneath it either way.
+
+Each NOTAM is rewritten once and its checked answer is kept, also across restarts. The view
+never waits for the model: a NOTAM shows the spelled-out line until its rewrite has passed
+the check, and keeps it when the model server is down. The admin page's status line counts
+the rewrites shown, refused and waiting.
+
+To measure a model before relying on it, `backend/tools/eval_notam_model.py` sends it the
+FAA's example NOTAMs (or a file of your own) and reports how many answers passed the check,
+every refused answer with the reason, and accepted answers beside the spelled-out line:
+
+```bash
+docker run --rm --env-file .env -v "$PWD/backend:/work:ro" -w /work hangar-display:latest \
+  python tools/eval_notam_model.py --base-url https://llm.example.net/v1 --model NAME
+```
+
+With `--network container:hangar-display` and `--display http://localhost:8000` added, it
+uses the NOTAMs your display currently shows for your own locations instead. `--jobs 4`
+keeps four NOTAMs with the model at a time, and `--out FILE` saves every answer.
+
 **Screen.** Buttons to step the display to the previous or next view or jump to one, and
 to black out and restore the picture: the same things an automation can do (see below).
 
@@ -316,6 +476,23 @@ cameras:
     - name: Gate             # caption; the stream name when empty
       stream: cam1
       cols: 2                # of 6 grid columns: 2 is a 16:9 tile, 4 a 32:9 tile
+
+notams:
+  enabled: false
+  source: faa                # faa (needs HANGAR_NMS_CLIENT_ID and _SECRET in .env) | sample
+  label: NOTAMs
+  dwell_s: 30                # seconds per page
+  lookahead_h: 24            # also show NOTAMs taking effect within this many hours
+  refresh_s: 600
+  locations:                 # the affected facility: airport, NAVAID or ARTCC identifier
+    - ident: KS50            # S50 and KS50 are the same location
+      name: Auburn Muni      # shown in the view's heading
+  translate:                 # rewrite by your own model; its key is HANGAR_LLM_API_KEY in .env
+    enabled: false
+    base_url: ""             # OpenAI-compatible endpoint, e.g. https://llm.example.net/v1
+    model: ""
+    timeout_s: 60            # seconds allowed per answer
+      enabled: true
 ```
 
 ## Control the screen from an automation
@@ -339,7 +516,7 @@ curl -X POST http://<pi-ip>:8000/api/display/previous
 ```
 
 ```bash
-# jump to a view by id; GET /api/views lists them (local:KSEA, region:Puget Sound, satellite, cameras)
+# jump to a view by id; GET /api/views lists them (local:KSEA, region:Puget Sound, satellite, cameras, notams:KS50)
 curl -X POST -H 'content-type: application/json' \
   -d '{"view": "satellite"}' http://<pi-ip>:8000/api/display/view
 ```
@@ -557,6 +734,21 @@ actions:
   must be one of `cam1` to `cam12`) and slots that have no link in `.env`, and
   `docker compose logs go2rtc` shows why a camera does not connect. A Protect link must be used without its `?enableSrtp`
   suffix, and the camera's RTSP output must be turned on.
+- **A NOTAM view says the data is unavailable or NOT REFRESHING.** The reason is on the
+  view when nothing was ever fetched, in the admin page's status line, and in
+  `docker compose logs`. "Credentials are not set" means `HANGAR_NMS_CLIENT_ID` and
+  `HANGAR_NMS_CLIENT_SECRET` are missing from `.env` or the app was not recreated with
+  `docker compose up -d` after adding them; "rejected the credentials" means the FAA did
+  not accept them; "does not know location" means the identifier is not one the FAA files
+  NOTAMs under. While refreshes fail the view keeps showing the last NOTAMs it fetched, with
+  the time they were retrieved.
+- **NOTAM cards never say "Model rewrite".** The admin page's status line gives the count
+  of rewrites shown, refused and waiting, and the reason when the model server cannot be
+  used: no `HANGAR_LLM_API_KEY` in `.env` (or the app not recreated with
+  `docker compose up -d` after adding it), a key the server rejects, a model name it does
+  not know, or no answer within the timeout. **Test model** shows the same for one NOTAM.
+  A high count of refused answers means the model does not follow the rules it is given;
+  the cards then keep the spelled-out line, which is the intended result.
 - **Camera video is choppy, or the tiles stay black on a Pi 4.** The camera view needs the
   Pi 5's hardware decoder. On a Pi 5, `deploy/bootstrap.sh --check` confirms that the
   patched browser is installed and held.
@@ -570,6 +762,17 @@ actions:
   from [tar1090-db](https://github.com/wiedehopf/tar1090-db).
 - Map data © OpenStreetMap contributors. Weather from the NWS Aviation Weather Center,
   radar from the Iowa Environmental Mesonet, satellite imagery from NOAA STAR.
+- NOTAMs are from the FAA NOTAM Management Service. The contraction meanings used to spell
+  them out are from the FAA's Aeronautical Information Manual (chapter 5, section 1), FAA
+  Order 7930.2 (NOTAMs), FAA Order JO 7340.2 (Contractions) and the FAA's Aeronautical
+  Information Publication (GEN 2.2); the NOTAM keywords and the sample NOTAM texts are from
+  Order 7930.2. Those are U.S. Government works. The abbreviations of ICAO Doc 8400 are
+  taken as the Aeronautical Information Publications of Ireland, the Republic of Korea and
+  Portugal list them (GEN 2.2), where two of them agree; the meaning of RSC in Canadian
+  NOTAMs is from Transport Canada Advisory Circular 300-019. The English words are those of
+  the American and British word lists of [SCOWL](http://wordlist.aspell.net/) as Debian
+  packages them (wamerican, wbritish); the phonetic alphabet is from the AIM (chapter 4,
+  section 2).
 - Camera streams are relayed by [go2rtc](https://github.com/AlexxIT/go2rtc) (MIT), run as
   its own container. Hardware H.265 decoding in the kiosk browser comes from the
   [chromium-rpi-hevc](https://github.com/sslivins/chromium-rpi-hevc) build of Raspberry Pi

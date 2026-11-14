@@ -1,0 +1,186 @@
+{
+ "note": "FAA NMS-API sample data. spec_example: the GeoJSON example in the FAA OpenAPI specification (nms-api.yaml v1.0.17), verbatim. sample_initial_load: the two NOTAMs of the FAA sample initial-load file (AIXM), field values exactly as given there, placed in the GeoJSON structure. checklist: the FAA checklist example, verbatim.",
+ "spec_example": [
+  {
+   "type": "Feature",
+   "properties": {
+    "coreNOTAMData": {
+     "notamEvent": {
+      "encoding": "ANNOTATION",
+      "scenario": "123"
+     },
+     "notam": {
+      "id": "NMS_ID_1234567812345678",
+      "series": "A",
+      "number": "01/123",
+      "year": "2025",
+      "type": "N",
+      "issued": "2025-03-17T17:08:00.000Z",
+      "affectedFir": "ZTL",
+      "selectionCode": "QXXX",
+      "traffic": "IV",
+      "purpose": "BO",
+      "scope": "A",
+      "minimumFl": "000",
+      "maximumFl": "999",
+      "location": "CLT",
+      "effectiveStart": "2025-03-17T17:02:00.000Z",
+      "effectiveEnd": "2025-09-18T21:11:00.000Z",
+      "estimated": "true",
+      "text": "27 RWY END ID LGT U/S",
+      "classification": "DOM",
+      "cancelationDate": "2025-09-18T21:11:00.000Z",
+      "accountId": "XYZ",
+      "lastUpdated": "2025-03-17T17:08:00.000Z",
+      "icaoLocation": "KCLT",
+      "schedule": "Daily:1200-1230~DLY 1200-1230",
+      "lowerLimit": "SFC",
+      "upperLimit": "280M",
+      "coordinates": "3939N04302E",
+      "radius": "5"
+     },
+     "notamTranslation": [
+      {
+       "type": "LOCAL_FORMAT",
+       "domestic_message": "!CLT 01/123 SAMPLE NOTAM"
+      },
+      {
+       "type": "ICAO",
+       "icao_message": "01/123 NOTAMR \nQ) Q_CODE \nA) CLT \nB) 2503171702 \nC) 2509182111EST \n\nE) SAMPLE NOTAM \n U/S"
+      }
+     ]
+    }
+   },
+   "geometry": {
+    "type": "GeometryCollection",
+    "geometries": [
+     {
+      "type": "Point",
+      "coordinates": [
+       -81.1918244444444,
+       40.0024157777778
+      ]
+     },
+     {
+      "type": "Polygon",
+      "coordinates": [
+       [
+        [
+         -81.198961471121,
+         40.0021595400093
+        ],
+        [
+         -81.1989468623111,
+         40.0019815155841
+        ]
+       ]
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "sample_initial_load": [
+  {
+   "type": "Feature",
+   "properties": {
+    "coreNOTAMData": {
+     "notam": {
+      "id": "NMS_ID_1757609538792382",
+      "number": "430",
+      "year": "2025",
+      "type": "N",
+      "issued": "2025-08-21T02:34:00.000Z",
+      "location": "8WC",
+      "effectiveStart": "202508210234",
+      "effectiveEnd": "202510012359",
+      "text": "RWY 20 RWY END ID LGT U/S",
+      "classification": "DOM",
+      "accountId": "STL",
+      "lastUpdated": "2025-08-21T02:34:00.000Z"
+     },
+     "notamTranslation": [
+      {
+       "type": "LOCAL_FORMAT",
+       "simpleText": "!STL 08/430 8WC RWY 20 RWY END ID LGT U/S 2508210234-2510012359"
+      }
+     ]
+    }
+   },
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "coreNOTAMData": {
+     "notam": {
+      "id": "NMS_ID_1757609468919567",
+      "number": "221",
+      "year": "2025",
+      "type": "N",
+      "issued": "2025-04-30T22:28:00.000Z",
+      "location": "ZBW",
+      "effectiveStart": "202505011100",
+      "effectiveEnd": "202511020001",
+      "schedule": "Daily:1100-0001~DLY 1100-0001",
+      "text": "AIRSPACE UAS WI AN AREA DEFINED AS 1.5NM RADIUS OF 430205N0753903W (12.2NM NW VGC) SFC-1200FT AGL DLY 1100-0001",
+      "classification": "DOM",
+      "accountId": "BDR",
+      "lastUpdated": "2025-04-30T22:28:00.000Z",
+      "icaoLocation": "KZBW"
+     },
+     "notamTranslation": [
+      {
+       "type": "LOCAL_FORMAT",
+       "simpleText": "!BDR 04/221 ZBW AIRSPACE UAS WI AN AREA DEFINED AS 1.5NM RADIUS OF 430205N0753903W (12.2NM NW VGC) SFC-1200FT AGL DLY 1100-0001 2505011100-2511020001"
+      }
+     ]
+    }
+   },
+   "geometry": null
+  }
+ ],
+ "checklist": {
+  "status": "Success",
+  "data": {
+   "checklist": [
+    {
+     "id": "1757616312849974",
+     "classification": "DOMESTIC",
+     "accountId": "ATL",
+     "number": "09/186",
+     "location": "ATL",
+     "icaoLocation": "KATL",
+     "lastUpdated": "2025-09-12T10:21:00Z"
+    },
+    {
+     "id": "1757617034473413",
+     "classification": "DOMESTIC",
+     "accountId": "ATL",
+     "number": "09/193",
+     "location": "ATL",
+     "icaoLocation": "KATL",
+     "lastUpdated": "2025-09-12T10:21:00Z"
+    },
+    {
+     "id": "1757616991582748",
+     "classification": "DOMESTIC",
+     "accountId": "ATL",
+     "number": "09/192",
+     "location": "ATL",
+     "icaoLocation": "KATL",
+     "lastUpdated": "2025-09-12T10:21:00Z"
+    },
+    {
+     "id": "1757616950513096",
+     "classification": "DOMESTIC",
+     "accountId": "ATL",
+     "number": "09/191",
+     "location": "ATL",
+     "icaoLocation": "KATL",
+     "lastUpdated": "2025-09-12T10:21:00Z"
+    }
+   ]
+  }
+ }
+}
