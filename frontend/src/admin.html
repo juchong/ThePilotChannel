@@ -63,8 +63,9 @@
 
       <section class="card" data-section="cameras">
         <h2>Cameras (live video) <button type="button" class="btn sm" data-add="cameras.tiles">+ add tile</button></h2>
-        <p class="hint" style="margin-top:0">A view of live camera streams. Each tile plays a stream by the name it has in
-          <code>data/go2rtc/go2rtc.yaml</code> on the Pi, which holds the camera URLs (see the README). Tiles fill
+        <p class="hint" style="margin-top:0">A view of live camera streams. Each tile plays a stream slot, <code>cam1</code> to
+          <code>cam12</code>; the camera URLs live in <code>.env</code> as <code>HANGAR_CAM1</code> to
+          <code>HANGAR_CAM12</code> (see the README). Tiles fill
           rows of six columns; a two-column tile is 16:9 and a four-column tile 32:9.</p>
         <div id="cameras"></div>
       </section>
