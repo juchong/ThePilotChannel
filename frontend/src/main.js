@@ -7,9 +7,8 @@ import { ALT_STOPS, HangarMap } from "./lib/map.js";
 import { counts, current, fmtSpan, fmtZ, listHtml, pageCount, visitSeconds } from "./lib/notams.js";
 import { radarStep } from "./lib/radarloop.js";
 import { nextStations, sameStations, stationsFooter } from "./lib/stations.js";
-import { windBarbSVG } from "./lib/windbarb.js";
+import { UNKNOWN_COLOR, categoryChip, windBarbSVG, windText } from "./lib/windbarb.js";
 
-const CAT_FALLBACK = "#ffffff";
 const POLL_MS = 1000;                 // traffic poll cadence on local views
 const MOTION_FRAME_MS = 50;           // aircraft marker update interval (20 fps)
 const FALLBACK_DWELL_S = 15;          // used if a view switch throws
@@ -648,12 +647,6 @@ async function showRegionalWeather(view) {
   }
 }
 
-function windText(w, spaced) {
-  if (w.calm) return "Calm";
-  const gust = w.gust_kt ? "G" + w.gust_kt : "";
-  return `${w.variable ? "VRB" : pad3(w.dir)}° ${w.speed_kt ?? "--"}${gust}${spaced ? " " : ""}kt`;
-}
-
 function renderStationList(stations) {
   // sort worst conditions first: LIFR, IFR, MVFR, VFR, then unknown
   const rank = { LIFR: 0, IFR: 1, MVFR: 2, VFR: 3 };
@@ -664,17 +657,15 @@ function renderStationList(stations) {
   state.lastListHtml = null;
   el("aircraft-list").innerHTML = sorted
     .map((m) => {
-      const color = esc(m.category_color || "#fff");
       const barb = windBarbSVG({
         speedKt: m.wind.speed_kt,
         dirDeg: m.wind.dir,
         variable: m.wind.variable,
         calm: m.wind.calm,
         color: m.category_color,
-        fallback: "#ffffff",
         size: 40,
       });
-      const cat = m.category ? `<span class="cat" style="background:${color}">${esc(m.category)}</span>` : "";
+      const cat = m.category ? categoryChip(m, "cat") : "";
       return `<div class="st-row">${barb}<span class="icao">${esc(m.icao)}</span>${cat}<span class="wind">${esc(windText(m.wind))}</span></div>`;
     })
     .join("");
@@ -736,19 +727,15 @@ function renderSideHeader() {
 function renderLocal(icao) {
   const m = state.weather[(icao || "").toUpperCase()];
   if (!m) return `<div class="metar-block"><div class="wind-text">${esc(icao)}: no weather</div></div>`;
-  const color = esc(m.category_color || "#fff");
   const barb = windBarbSVG({
     speedKt: m.wind.speed_kt,
     dirDeg: m.wind.dir,
     variable: m.wind.variable,
     calm: m.wind.calm,
     color: m.category_color,
-    fallback: CAT_FALLBACK,
     size: 120,
   });
-  const cat = m.category
-    ? `<span class="cat-chip" style="background:${color}">${esc(m.category)}</span>`
-    : `<span class="cat-chip" style="background:#fff">N/A</span>`;
+  const cat = categoryChip(m, "cat-chip");
   const stale = m.stale ? `<span class="stale-badge">STALE WX</span>` : "";
   return `
     <div class="metar-block">
@@ -774,17 +761,15 @@ function renderRegional(icaos) {
     .map((icao) => {
       const m = state.weather[icao.toUpperCase()];
       if (!m) return `<div class="ap-row"><span class="icao">${esc(icao)}</span><span class="wind">no wx</span></div>`;
-      const color = esc(m.category_color || "#fff");
       const barb = windBarbSVG({
         speedKt: m.wind.speed_kt,
         dirDeg: m.wind.dir,
         variable: m.wind.variable,
         calm: m.wind.calm,
         color: m.category_color,
-        fallback: CAT_FALLBACK,
         size: 38,
       });
-      const cat = m.category ? `<span class="cat" style="background:${color}">${esc(m.category)}</span>` : "";
+      const cat = m.category ? categoryChip(m, "cat") : "";
       return `<div class="ap-row">${barb}<span class="icao">${esc(m.icao)}</span>${cat}<span class="wind">${esc(windText(m.wind))}</span></div>`;
     })
     .join("");
@@ -864,7 +849,7 @@ function renderLegend(mode = "alt") {
     ],
     cat: [
       "WX",
-      [["VFR", "#22c55e"], ["MVFR", "#3b82f6"], ["IFR", "#ef4444"], ["LIFR", "#d946ef"]],
+      [["VFR", "#22c55e"], ["MVFR", "#3b82f6"], ["IFR", "#ef4444"], ["LIFR", "#d946ef"], ["Unknown", UNKNOWN_COLOR]],
     ],
   };
   const [title, items] = sets[mode] || sets.alt;
@@ -880,9 +865,6 @@ function showOverlay(t) {
 }
 function hideOverlay() {
   el("overlay").classList.add("hidden");
-}
-function pad3(n) {
-  return String(n ?? 0).padStart(3, "0");
 }
 function fmt(v, unit) {
   return v == null ? "—" : `${v}${unit ? " " + unit : ""}`;

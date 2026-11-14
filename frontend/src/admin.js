@@ -135,7 +135,7 @@ async function showStatusPanel() {
     el("backend-status").innerHTML =
       `backend up ${esc(fmtUptime(s.uptime_s))} · traffic source: ${src}` +
       (s.last_error ? ` · last error: <code>${esc(s.last_error)}</code>` : "") +
-      (s.weather && s.weather.error ? ` · weather: <code>${esc(s.weather.error)}</code>` : "") +
+      weatherStatus(s.weather) +
       cameraStatus(s.cameras) +
       notamStatus(s.notams);
   } catch (_) {}
@@ -196,6 +196,16 @@ async function checkNotam(i) {
   } catch (e) {
     setStatus(id, e.status === 401 ? "not authorized: reload and enter the admin password" : "error: " + (typeof e.detail === "string" ? e.detail : e.message), "err");
   }
+}
+
+// Weather for the status line: a failing refresh, and the airports whose report
+// comes from the NWS gateway because aviationweather.gov has none for them.
+function weatherStatus(w) {
+  if (!w) return "";
+  const g = w.gateway || {};
+  const err = w.error || g.error;
+  const via = (g.stations || []).length ? ` · weather via NWS gateway: ${esc(g.stations.join(", "))}` : "";
+  return (err ? ` · weather: <code>${esc(err)}</code>` : "") + via;
 }
 
 // The camera relay's state for the status line: whether go2rtc answers, which tile

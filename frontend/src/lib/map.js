@@ -207,10 +207,9 @@ export class HangarMap {
               variable: ap.metar.wind.variable,
               calm: ap.metar.wind.calm,
               color: ap.metar.category_color,
-              fallback: "#ffffff",
               size: BARB_PX,
             })
-          : windBarbSVG({ speedKt: null, color: "#ffffff", size: BARB_PX });
+          : windBarbSVG({ speedKt: null, size: BARB_PX });
         el.innerHTML = `${barb}<div class="map-airport-label">${esc(ap.icao)}</div>`;
       } else {
         el.innerHTML = `<div class="map-airport-dot"></div><div class="map-airport-label">${esc(ap.icao)}</div>`;

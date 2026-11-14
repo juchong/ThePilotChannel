@@ -25,7 +25,12 @@ def client(monkeypatch):
     async def fake_radar(product, lag, z, x, y):
         return b"\x89PNG\r\n\x1a\n" + b"0" * 16
 
+    class NoGateway:
+        async def get(self, *a, **kw):
+            raise AssertionError("a test reached the NWS gateway")
+
     monkeypatch.setattr(main_mod.manager.metar, "fetch", fake_metar)
+    monkeypatch.setattr(main_mod.manager.gateway, "client", NoGateway())
     monkeypatch.setattr(main_mod.manager, "_fetch_traffic", fake_traffic)
     # the lifespan warms the basemap tile cache for the configured views: never from OSM in tests
     monkeypatch.setattr(main_mod.manager.tiles, "_fetch_upstream", fake_tile)

@@ -30,6 +30,7 @@ from .config import (
 from .llm import ChatModel, ModelError, api_key
 from .notam_translate import PROMPT_VERSION, RESPONSE_SCHEMA, checked_rewrite
 from .notams import NmsSource, SampleSource, affects, normalize, query_forms, select
+from .nws_gateway import SOURCE as GATEWAY_SOURCE, GatewaySource
 from .satellite import SatelliteSource
 from .sources.aggregator import AggregatorSource
 from .radar import RadarTiles
@@ -86,6 +87,7 @@ class DataManager:
             headers={"User-Agent": "the-pilot-channel/0.2 (+https://github.com/juchong/ThePilotChannel)"},
         )
         self.metar = MetarSource(self.client)
+        self.gateway = GatewaySource(self.client)
         self.satellite = SatelliteSource(self.client)
         self.tiles = TileCache(self.client)
         self.radar = RadarTiles(self.client)
@@ -101,6 +103,7 @@ class DataManager:
         self._weather_cache: Dict[str, Dict] = {}
         self._weather_ts: Optional[float] = None
         self._weather_error: Optional[str] = None
+        self._gateway_error: Optional[str] = None
         self._area_cache: Dict[str, Dict] = {}        # key -> {ts (wall), data, error}
         self._area_refreshing: Set[str] = set()
         self._sat_cache: Dict[str, Dict] = {}
@@ -399,9 +402,6 @@ class DataManager:
             self._traffic_health[view_id] = {"healthy": False, "error": err}
 
     # ---- weather ---------------------------------------------------------
-    def _all_icaos(self) -> List[str]:
-        return [ap.icao for ap in self.cfg.airports if ap.enabled]
-
     async def _weather_loop(self):
         while True:
             try:
@@ -428,19 +428,56 @@ class DataManager:
                 await asyncio.sleep(wait)
 
     async def _refresh_weather(self):
-        icaos = self._all_icaos()
-        if not icaos:
+        airports = {ap.icao.upper(): ap for ap in self.cfg.airports if ap.enabled}
+        if not airports:
             self._weather_cache = {}
             return
-        data = await self.metar.fetch(icaos, self.cfg.weather.stale_after_s)
+        stale = self.cfg.weather.stale_after_s
         # merge so a station missing from one response keeps its last report
         # (its age keeps growing and it is flagged stale by get_weather)
-        merged = {k: v for k, v in self._weather_cache.items() if k in icaos}
-        merged.update(data)
+        merged = {k: v for k, v in self._weather_cache.items() if k in airports}
+        failure = None
+        try:
+            served = await self.metar.fetch(list(airports), stale)
+            merged.update(served)
+            lacking = [k for k in airports if k not in served]
+        except Exception as exc:  # noqa: BLE001
+            # the stations the gateway serves do not depend on aviationweather.gov
+            failure = exc
+            lacking = [k for k, m in merged.items() if m.get("source") == GATEWAY_SOURCE]
+        taken = await self._refresh_from_gateway([airports[k] for k in lacking], merged, stale)
         self._weather_cache = merged
-        self._weather_ts = time.time()
-        self._save_weather_store()
-        self._broadcast({"event": "weather_updated"})
+        if failure is None:
+            self._weather_ts = time.time()
+        if failure is None or taken:
+            self._save_weather_store()
+            self._broadcast({"event": "weather_updated"})
+        if failure is not None:
+            raise failure
+
+    async def _refresh_from_gateway(self, airports: List, merged: Dict[str, Dict], stale_after_s: int) -> bool:
+        """Read the airports aviationweather.gov did not answer for from the NWS
+        gateway into `merged`; True when a report was taken. A gateway report never
+        replaces a newer cached one. A failing gateway is logged once and leaves
+        the cached reports in place."""
+        if not airports:
+            self._gateway_error = None
+            return False
+        found, error = await self.gateway.fetch(airports, stale_after_s)
+        if error != self._gateway_error:
+            if error:
+                log.error("gateway weather fetch failed: %s", error)
+            else:
+                log.info("gateway weather fetch recovered")
+            self._gateway_error = error
+        taken = False
+        for icao, m in found.items():
+            cached = merged.get(icao)
+            if cached is not None and (cached.get("obs_time") or 0) > (m.get("obs_time") or 0):
+                continue
+            taken = taken or cached is None or cached.get("raw") != m.get("raw")
+            merged[icao] = m
+        return taken
 
     # The last good weather is kept on disk so a restart during an upstream or
     # DNS outage (the two happen together when a router's resolver fails) still
@@ -516,6 +553,20 @@ class DataManager:
             oldest = min(cache, key=lambda k: cache[k]["ts"])
             cache.pop(oldest, None)
 
+    def _with_gateway_stations(self, key: str, result: Dict, inside) -> Dict:
+        """A station-set response plus the configured airports inside its area whose
+        report came from the NWS gateway: the set is aviationweather.gov's answer,
+        which has no such station. A set that was never fetched is left as it is."""
+        if self._area_cache.get(key, {}).get("ts", 0) <= 0:
+            return result
+        listed = {s.get("icao") for s in result["stations"]}
+        extra = [
+            self._with_age(m)
+            for icao, m in self._weather_cache.items()
+            if m.get("source") == GATEWAY_SOURCE and icao not in listed and m.get("lat") is not None and inside(m["lat"], m["lon"])
+        ]
+        return dict(result, stations=result["stations"] + extra) if extra else result
+
     def _area_result(self, key: str) -> Dict:
         """Response for a cached station set: the stations plus how old the set
         is, whether it counts as stale (two refresh intervals), and the last
@@ -590,7 +641,9 @@ class DataManager:
             )
             return [s for s in stations if s.get("lat") is not None and haversine_nm(s["lat"], s["lon"], lat, lon) <= radius_nm]
 
-        return await self._area_get(key, fetch, "area")
+        return self._with_gateway_stations(
+            key, await self._area_get(key, fetch, "area"), lambda la, lo: haversine_nm(la, lo, lat, lon) <= radius_nm
+        )
 
     async def get_bbox_weather(self, min_lat, min_lon, max_lat, max_lon) -> Dict:
         """All METAR stations within an explicit bounding box (the map's visible
@@ -600,7 +653,9 @@ class DataManager:
         async def fetch():
             return await self.metar.fetch_bbox(min_lat, min_lon, max_lat, max_lon, self.cfg.weather.stale_after_s)
 
-        return await self._area_get(key, fetch, "bbox")
+        return self._with_gateway_stations(
+            key, await self._area_get(key, fetch, "bbox"), lambda la, lo: min_lat <= la <= max_lat and min_lon <= lo <= max_lon
+        )
 
     # ---- NOTAMs ----------------------------------------------------------
     # Fetched per monitored location by a background loop and kept on disk, so
@@ -1015,6 +1070,10 @@ class DataManager:
                 "last_refresh_ts": self._weather_ts,
                 "stations": len(self._weather_cache),
                 "error": self._weather_error,
+                "gateway": {
+                    "stations": sorted(k for k, m in self._weather_cache.items() if m.get("source") == GATEWAY_SOURCE),
+                    "error": self._gateway_error,
+                },
             },
             "notams": {
                 "enabled": self.cfg.notams.enabled,

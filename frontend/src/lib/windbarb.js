@@ -3,15 +3,36 @@
 // A filled STATION DOT marks the observation point (the airport) at the base;
 // the barbs/pennants sit at the far (upwind) tip -> clear head/tail distinction.
 // 5 kt = half barb, 10 kt = full barb, 50 kt = pennant. Calm = open ring.
-// Colored by flight category, with a dark halo so it reads on a map.
+// Colored by flight category, gray when the category is unknown, with a dark halo
+// so it reads on a map. A station with neither a category nor a wind is a gray circle.
+import { esc } from "./dom.js";
+
+export const UNKNOWN_COLOR = "#9ca3af";
 
 const CX = 50;
 const CY = 50;
 const TIP = 8; // top of staff (upwind end, where barbs live)
 
+// The wind of a METAR record as text: "Calm", "230° 12G22 kt", "VRB° 4 kt", or
+// "--" when the report carries no wind. `spaced` puts a space before the unit.
+export function windText(w, spaced) {
+  if (w.calm) return "Calm";
+  if (w.speed_kt == null) return "--";
+  const gust = w.gust_kt ? "G" + w.gust_kt : "";
+  const dir = w.variable ? "VRB" : String(w.dir ?? 0).padStart(3, "0");
+  return `${dir}° ${w.speed_kt}${gust}${spaced ? " " : ""}kt`;
+}
+
+// The flight category of a METAR record as a chip of class `cls`: the category on
+// its color, or UNKNOWN on gray when the report settles none.
+export function categoryChip(m, cls) {
+  const color = esc(m.category_color || UNKNOWN_COLOR);
+  return `<span class="${cls}" style="background:${color}">${esc(m.category || "UNKNOWN")}</span>`;
+}
+
 export function windBarbSVG(opts) {
-  const { speedKt, dirDeg, variable, calm, color, fallback = "#ffffff", size = 100, halo = "#0b0f14" } = opts;
-  const stroke = color || fallback;
+  const { speedKt, dirDeg, variable, calm, color, size = 100, halo = "#0b0f14" } = opts;
+  const stroke = color || UNKNOWN_COLOR;
 
   if (calm || speedKt === 0) {
     return wrap(
@@ -21,6 +42,9 @@ export function windBarbSVG(opts) {
     );
   }
   if (speedKt == null) {
+    if (!color) {
+      return wrap(size, `<circle cx="${CX}" cy="${CY}" r="11" fill="${stroke}" stroke="${halo}" stroke-width="3"/>`);
+    }
     return wrap(size, `<text x="50" y="58" text-anchor="middle" fill="${stroke}" font-size="24">--</text>`);
   }
 

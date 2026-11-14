@@ -325,6 +325,44 @@ def test_reported_category_wins_over_derived_and_colors_follow():
     assert m["category"] == "LIFR" and m["category_color"] == "#d946ef"
 
 
+def test_record_lacking_sky_or_visibility_gets_the_category_every_value_of_the_missing_element_gives():
+    ceilings = [0, 100, 499, 500, 999, 1000, 3000, 3100, 12000, None]  # None: no ceiling
+    visibilities = [0, 0.25, 0.99, 1, 2.99, 3, 5, 5.01, 10]
+    skies = [(None, ceilings), ([], [None]), ([{"cover": "FEW", "base": 200}], [None])]
+    skies += [([{"cover": "SCT", "base": 100}, {"cover": "BKN", "base": c}], [c]) for c in ceilings[:-1]]
+    for clouds, possible_ceilings in skies:
+        for vis in [None] + visibilities:
+            record = {"icaoId": "KSEA"}
+            if clouds is not None:
+                record["clouds"] = clouds
+            if vis is not None:
+                record["visib"] = vis
+            possible = {derive_category(c, v) for c in possible_ceilings for v in (visibilities if vis is None else [vis])}
+            expected = possible.pop() if len(possible) == 1 else None
+            assert normalize_metar(record, 4500)["category"] == expected, (clouds, vis)
+
+
+@pytest.mark.parametrize(
+    "record, expected",
+    [
+        # no sky condition: only a visibility below one mile settles the category
+        ({"rawOb": "METAR K2J9 130055Z AUTO 32006KT 1/4SM HZ 17/13 RMK AO2", "visib": 0.25}, "LIFR"),
+        ({"rawOb": "METAR EHSA 132055Z AUTO 28012KT 9999 ///////// 09/02 Q1019 W14/H16", "visib": "6+"}, None),
+        ({"rawOb": "SPECI RKJB 132017Z AUTO 19003KT 160V230 3000 RA ///003/// 15/14 Q1018", "visib": 1.86}, None),
+        # no visibility: only a ceiling below 500 feet settles it
+        ({"rawOb": "METAR K3K3 131315Z AUTO 12008KT BKN002 02/02 A3009 RMK AO2 PWINO", "clouds": [{"cover": "BKN", "base": 200}]}, "LIFR"),
+        ({"rawOb": "METAR PANN 132253Z AUTO 07006KT OVC007 M07/M09 A2949 RMK AO2 SLP998 T10721089 TSNO $", "clouds": [{"cover": "OVC", "base": 700}]}, None),
+        ({"rawOb": "METAR KMIV 132254Z AUTO 33007KT OVC025 06/02 A2973 RMK AO2 SLP066 T00560022 $", "clouds": [{"cover": "OVC", "base": 2500}]}, None),
+        ({"rawOb": "METAR EHVL 132255Z AUTO 31010KT //// // BKN037 OVC042 09/04 Q1017 RE//", "clouds": [{"cover": "BKN", "base": 3700}, {"cover": "OVC", "base": 4200}]}, None),
+        # a clear sky leaves the visibility to decide
+        ({"rawOb": "METAR DTTZ 132200Z AUTO 26009KT NCD 21/10 Q1016", "clouds": []}, None),
+    ],
+)
+def test_category_of_aviationweather_records_without_one(record, expected):
+    m = normalize_metar(record, 4500)
+    assert m["category"] == expected and m["category_color"] == ({"LIFR": "#d946ef"}.get(expected))
+
+
 def test_visibility_and_ceiling_decoding():
     assert _visibility_sm("1 1/2") == 1.5 and _visibility_sm("1/4") == 0.25
     assert _visibility_sm("10+") == 10.0 and _visibility_sm(6) == 6.0 and _visibility_sm("junk") is None

@@ -76,6 +76,10 @@ backend/app/
                    one retry of a refused answer
   llm.py           OpenAI-compatible chat client (model list, one completion), key from env
   weather.py       aviationweather.gov METAR fetch, decode, flight category
+  nws_gateway.py   NWS gateway station files: the METAR of a configured airport that
+                   aviationweather.gov does not serve
+  metar_decode.py  raw METAR text -> aviationweather.gov's decoded fields, plus the range
+                   the ceiling and the visibility can lie in
   satellite.py     NOAA STAR CDN directory listing -> recent GOES frame URLs
   tiles.py         basemap tile cache/proxy and per-view warm-up (tile math mirrors
                    the display's fitBounds framing)
@@ -91,11 +95,14 @@ backend/tools/
                         lists, the reference data, tests/data/faa_examples.json and
                         tests/data/notam_sources.json
   check_notam_text.py   runs the decoder and the answer check over a file of real NOTAM texts
+  check_metar_decode.py compares metar_decode.py with aviationweather.gov's decode of the
+                        same reports (--fetch downloads them), audits unread groups over
+                        the gateway's reports, and writes tests/data/metar_reports.json
   eval_notam_model.py   measures a model endpoint: answers accepted (at once, or after the
                         retry), refused and why; --jobs N, --out FILE; waits and tries
                         again when the endpoint fails
 backend/tests/    support.py (env, wait_until), conftest.py (client fixture), test_api.py,
-                  test_behaviour.py, test_cameras.py, test_notams.py,
+                  test_behaviour.py, test_cameras.py, test_metar_gateway.py, test_notams.py,
                   test_notam_translate.py, notam_cases.py (wrong answers built from FAA
                   records), data/ (FAA example NOTAMs, FAA sample API data, the lists
                   the generator read)
@@ -117,7 +124,7 @@ frontend/src/
   lib/notams.js     NOTAM view: Z time and span formatting, status, grouping by type,
                     page arithmetic, card markup
   lib/stations.js   which station set the regional view shows, footer state
-  lib/windbarb.js   wind barb SVG
+  lib/windbarb.js   wind barb SVG, wind text, flight category chip
   lib/geo.js        client geo helpers
 deploy/bootstrap.sh   idempotent OS provisioning for a fresh Pi (also --check / --dry-run)
 deploy/harden-wifi.sh   Wi-Fi as NetworkManager keyfiles with read-only copies (also --check)
@@ -171,7 +178,10 @@ Dockerfile, docker-compose.yml (app + go2rtc), deploy/go2rtc.yaml, data/config.y
   pre-decode frames into ImageBitmaps or draw them on a canvas (the frames exceed the Pi's
   GPU memory, a CMA pool shared with map textures), and do not load them one at a time.
 - Two color systems that never mix: aircraft by altitude band; wind barbs and METAR text
-  by flight category (VFR green, MVFR blue, IFR red, LIFR magenta, white when unknown).
+  by flight category (VFR green, MVFR blue, IFR red, LIFR magenta). A station without a
+  category is gray, the gray of an aircraft on the ground (`UNKNOWN_COLOR` in
+  `lib/windbarb.js`): its barb when the record has a wind, a filled circle when it has
+  none, and an `UNKNOWN` chip on the local view.
 - Aircraft icons follow tar1090: `lib/shapes.js` calls the vendored `getBaseMarker()` in
   `lib/vendor/tar1090/markers.js` (tar1090's shapes and tables, GPL-2.0, license in that
   directory; regenerate from upstream rather than editing), which picks a shape by exact
@@ -244,6 +254,42 @@ Dockerfile, docker-compose.yml (app + go2rtc), deploy/go2rtc.yaml, data/config.y
   keeps the last non-empty station set through a failing refresh and changes only the
   footer. Do not add public fallback resolvers: the LAN receiver's name is known only to
   the router.
+- A configured airport that aviationweather.gov's answer lacks is read from the NWS
+  gateway (`nws_gateway.py`): one text file per station, a `YYYY/MM/DD HH:MM` line and the
+  latest report, 404 for a station it does not know. Only those airports are asked, each
+  refresh; an airport aviationweather.gov serves is never asked. A gateway report never
+  replaces a newer cached one, and one older than `MAX_AGE_S` (the 30 days
+  aviationweather.gov keeps returning a station's last report) is not taken: the gateway
+  keeps the files of stations that stopped reporting. The report's month comes from the
+  file's date line, not the clock. While aviationweather.gov is failing, the airports whose
+  cached report came from the gateway are still refreshed and the refresh still counts as
+  failed. A failing gateway is logged once, reported as `weather.gateway.error` in
+  `/api/status`, and leaves the cached report in place; it does not shorten the refresh
+  interval. Gateway records carry `source: "nws"`, the airport's configured name and
+  position, and are added to a bbox or area station set they lie in (never to a set that
+  was not fetched yet, and never twice).
+- `metar_decode.py` reads the body of a report in group order (FMH-1 chapter 12, WMO-No.
+  306 FM 15) up to the remarks or the trend forecast, and the tenths-of-a-degree group in
+  the remarks. Units and conventions are aviationweather.gov's, so a station reads the same
+  from either source: knots (`MPS` converted), `000` with a speed is `VRB`, statute miles
+  with `"10+"` for `10SM` and `"6+"` for `9999`, `10KM` and `CAVOK`, metres times
+  `SM_PER_M`, inches times `HPA_PER_INHG` (the hPa group wins when a report has both), the
+  tenths group only within `TENTHS_TOLERANCE_C` of the body's whole degrees. A group that is
+  not in code form feeds nothing. Where the report settles more than aviationweather.gov's
+  record keeps, the report stands: every cloud layer (the record stops at four and drops
+  base 000 and layers beside a vertical visibility), a visibility with `NDV`, a wind whose
+  gust is slashed out, a temperature whose dew point is slashed out.
+- A gateway record's flight category and ceiling are given only when the report settles
+  them (`weather.category_in_range` over the decoder's `ceiling_range` and
+  `visibility_range`). A missing sky condition or visibility leaves its range open; a
+  broken or overcast layer without a height is no lower than the layer before it; a
+  vertical visibility without a height, a group with neither amount nor height, and a
+  ceiling group that is not in code form may be a ceiling at any height; `CAVOK` rules a
+  ceiling out. The category is the one every value in the ranges leads to, else none.
+- A record from aviationweather.gov keeps its `fltCat`. It carries none when the sky
+  condition (no `clouds`; an empty list is a clear sky) or the visibility is missing, and
+  then gets its category by the same rule over `weather.reported_ranges`: one value for
+  an element the record carries, the whole scale for one it lacks.
 - Satellite frame URLs come from parsing the NOAA STAR CDN directory listing
   (`satellite.py`), cached for 240 s per parameter set. Query parameters are validated
   before they reach a URL.
@@ -531,7 +577,14 @@ Dockerfile, docker-compose.yml (app + go2rtc), deploy/go2rtc.yaml, data/config.y
   covers the API surface; `test_behaviour.py` covers speed, reliability, and decoding
   properties; `test_cameras.py` covers tile validation, the camera view descriptor, and
   the relay (an upstream stub stands in for go2rtc; `HANGAR_GO2RTC` points at a closed
-  port); `test_notams.py` covers selection by affected location, the time window and time
+  port); `test_metar_gateway.py` covers the raw-METAR decoder against
+  aviationweather.gov's decode of real reports (`data/metar_reports.json`, written by
+  `tools/check_metar_decode.py --fixture`, never by hand: each report form at least three
+  times), the forms the code defines beyond that record, the flight category under every
+  combination of open ranges and of real aviationweather.gov records that carry none,
+  gateway station files, and the fallback in the weather
+  refresh and the station sets (a stand-in for the gateway; the `client` fixture's gateway
+  client refuses every request); `test_notams.py` covers selection by affected location, the time window and time
   formats (the FAA's sample API data in `data/nms_samples.json`), type classification and
   order, the generated term table and the decoding of every FAA example NOTAM
   (`data/faa_examples.json`), that every ICAO-usage contraction of Order JO 7340.2 is
@@ -544,7 +597,11 @@ Dockerfile, docker-compose.yml (app + go2rtc), deploy/go2rtc.yaml, data/config.y
   transport and a stand-in HTTP server), and the pipeline with a stub model. No test needs
   a model or the network. A change to the decoder, the term table or the answer check is
   also run over real NOTAM texts with `tools/check_notam_text.py FILE --answers`, which
-  must report no failure. Name each test for the
+  must report no failure. A change to `metar_decode.py` or to the flight category is also
+  run over aviationweather.gov's current decoded set and the gateway's hourly files with
+  `tools/check_metar_decode.py` (its header gives the commands; the reports stay out of
+  the repository): it must report no unexplained difference, and every group it lists as
+  of no known kind is read for a form the decoder should take. Name each test for the
   failure it prevents. The manager is a module
   singleton whose loops keep refreshing views polled by earlier tests, so apply config
   before installing a failing stub. Assert on background work by polling for the condition
@@ -597,8 +654,8 @@ Dockerfile, docker-compose.yml (app + go2rtc), deploy/go2rtc.yaml, data/config.y
 ## Documentation screenshots
 
 `docs/display-*.jpg` are captured from the live kiosk with grim (`-t jpeg -q 88 -s 0.5`,
-which gives 1920x1080 from the 3840x2160 mode; the current frames are 1920x1012 because
-the Pi 4 negotiated 4096x2160, scale 0.46875) once each view is fully rendered: the KSEA
+which gives 1920x1080 from the 3840x2160 mode; the local and satellite frames are
+1920x1012, from a 4096x2160 mode at scale 0.46875) once each view is fully rendered: the KSEA
 local view a few seconds in, the regional view with the radar loop and barbs loaded, and the
 satellite view once its loop is animating, and the camera view with every tile live.
 `docs/display-notams.jpg` is the NOTAM view with `notams.source: sample`, taken from a
@@ -677,7 +734,8 @@ loaded) before keeping it.
   an unknown view.
 - `GET /api/weather?ids=<csv>`, `GET /api/weather/bbox?min_lat=&min_lon=&max_lat=&max_lon=`
   (at most 20 by 30 degrees), `GET /api/weather/area?lat=&lon=&radius_nm=`; the last two
-  return `{stations, age_s, stale, error}`.
+  return `{stations, age_s, stale, error}`. A METAR read from the NWS gateway has
+  `source: "nws"`; one from aviationweather.gov has no `source`.
 - `GET /api/satellite?sat=&sector=&band=&size=&frames=` recent frame URLs.
 - `GET /api/notams?location=<ident>` for a monitored location: `{location, name, source,
   notams, count, now, lookahead_h, fetched, age_s, stale, pending, error}`; each NOTAM has
@@ -689,7 +747,9 @@ loaded) before keeping it.
   nothing. `POST /api/notams/model-test` (`{"base_url", "model", "timeout_s"}`, admin) has
   that endpoint rewrite one FAA example NOTAM and returns `{ok, notam, answer, refused,
   ms, models, key, error}`, saving nothing.
-- `GET /api/status` source, health, uptime, weather, config, display, and tile cache state,
+- `GET /api/status` source, health, uptime, weather (`last_refresh_ts` of the last
+  aviationweather.gov answer, `stations`, `error`, and `gateway`: the `stations` read from
+  the NWS gateway and its `error`), config, display, and tile cache state,
   plus `cameras` (`enabled`, `tiles`, `relay` ok or down, `error`, `unknown_streams`) and
   `notams` (`enabled`, `source`, `credentials` set or not, `locations`, `last_refresh_ts`,
   `error`, and `translate`: `enabled`, `model`, `key` set or not, `error`, and the counts

@@ -1,20 +1,23 @@
 """METAR adapter: aviationweather.gov Data API.
 
-Fetches batched METARs, trusts the API's fltCat when present, derives a
-fallback per FAA AIM 7-1-7 otherwise, and produces a decoded summary plus the
-data the wind barb needs.
+Fetches batched METARs, trusts the API's fltCat when present, and produces a
+decoded summary plus the data the wind barb needs. A record without fltCat lacks
+the sky condition or the visibility: its category per FAA AIM 7-1-7 is given
+only when what it carries settles it.
 """
 from __future__ import annotations
 
 import asyncio
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import httpx
 
+from .metar_decode import UNLIMITED_FT, UNLIMITED_SM
+
 API_URL = "https://aviationweather.gov/api/data/metar"
 
-# Flight category -> display color (hex). Black/white fallback chosen by frontend theme.
+# Flight category -> display color (hex). The frontend draws a station without one in gray.
 CATEGORY_COLORS = {
     "VFR": "#22c55e",   # green
     "MVFR": "#3b82f6",  # blue
@@ -67,12 +70,35 @@ def derive_category(ceiling_ft: Optional[int], vis_sm: Optional[float]) -> Optio
     return "VFR"
 
 
+def category_in_range(ceiling_ft: Tuple[int, int], vis_sm: Tuple[float, float]) -> Optional[str]:
+    """The flight category when the ceiling and the visibility are each known only
+    to lie in a range (low, high): the category every value in the ranges leads to,
+    or None when they lead to different ones. A lower ceiling or visibility never
+    gives a better category, so the two ends decide."""
+    worst = derive_category(ceiling_ft[0], vis_sm[0])
+    best = derive_category(ceiling_ft[1], vis_sm[1])
+    return worst if worst == best else None
+
+
+def reported_ranges(raw: Dict) -> Tuple[Tuple[int, int], Tuple[float, float]]:
+    """The (low, high) ranges a record leaves the ceiling and the visibility in: one
+    value for an element it carries, the whole scale for one it lacks. A record
+    without `clouds` reports no sky condition; an empty list is a clear sky."""
+    if raw.get("clouds") is None:
+        ceiling = (0, UNLIMITED_FT)
+    else:
+        base = _ceiling_ft(raw["clouds"])
+        ceiling = (base, base) if base is not None else (UNLIMITED_FT, UNLIMITED_FT)
+    vis = _visibility_sm(raw.get("visib"))
+    return ceiling, ((vis, vis) if vis is not None else (0.0, UNLIMITED_SM))
+
+
 def normalize_metar(raw: Dict, stale_after_s: int) -> Dict:
     clouds = raw.get("clouds") or []
     ceiling = _ceiling_ft(clouds)
     vis = _visibility_sm(raw.get("visib"))
 
-    category = raw.get("fltCat") or derive_category(ceiling, vis)
+    category = raw.get("fltCat") or category_in_range(*reported_ranges(raw))
 
     wdir = raw.get("wdir")  # int degrees true, or "VRB", or None
     variable = isinstance(wdir, str) and wdir.upper() == "VRB"

@@ -1,6 +1,6 @@
 <!doctype html><html><body><pre id="out"></pre><div id="probe"></div><script type="module">
 import { check, done } from "./harness.js";
-import { windBarbSVG } from "../src/lib/windbarb.js";
+import { UNKNOWN_COLOR, categoryChip, windBarbSVG, windText } from "../src/lib/windbarb.js";
 // Standard barb notation: 5 kt half barb, 10 kt full barb, 50 kt pennant.
 const count = (svg, what) => { document.getElementById("probe").innerHTML = svg; const root = document.querySelector("#probe svg g"); if (!root) return 0; const els = root.querySelectorAll(what); return els.length / 2; }; // halo + color layers
 check("calm draws a ring and no staff", windBarbSVG({ speedKt: 0, calm: true, color: "#fff", size: 40 }).includes("<circle") && !windBarbSVG({ speedKt: 0, calm: true, color: "#fff", size: 40 }).includes("<line"));
@@ -11,5 +11,21 @@ check("65 kt = 1 pennant + 1 full + 1 half", count(windBarbSVG({ speedKt: 65, di
 check("the staff is rotated to the wind direction", windBarbSVG({ speedKt: 10, dirDeg: 230, color: "#fff", size: 60 }).includes("rotate(230 "));
 check("variable wind is not rotated and is marked VRB", windBarbSVG({ speedKt: 5, variable: true, color: "#fff", size: 60 }).includes("rotate(0 ") && windBarbSVG({ speedKt: 5, variable: true, color: "#fff", size: 60 }).includes(">VRB<"));
 check("the category color is used for the strokes", windBarbSVG({ speedKt: 10, dirDeg: 0, color: "#22c55e", size: 60 }).includes('stroke="#22c55e"'));
+const gray = "#9ca3af";
+check("the unknown color is the gray of an aircraft on the ground", UNKNOWN_COLOR === gray);
+const noCategory = windBarbSVG({ speedKt: 10, dirDeg: 230, size: 60 });
+check("a wind without a category draws the barb in gray", count(noCategory, "line") === 2 && noCategory.includes("rotate(230 ") && noCategory.includes(`stroke="${gray}"`) && !/#fff/i.test(noCategory));
+const neither = windBarbSVG({ speedKt: null, size: 60 });
+check("neither a category nor a wind draws a filled gray circle and nothing else", neither.includes(`<circle cx="50" cy="50" r="11" fill="${gray}"`) && !neither.includes("<line") && !neither.includes("<text") && !neither.includes("--"));
+const calmUnknown = windBarbSVG({ speedKt: 0, calm: true, size: 60 });
+check("a calm wind without a category is the open ring in gray, not the filled circle", calmUnknown.includes('fill="none"') && calmUnknown.includes(`stroke="${gray}"`) && !calmUnknown.includes(`fill="${gray}"`));
+const noWind = windBarbSVG({ speedKt: null, color: "#22c55e", size: 60 });
+check("a category without a wind keeps the -- placeholder in the category color", noWind.includes("--") && noWind.includes('fill="#22c55e"') && !noWind.includes("<circle"));
+check("the chip names the category on its color", categoryChip({ category: "IFR", category_color: "#ef4444" }, "cat") === '<span class="cat" style="background:#ef4444">IFR</span>');
+check("the chip reads UNKNOWN on gray when there is no category", categoryChip({ category: null, category_color: null }, "cat-chip") === `<span class="cat-chip" style="background:${gray}">UNKNOWN</span>`);
+const wind = (dir, speed_kt, extra) => ({ dir, speed_kt, gust_kt: null, variable: false, calm: speed_kt === 0, ...extra });
+check("wind text gives direction, speed and gust", windText(wind(230, 12, { gust_kt: 22 })) === "230° 12G22kt" && windText(wind(40, 7), true) === "040° 7 kt");
+check("wind text reads calm and variable winds", windText(wind(0, 0)) === "Calm" && windText(wind(null, 4, { variable: true }), true) === "VRB° 4 kt");
+check("a report without wind reads as no wind, not as a direction", windText(wind(null, null), true) === "--" && !windText(wind(null, null)).includes("000"));
 done();
 </script></body></html>

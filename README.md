@@ -45,9 +45,9 @@ time left on the current view.
   and raw, with a large wind barb, and a list of every aircraft in view with general
   aviation first.
 - **Regional view.** Weather only: a wind barb for every airport reporting a METAR inside
-  the map, colored by flight category (VFR green, MVFR blue, IFR red, LIFR magenta), over
-  an animated NEXRAD base-reflectivity radar loop. The side panel lists the stations, worst
-  conditions first.
+  the map, colored by flight category (VFR green, MVFR blue, IFR red, LIFR magenta, gray
+  when unknown), over an animated NEXRAD base-reflectivity radar loop. The side panel lists
+  the stations, worst conditions first.
 - **Satellite loop (optional).** A full-screen NOAA GOES animation for your part of the
   country, for example GOES-West, Pacific Northwest sector, GeoColor.
 - **Cameras (optional).** Live video from your security cameras on a grid you arrange: each
@@ -68,7 +68,8 @@ time left on the current view.
 
 No API keys are needed, except for the NOTAM views, which use credentials the FAA issues on
 request, and the key of your own model server if you turn the rewrite on. Weather comes from the US National Weather Service Aviation Weather
-Center, radar from the Iowa Environmental Mesonet, satellite imagery from NOAA STAR, and map
+Center (and, for an airport of yours that it does not list, from the Weather Service's own
+report files), radar from the Iowa Environmental Mesonet, satellite imagery from NOAA STAR, and map
 tiles from OpenStreetMap. Traffic comes from your own ADS-B receiver if you have one, or
 from a free public aggregator (adsb.fi, adsb.lol, or airplanes.live).
 
@@ -179,11 +180,23 @@ settings.
 Open `http://<pi-ip>:8000/admin` (it asks for the password if you set one). Every field is
 checked when you save, mistakes are highlighted, and the TV reloads with the new settings.
 
-**Airports.** One row per airport you want a local view for: the ICAO identifier (for
-example `KSEA`; for US fields without one use the FAA identifier such as `S50`), a name, the
-latitude and longitude of the field, and the radius in miles. Use the arrows to set the
-order they appear in. Airports without a weather station show "no weather" on their local
-view but still show traffic.
+**Airports.** One row per airport you want a local view for: the identifier its weather
+reports carry (the ICAO identifier, for example `KSEA`; for a US field without one, `K`
+followed by the FAA identifier, such as `KS50`), a name, the latitude and longitude of the
+field, and the radius in miles. Use the arrows to set the order they appear in. Airports
+without a weather station show "no weather" on their local view but still show traffic.
+
+An airport the Aviation Weather Center does not list, such as one whose AWOS was installed
+recently, is read from the Weather Service's report files instead and appears on the
+regional view as well. The status line at the top of the admin page names the airports
+read this way.
+
+A station's flight category is shown only when its report settles it. If the sky
+condition or the visibility is missing, the category is unknown unless what is reported
+decides it alone (a visibility below one mile is LIFR whatever the ceiling). The same
+holds for an airport read from the Weather Service's files when a cloud layer is reported
+without its height. A station of unknown category is drawn in gray and labeled UNKNOWN:
+its wind barb when the report carries a wind, a gray circle when it does not.
 
 **Regions.** A wider view for the weather overview: a center point and a radius. Wind
 barbs appear for every airport reporting weather inside the map, not just the ones you
@@ -715,8 +728,10 @@ actions:
 - **No aircraft.** Open `http://<pi-ip>:8000/api/status` or press Test connection on the
   admin page. For a local receiver, the URL must be its LAN address, not `localhost`.
 - **No weather or wind barbs.** Check that the Pi can reach `aviationweather.gov` and that
-  the identifier is right; some small fields have no weather station, and a newly installed
-  AWOS shows up only once aviationweather.gov lists it. The display keeps the last weather
+  the identifier is the one the station reports under (`KS50`, not `S50`); some small
+  fields have no weather station. An airport aviationweather.gov does not list is read from
+  `tgftp.nws.noaa.gov`, so a newly installed AWOS shows up once its reports are on either.
+  A dash in place of a value means the report did not carry it. The display keeps the last weather
   it fetched, also across restarts, and turns the footer dot amber when it is getting old
   and red when refreshes are failing. `docker compose logs` shows the error; a
   name-resolution error means the router's DNS is not answering.
@@ -760,8 +775,8 @@ actions:
   They are vendored under `frontend/src/lib/vendor/tar1090/` with tar1090's license.
 - The aircraft type table (ICAO type designator to type description and wake category) is
   from [tar1090-db](https://github.com/wiedehopf/tar1090-db).
-- Map data © OpenStreetMap contributors. Weather from the NWS Aviation Weather Center,
-  radar from the Iowa Environmental Mesonet, satellite imagery from NOAA STAR.
+- Map data © OpenStreetMap contributors. Weather from the NWS Aviation Weather Center and
+  the NWS telecommunication gateway, radar from the Iowa Environmental Mesonet, satellite imagery from NOAA STAR.
 - NOTAMs are from the FAA NOTAM Management Service. The contraction meanings used to spell
   them out are from the FAA's Aeronautical Information Manual (chapter 5, section 1), FAA
   Order 7930.2 (NOTAMs), FAA Order JO 7340.2 (Contractions) and the FAA's Aeronautical
