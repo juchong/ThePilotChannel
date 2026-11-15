@@ -196,7 +196,8 @@ under Views and System hold the settings: change what you like on any of them, t
 a mistake is marked on its field and its page is marked in the menu, and the TV reloads
 with the new settings. **Discard** drops the changes instead. Camera addresses, keys and
 the account are not part of that: they take effect the moment you store them and never
-reload the TV.
+reload the TV. A new display has no airports yet and shows only the satellite loop until you
+add them.
 
 **Airports.** One row per airport you want a local view for: the identifier its weather
 reports carry (the ICAO identifier, for example `KSEA`; for a US field without one, `K`
@@ -467,8 +468,10 @@ in with this display's address and views (see
 ### Editing the file directly
 
 Every setting of the Views and System pages lives in `data/config.yaml` on the Pi (nothing
-secret is in it: addresses, keys and the account are in `data/secrets.json`). You can edit
-it by hand and run `docker compose restart` to apply. The previous three versions are kept as `config.yaml.bak.1` to `.3` every time it is
+secret is in it: addresses, keys and the account are in `data/secrets.json`). The display
+writes it with the defaults at its first start; like everything in `data/`, it is yours and
+not part of the repository. You can edit it by hand and run `docker compose restart` to
+apply. The previous three versions are kept as `config.yaml.bak.1` to `.3` every time it is
 saved, and if the file is ever unreadable the display still starts, using the newest good
 backup, and the admin page shows a banner explaining what is wrong.
 
@@ -756,15 +759,22 @@ actions:
   that are still there: delete them, or the file, and run `docker compose up -d`. Home
   Assistant and scripts that sent the admin password need an API key instead (see
   "Control the screen from an automation").
+- **Coming from a version whose repository held `data/config.yaml`:** `git pull` refuses to
+  replace your settings file. Set it aside for the update and put it back afterwards:
+
+  ```bash
+  cd ThePilotChannel && cp data/config.yaml ~/config.yaml.keep && git checkout -- data/config.yaml
+  git pull && cp ~/config.yaml.keep data/config.yaml && docker compose up -d --build
+  ```
 - **Restart the display browser:** `pkill -x cage`. It comes straight back.
 - **Reboot the Pi:** everything starts again automatically, including after a power cut.
-- **Move to a new Pi:** your settings are the file `data/config.yaml` in the clone (the admin
-  page writes them there), so copy it off the old Pi, or commit it in your clone, before
-  retiring it. `data/secrets.json`, with the account, the API keys, the camera links and
-  the other keys, is never committed, so copy it by hand and keep it private. Flash and
-  bootstrap the new Pi as in the install steps, put both files back, and run
-  `docker compose up -d`. The tile and weather caches rebuild on their own. The new Pi may
-  get a different address: update any automation that points at it.
+- **Move to a new Pi:** what you set up is in two files in the clone's `data/` folder, which
+  git leaves alone: `config.yaml` (the settings) and `secrets.json` (the account, the API
+  keys, the camera links and the other keys; keep it private). Copy both off the old Pi
+  before retiring it. Flash and bootstrap the new Pi as in the install steps, put both files
+  back in `data/`, and run `docker compose up -d`. The tile and weather caches rebuild on
+  their own. The new Pi may get a different address: update any automation that points at
+  it.
 - **Change the Wi-Fi network or password:** use `sudo nmtui` (Edit a connection), then run
   `sudo ~/ThePilotChannel/deploy/harden-wifi.sh`: it moves the edited profile back out of
   netplan and refreshes the backup copy. To forget a network, delete it in `nmtui` and

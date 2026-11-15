@@ -53,8 +53,10 @@ robustness and low resource use come before features.
   wrong with it. A record's `plain` is the checked answer when there is one and the literal
   rendering otherwise.
 - `data/config.yaml` is the single source of truth for configuration, validated by the
-  pydantic model in `backend/app/config.py`. It holds nothing secret. It is bind-mounted as
-  a directory (`./data:/data`) so atomic renames and backup rotation work.
+  pydantic model in `backend/app/config.py`. It holds nothing secret. `data/` is the
+  display's own state and is ignored by git; a missing config is written with the defaults
+  at start. The directory is bind-mounted (`./data:/data`, created by Docker when absent)
+  so atomic renames and backup rotation work.
 - `data/secrets.json` (`store.py`) holds what must never be in the config or in an API
   response: the account, sessions, API keys, upstream credentials and camera addresses.
 - Config flow: the admin page `PUT`s the config, the backend validates and writes it
@@ -166,8 +168,9 @@ deploy/bootstrap.sh   idempotent OS provisioning for a fresh Pi (also --check / 
 deploy/harden-wifi.sh   Wi-Fi as NetworkManager keyfiles with read-only copies (also --check)
 deploy/grim-web-wrapper.sh   installed as /usr/local/bin/grim: web image formats via ImageMagick
 deploy/kiosk-launch.sh, getty-autologin.conf
-Dockerfile, docker-compose.yml (app + go2rtc), deploy/go2rtc.yaml, data/config.yaml,
-data/secrets.json (ignored)
+Dockerfile, docker-compose.yml (app + go2rtc), deploy/go2rtc.yaml
+data/   (ignored) written by the app: config.yaml and its backups, secrets.json, the
+        weather and NOTAM caches, nms-usage.jsonl, tiles/
 ```
 
 ## Invariants

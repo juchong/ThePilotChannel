@@ -3,11 +3,6 @@ frontend/dist/
 __pycache__/
 *.pyc
 .venv/
-data/config.yaml.tmp
 .env
-data/config.yaml.bak.*
-data/tiles/
-data/weather-cache.json*
-data/notam-cache.json*
-data/secrets.json*
-data/nms-usage.jsonl*
+# The display's own state: its settings, secrets store, caches and usage record.
+/data/
