@@ -909,3 +909,10 @@ any warranty. Copyright (C) 2026 Juan J Chong.
 
 Architecture, code conventions, invariants, and the build, test, and verify workflow are in
 [AGENTS.md](AGENTS.md).
+
+`data/` holds a display's own settings, secrets store, caches and record of FAA requests,
+so git ignores it (`/data/` in `.gitignore`). Keep that rule as it is and never commit a
+file from `data/`, not even with `git add -f`. A screenshot of the admin page from a
+running display shows its private settings (airports, addresses, camera and key names, the
+model endpoint): never commit one. The admin screenshot in `docs/` is taken from a copy of
+the app started on an empty data folder, as AGENTS.md describes.

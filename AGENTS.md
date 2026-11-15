@@ -652,6 +652,12 @@ data/   (ignored) written by the app: config.yaml and its backups, secrets.json,
   kept in `config.yaml` are copied into the store once (`import_legacy()`) and recorded; a
   value imported before is never imported again, so clearing it in the store is not undone
   by a restart.
+- `data/` is a running display's own state (config, secrets store, caches, usage record)
+  and git ignores it as a whole (`/data/` in `.gitignore`). The repository is public and a
+  display's config names its hosts, cameras and endpoints: never remove or narrow that
+  rule, never `git add -f` a file under `data/`, and never track `data/config.yaml` again.
+  The config reference is the example in README.md; a missing config is written with the
+  defaults.
 - `admin.html` is only reachable through `/admin`, which sends a browser without a session
   to `/login` (`AppStatic` blocks the direct path).
 - `WS /api/cameras/ws` is open like the read endpoints and relays only streams named by
@@ -874,7 +880,10 @@ production never shows sample NOTAMs.
 scheme, scrollbars hidden), driven over the DevTools protocol. It is taken from a second
 container of the image started on an empty data directory (port 8001, `HANGAR_GO2RTC`
 pointed at nothing), after creating its account and signing in, so that it shows none of
-the kiosk's settings.
+the kiosk's settings. Never commit a screenshot of the admin page taken from the kiosk or
+from a copy of its `data/`: every page shows private settings (airports, receiver and
+model addresses, stream names and hosts, key names). Look at a capture before committing
+it.
 
 ## Runtime environment
 
