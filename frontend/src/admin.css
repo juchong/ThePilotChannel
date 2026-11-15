@@ -50,6 +50,7 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-
 .page { display: flex; flex-direction: column; gap: 18px; }
 .page-head { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
 .page-head > div { flex: 1 1 320px; display: flex; flex-direction: column; gap: 4px; }
+.page-head > .row-actions { flex: 0 1 auto; flex-direction: row; gap: 8px; }
 
 /* parts */
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px;
@@ -125,6 +126,21 @@ input.invalid, select.invalid { border-color: var(--bad); box-shadow: 0 0 0 1px 
   display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .reveal .mono { word-break: break-all; }
 .quote { background: var(--surface2); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+
+/* the display API reference */
+.doc { gap: 10px; }
+.doc h2 { font-size: 20px; }
+.doc h3 { font-size: 17px; margin: 14px 0 0; }
+.doc h4 { font-size: 15px; margin: 8px 0 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.doc ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+.doc code { background: var(--surface2); border-radius: 4px; padding: 1px 4px; overflow-wrap: anywhere; }
+.doc pre { margin: 0; background: var(--surface2); border-radius: 8px; padding: 12px 14px; overflow-x: auto; }
+.doc pre code { background: none; padding: 0; overflow-wrap: normal; }
+.doc .table-wrap { overflow-x: auto; }
+.doc td code, .doc th code { overflow-wrap: normal; }
+.doc table { border-collapse: collapse; font-size: 14px; min-width: 100%; }
+.doc th, .doc td { text-align: left; vertical-align: top; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+.doc th { color: var(--muted); font-weight: 600; }
 
 /* unsaved changes */
 .savebar { position: fixed; left: var(--side); right: 0; bottom: 0; z-index: 5; background: var(--surface);

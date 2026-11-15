@@ -13,6 +13,7 @@ export const PAGES = [
   { id: "traffic", title: "Traffic source", group: "System", sections: ["data_source"] },
   { id: "display", title: "Display", group: "System", sections: ["display", "weather"] },
   { id: "access", title: "Access", group: "System", sections: [] },
+  { id: "api", title: "Display API", group: "System", sections: [] },
 ];
 
 const BY_ID = Object.fromEntries(PAGES.map((p) => [p.id, p]));

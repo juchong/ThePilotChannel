@@ -45,7 +45,7 @@
             </div>
             <div class="chips" id="screen-views"></div>
             <p class="sub">Choose a view to put it on the TV; the rotation carries on from there. An automation makes the same
-              calls with an API key (see Access).</p>
+              calls with an API key: Display API describes them.</p>
             <span id="screen-state" class="status" role="status"></span>
           </div>
           <div class="cards" id="health"></div>
@@ -260,6 +260,22 @@
             <div id="secrets"></div>
           </div>
           <div id="leftovers-access" class="notice" hidden><span id="leftovers-access-text"></span></div>
+        </section>
+
+        <section class="page" data-page="api" hidden>
+          <div class="page-head"><div>
+            <h1>Display API</h1>
+            <p class="sub">How a program on your network reads what the TV shows, changes the view and blacks out the
+              picture, filled in with this display's address and views. Copy it into an agent or a project that will make
+              the calls. It never holds a key: create one under Access.</p>
+          </div>
+            <div class="row-actions">
+              <button type="button" class="btn primary" id="api-doc-copy">Copy as Markdown</button>
+              <a class="btn" href="/api/docs/display?download=true" download>Download</a>
+            </div>
+          </div>
+          <span id="api-doc-status" class="status" role="status"></span>
+          <div class="card doc" id="api-doc"></div>
         </section>
       </main>
     </div>

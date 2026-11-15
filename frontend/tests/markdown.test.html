@@ -1,0 +1,75 @@
+<!doctype html><html><body><div id="box"></div><pre id="out"></pre><script type="module">
+import { check, done } from "./harness.js";
+import { inlineHtml, markdownHtml, tableCells } from "../src/lib/markdown.js";
+import { NAV_MAX_AGE_S } from "../src/lib/cycle.js";
+// The admin page's copy of the display API reference: every construct the
+// reference uses is drawn, nothing in it is taken as markup, and the reference
+// itself renders whole, with the numbers it states matching the display's own.
+const box = document.getElementById("box");
+const draw = (md, opts) => { box.innerHTML = markdownHtml(md, opts); return box; };
+const tags = (root) => [...root.querySelectorAll("*")].map((e) => e.tagName.toLowerCase());
+
+draw("# Title\n\n## Part\n\n### GET /api/display");
+check("headings sit one level under the page's own heading", tags(box).join() === "h2,h3,h4" && box.querySelector("h4").textContent === "GET /api/display");
+check("a heading can be lowered further or not at all", tags(draw("# A\n### B", { shift: 0 })).join() === "h1,h3" && tags(draw("###### deep")).join() === "h6");
+
+draw("One line\nand the next\n\nA second paragraph.");
+check("lines of a paragraph are joined, a blank line starts another", box.querySelectorAll("p").length === 2 && box.querySelector("p").textContent === "One line and the next");
+
+draw("- first\n  carried on\n- second\n\nafter");
+check("a list item carries its indented lines, and the list ends at a blank line", box.querySelectorAll("li").length === 2 && box.querySelector("li").textContent === "first carried on" && box.querySelector("p").textContent === "after");
+
+const code = '```json\n{"a": "<b>**x**</b>",\n  | not | a | table |\n# not a heading\n- not an item\n}\n```\nafter';
+draw(code);
+check("a code block keeps its lines exactly", box.querySelector("pre code").textContent === '{"a": "<b>**x**</b>",\n  | not | a | table |\n# not a heading\n- not an item\n}');
+check("and nothing inside it is read as markup", tags(box).join() === "pre,code,p" && box.querySelector("p").textContent === "after");
+check("a code block left open runs to the end", draw("```\nopen\nstill").querySelector("pre").textContent === "open\nstill");
+
+draw("| Field | Meaning |\n|---|---|\n| `a` | one \\| two |\n| `b \\| c` | **bold** |\nafter");
+const cells = [...box.querySelectorAll("td")].map((c) => c.textContent);
+check("a table has its header and rows", box.querySelectorAll("th").length === 2 && box.querySelectorAll("tbody tr").length === 2);
+check("an escaped pipe is a pipe inside its cell, in code too", cells.join("/") === "a/one | two/b | c/bold" && box.querySelectorAll("td code")[1].textContent === "b | c");
+check("a table sits in a box that scrolls on a narrow screen", box.firstElementChild.className === "table-wrap");
+check("cells are split on unescaped pipes only", tableCells("| `x \\| y` | z |").join("/") === "`x | y`/z" && tableCells("|a|b|").join("/") === "a/b");
+check("a line of pipes without a divider is a paragraph", tags(draw("| a | b |\n| c | d |")).join() === "p");
+
+check("a code span is drawn as code", inlineHtml("send `{\"view\": \"x\"}` now") === "send <code>{&quot;view&quot;: &quot;x&quot;}</code> now");
+check("a span delimited by two backticks may hold one", inlineHtml("`` region:tick`s ``") === "<code>region:tick`s</code>");
+check("bold is drawn outside code and not inside it", inlineHtml("**a** `**b**`") === "<strong>a</strong> <code>**b**</code>");
+check("a lone backtick stays text", inlineHtml("it`s") === "it`s");
+check("comment lines are left out", draw("<!-- views -->\ntext\n<!-- /views -->").innerHTML === "<p>text</p>");
+
+const hostile = '<img src=x onerror="window.__xss=1">';
+draw(`# ${hostile}\n\n${hostile}\n\n- ${hostile}\n\n| ${hostile} | x |\n|---|---|\n| ${hostile} | \`${hostile}\` |\n\n\`\`\`\n${hostile}\n\`\`\``);
+check("markup in any part of the source is shown as text", !box.querySelector("img") && !window.__xss && box.textContent.split("<img").length - 1 === 7);
+
+// The reference as it is in the repository.
+const src = await new Promise((resolve) => {
+  const x = new XMLHttpRequest();
+  x.open("GET", "../../backend/app/data/display_api.md");
+  x.onload = () => resolve(x.responseText);
+  x.onerror = () => resolve("");
+  x.send();
+});
+check("the reference is found", src.startsWith("# The Pilot Channel display API"));
+draw(src);
+const outside = src.replace(/```[\s\S]*?```/g, "");
+const fences = [...src.matchAll(/```\w*\n([\s\S]*?)\n```/g)].map((m) => m[1]);
+check("every heading is drawn", box.querySelectorAll("h2,h3,h4").length === (outside.match(/^#{1,3} /gm) || []).length);
+check("every code block is drawn exactly", fences.length > 0 && [...box.querySelectorAll("pre")].map((p) => p.textContent).join("\n--\n") === fences.join("\n--\n"));
+check("every table is drawn with all its rows", box.querySelectorAll("table").length === (outside.match(/^\|---/gm) || []).length && box.querySelectorAll("tr").length === (outside.match(/^\|(?!---)/gm) || []).length);
+check("every list item is drawn", box.querySelectorAll("li").length === (outside.match(/^- /gm) || []).length);
+const loose = [];
+const walk = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
+for (let n = walk.nextNode(); n; n = walk.nextNode()) if (!n.parentElement.closest("code") && /[`|*#]|<!--|^\s*-\s/.test(n.textContent)) loose.push(n.textContent);
+check("no Markdown is left as text outside code", loose.length === 0, loose.slice(0, 3).join(" / "));
+const age = /more than (\d+) seconds after it was made/.exec(src.replace(/\s+/g, " "));
+check("the age past which the TV drops a move is the one it applies", age && Number(age[1]) === NAV_MAX_AGE_S, age && age[1]);
+
+// A copy made for a display: its views table escapes what a name may hold.
+draw("| id | type | label | seconds on screen | entries in the cycle |\n|---|---|---|---|---|\n| `region:Puget \\| Sound` | regional | Region: a \\| b c | 15 | 2 |\n| `` region:tick`s `` | regional | ticks | 15 | 1 |");
+const ids = [...box.querySelectorAll("td code")].map((c) => c.textContent);
+check("a view id with a pipe or a backtick reads exactly as the display gives it", ids.join("/") === "region:Puget | Sound/region:tick`s" && box.querySelectorAll("tbody tr")[0].children.length === 5);
+
+done();
+</script></body></html>

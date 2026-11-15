@@ -59,6 +59,7 @@ ROUTES = {
     ("POST", "/api/display/previous"): (CONTROL_CLASS, {}),
     ("POST", "/api/display/view"): (CONTROL_CLASS, {"json": {"view": "no-such-view"}}),
     ("POST", "/api/display/showing"): (OPEN, None),
+    ("GET", "/api/docs/display"): (SESSION, {}),
     ("GET", "/api/stream"): (OPEN, None),
     ("GET", "/api/auth/session"): (OPEN, None),
     ("POST", "/api/auth/setup"): (OPEN, None),

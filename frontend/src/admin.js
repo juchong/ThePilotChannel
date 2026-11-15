@@ -17,6 +17,7 @@ import {
 import { changedPages, changedText, errorPages, navHtml, pageFromHash } from "./lib/adminNav.js";
 import { cardsHtml, healthCards } from "./lib/adminStatus.js";
 import { el, esc } from "./lib/dom.js";
+import { markdownHtml } from "./lib/markdown.js";
 import { layoutHtml, streamsHtml, testText } from "./lib/streams.js";
 
 let cfg = null; // the config being edited
@@ -136,6 +137,7 @@ function showPage() {
   window.scrollTo(0, 0);
   if (page === "access") loadAccess();
   if (page === "cameras" && cfg) loadStreams(true);
+  if (page === "api") loadApiDoc();
 }
 
 function fillTimezones() {
@@ -242,6 +244,7 @@ function wire() {
   el("nms-remove").addEventListener("click", () => clearSecret("nms"));
   el("key-create").addEventListener("click", createKey);
   el("acct-save").addEventListener("click", saveAccount);
+  el("api-doc-copy").addEventListener("click", copyApiDoc);
   el("logout-all").addEventListener("click", async () => {
     if (!confirm("Sign out every browser, this one included?")) return;
     try {
@@ -694,6 +697,29 @@ async function copyText(button) {
   selection.removeAllRanges();
   selection.addRange(range);
   button.textContent = "Selected: copy it";
+}
+
+// ---- the display API reference ------------------------------------------------------
+let apiDoc = "";
+
+async function loadApiDoc() {
+  try {
+    apiDoc = await api.getDisplayApiDoc();
+    el("api-doc").innerHTML = markdownHtml(apiDoc);
+    setStatus("api-doc-status", "");
+  } catch (e) {
+    setStatus("api-doc-status", said(e), "err");
+  }
+}
+
+async function copyApiDoc() {
+  if (!apiDoc) return setStatus("api-doc-status", "The reference has not loaded yet.", "err");
+  const ok = await clip(apiDoc);
+  setStatus(
+    "api-doc-status",
+    ok ? "Copied as Markdown, ready to paste." : "This browser did not allow copying: use Download.",
+    ok ? "ok" : "err"
+  );
 }
 
 async function saveAccount() {

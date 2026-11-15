@@ -27,7 +27,8 @@ NOTAM view (one per location; shown here with the built-in sample NOTAMs):
 
 ![NOTAM view](docs/display-notams.jpg)
 
-Admin page (remote configuration):
+Admin page (remote configuration; here its Access page, with the account and the API keys
+for automations):
 
 ![Admin page](docs/admin.png)
 
@@ -459,6 +460,10 @@ where to change it. A password or key is stored on the Pi in `data/secrets.json`
 only by the display; passwords and API keys as hashes, so they cannot be read back even
 from that file.
 
+**Display API.** The reference for programs that control the TV over the network, filled
+in with this display's address and views (see
+[Control the screen from an automation](#control-the-screen-from-an-automation)).
+
 ### Editing the file directly
 
 Every setting of the Views and System pages lives in `data/config.yaml` on the Pi (nothing
@@ -566,6 +571,14 @@ display, or also change settings). The key is shown once, so copy it then; the p
 only enough of it to tell keys apart, and **Revoke** ends it. Send it in the
 `Authorization` header as `Bearer` followed by the key. The admin password is not accepted
 for these calls.
+
+The admin page's **Display API** page is the full reference for these calls: what each one
+takes and answers, its errors and limits, the event stream that reports changes, and the
+ids of your display's views, with your display's address filled in. **Copy as Markdown**
+puts it on the clipboard, ready to paste into an AI agent or a project that will make the
+calls; **Download** saves it as `display-api.md`. It never contains a key. The same
+reference with `<pi-ip>` in place of the address is
+[backend/app/data/display_api.md](backend/app/data/display_api.md).
 
 ### Change the view
 

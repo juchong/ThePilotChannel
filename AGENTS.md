@@ -75,6 +75,8 @@ backend/app/
                    access dependencies, the one-time import of values an earlier version
                    read from the environment, and the `python -m app.access` tool
   access_api.py    routes: sign in, set up, account, API keys, stored credentials
+  apidoc.py        the display API reference (data/display_api.md) with the address the
+                   browser used and the current views written in
   store.py         the secrets store: data/secrets.json, written atomically with mode 0600
   config.py        pydantic models + constraints, stream address rules, durable load/save
   manager.py       DataManager: sources, caches, rate limit, traffic/weather loops,
@@ -127,7 +129,7 @@ backend/tools/
                         depends on: formats, classifications, spellings, the pull of changes
 backend/tests/    support.py (env, API keys, stand-ins, wait_until), conftest.py (client
                   fixture, store restored after each test), test_api.py, test_access.py,
-                  test_secrets.py, test_behaviour.py, test_cameras.py,
+                  test_apidoc.py, test_secrets.py, test_behaviour.py, test_cameras.py,
                   test_metar_gateway.py, test_notams.py, test_notam_feed.py,
                   test_notam_translate.py, notam_cases.py (wrong answers built from FAA
                   records), data/ (FAA example NOTAMs, FAA sample API data and printed
@@ -143,6 +145,7 @@ frontend/src/
   lib/adminNav.js   the admin's pages, their config sections, unsaved and refused pages
   lib/adminStatus.js  the overview's health cards from /api/status
   lib/access.js     sign-in texts, API key list, stored-secret state
+  lib/markdown.js   the Markdown the display API reference uses, as escaped HTML
   lib/streams.js    stream list, test result, tile choices, the camera grid as a picture
   lib/dom.js        esc(), el(), sleep()
   lib/map.js        MapLibre wrapper: markers, barbs, radar layers, view framing
@@ -675,6 +678,17 @@ data/secrets.json (ignored)
   replaying whatever request it finds on a fresh load. After every switch it reports the
   view with `POST /api/display/showing`; `GET /api/display` exposes `nav` and `showing`
   for automations and the admin page.
+- `backend/app/data/display_api.md` is the contract for automations: every control route
+  and the reads they need (`GET /api/display`, `/api/views`, `/api/stream`). A change to
+  those routes, the display state, their errors or limits, `SSE_KEEPALIVE_S`,
+  `MAX_SUBSCRIBERS` or `NAV_MAX_AGE_S` changes the reference with it: `test_apidoc.py`
+  fails on a control route it lacks, an example or field table that differs from the
+  answers, or an error or limit it misstates, and `markdown.test.html` renders it whole and
+  checks the age of a dropped request. It stays readable on its own with `<pi-ip>` for the
+  address; `apidoc.render()` writes in the address the browser used (only a plain scheme,
+  host and port) and replaces the block between `<!-- views -->` and `<!-- /views -->`
+  with the current views. The admin's Display API page draws it with `lib/markdown.js`,
+  which escapes every character and knows only the Markdown the reference uses.
 
 ### Style
 
@@ -729,7 +743,8 @@ data/secrets.json (ignored)
   session and a cross-site write), password hashing against the scrypt vectors of RFC 7914
   (`data/rfc7914_scrypt.json`, extracted from the RFC's text), sessions, the throttle, API
   keys, the store's durability and locking, the command-line tool, and the import of every
-  retired variable;
+  retired variable; `test_apidoc.py` covers the display API reference against the routes,
+  answers, errors and limits it describes, and the copy made for a display;
   `test_secrets.py` covers the secrets API and that no stored secret is
   in any response, header, log line or other file; `test_behaviour.py` covers speed,
   reliability, and decoding properties; `test_cameras.py` covers tile validation, the
@@ -785,7 +800,8 @@ data/secrets.json (ignored)
   and their unsaved and refused marks, the overview's health cards, sign-in texts and the
   key and secret lists, the stream list and the camera grid picture, cycle navigation, the
   camera stream client (fake WebSocket and MediaSource), NOTAM time formatting, card markup
-  and source texts, and per-frame cost bounds. `harness.js` prints the PASS/FAIL lines
+  and source texts, the Markdown of the display API reference (read from
+  `backend/app/data/`), and per-frame cost bounds. `harness.js` prints the PASS/FAIL lines
   the runner parses. Run it after any change under `frontend/src/lib`.
 - Try a build beside production: `docker build -t hangar-display:test .` then run it on a
   copy of `data/` (two apps must not write one `secrets.json` or `config.yaml`) and with
@@ -851,8 +867,11 @@ taken from a second container of the same image (its own copy of `data/`, port 8
 the kiosk is pointed at through the DevTools port and then pointed back from, so that
 production never shows sample NOTAMs.
 
-`docs/admin.png` is headless Chromium against a running backend at 1120 px wide, cropped
-to the page.
+`docs/admin.png` is the admin's Access page in headless Chromium at 1280x1000 (light
+scheme, scrollbars hidden), driven over the DevTools protocol. It is taken from a second
+container of the image started on an empty data directory (port 8001, `HANGAR_GO2RTC`
+pointed at nothing), after creating its account and signing in, so that it shows none of
+the kiosk's settings.
 
 ## Runtime environment
 
@@ -907,7 +926,8 @@ to the page.
 ## HTTP API
 
 The access class of each route is in "Safety and robustness"; a route is open unless
-marked (control), (settings) or (session).
+marked (control), (settings) or (session). The routes an automation uses are described in
+full in `backend/app/data/display_api.md`.
 
 - `GET /healthz` liveness, `boot_id`, source status, config load state.
 - `GET /admin` the admin page for a session, else 303 to `/login`; `GET /login`.
@@ -985,8 +1005,11 @@ marked (control), (settings) or (session).
   `POST /api/display/restore`, `POST /api/display/next`, `POST /api/display/previous`,
   `POST /api/display/view` (`{"view": id}`; 404 for an unknown id) (control);
   `POST /api/display/showing` (`{"view", "index"}`, sent by the display).
+- `GET /api/docs/display` the display API reference as `text/markdown`, filled in for this
+  display; `?download=true` sends it as the file `display-api.md` (session).
 - `GET /api/stream` SSE: `connected`, `config_changed`, `weather_updated`,
-  `notams_updated`, `display`.
+  `notams_updated`, `display`; a `: keep-alive` comment after `SSE_KEEPALIVE_S` without an
+  event; 503 beyond `MAX_SUBSCRIBERS` streams.
 
 ## Configuration model
 

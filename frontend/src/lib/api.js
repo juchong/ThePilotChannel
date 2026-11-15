@@ -68,6 +68,8 @@ export const api = {
   nextView: () => j("/api/display/next", { method: "POST" }),
   previousView: () => j("/api/display/previous", { method: "POST" }),
   showView: (viewId) => j("/api/display/view", json("POST", { view: viewId })),
+  // the reference for those calls, as Markdown, filled in for this display
+  getDisplayApiDoc: () => j("/api/docs/display", {}, DEFAULT_TIMEOUT_MS, (r) => r.text()),
   // the display's own report of the view it has switched to
   reportShowing: (body) => j("/api/display/showing", json("POST", body), 4000),
   testSource: (payload) => j("/api/test-source", json("POST", payload), 30000),

@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import access_api, cameras
+from . import access_api, apidoc, cameras
 from .access import ACCESS, SESSION_COOKIE, require
 from .config import (
     ICAO_RE,
@@ -518,6 +518,17 @@ async def display_showing(req: ShowingReport):
         raise HTTPException(status_code=404, detail="unknown view")
 
 
+@app.get("/api/docs/display", dependencies=[Depends(session_only)])
+async def display_api_doc(request: Request, download: bool = False):
+    """The display API reference, filled in with this display's address and views."""
+    text = apidoc.render(str(request.base_url), manager.views())
+    headers = {"Content-Disposition": f'attachment; filename="{apidoc.FILENAME}"'} if download else {}
+    return Response(text, media_type="text/markdown; charset=utf-8", headers=headers)
+
+
+SSE_KEEPALIVE_S = 20.0  # a comment line after this long without an event
+
+
 def _sse(msg: dict) -> str:
     return f"data: {json.dumps(msg)}\n\n"
 
@@ -545,7 +556,7 @@ async def stream(request: Request):
                 if await request.is_disconnected():
                     break
                 try:
-                    msg = await asyncio.wait_for(q.get(), timeout=20.0)
+                    msg = await asyncio.wait_for(q.get(), timeout=SSE_KEEPALIVE_S)
                     yield _sse(msg)
                 except asyncio.TimeoutError:
                     yield ": keep-alive\n\n"
