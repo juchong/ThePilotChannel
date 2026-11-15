@@ -27,29 +27,40 @@ robustness and low resource use come before features.
   run by the bootstrap, keeps Wi-Fi in NetworkManager keyfiles. The kiosk is not in Docker
   because it needs the GPU and HDMI output directly.
 - `go2rtc`, the second compose service (image pinned), pulls the camera RTSPS streams and
-  serves them as fragmented MP4 without re-encoding. Its config `deploy/go2rtc.yaml` defines
-  the stream slots `cam1` to `cam12`, each expanded by go2rtc from its environment
-  (`${HANGAR_CAMn:}`, empty when unset), which compose fills from `.env`: the URLs carry
-  access tokens and are never in the repository. It publishes no port. The backend relays its MSE
-  WebSocket per tile (`backend/app/cameras.py`, `WS /api/cameras/ws?stream=`), for streams
-  configured as tiles only, and the display plays each tile with `lib/camstream.js`.
-- NOTAM flow: a background loop in `manager.py` fetches each monitored location from the
-  FAA NMS-API (`backend/app/notams.py`), turns every NOTAM into a display record (times as
-  epoch seconds, type, plain-language line from `notam_decode.py`) and keeps the records in
-  memory and in `notam-cache.json`. `GET /api/notams?location=` answers from that cache and
-  decides at that moment which NOTAMs are in effect or upcoming. The display shows one view
-  per location (`lib/notams.js`).
+  serves them as fragmented MP4 without re-encoding. It starts with no streams and keeps
+  them in memory only: `backend/app/cameras.py` sets them through its API from the
+  addresses in the secrets store (`sync()`: at start, after a change, every
+  `SYNC_INTERVAL_S`, and when a relay connection fails, which is how a restarted go2rtc
+  gets them back). It publishes no port. The backend relays its MSE WebSocket per tile
+  (`WS /api/cameras/ws?stream=`), for streams configured as tiles only, and the display
+  plays each tile with `lib/camstream.js`.
+- Access: `backend/app/access.py` holds the admin account, browser sessions, API keys and
+  the dependency that puts every route in one access class; `access_api.py` has the routes
+  for signing in, keys and stored credentials. What they keep is in the secrets store
+  (`store.py`, `data/secrets.json`).
+- NOTAM flow: a background loop in `manager.py` is the only caller of the FAA NMS-API's
+  data endpoint (`backend/app/notams.py`) and makes one pull at a time, at the pace
+  `PullGate` allows. It fetches each monitored location whole (by `location`), then keeps
+  every location current with one pull of everything changed since the last
+  (`lastUpdatedDate`), merged by NOTAM id. Every NOTAM becomes a display record (times as
+  epoch seconds, type, plain-language line from `notam_decode.py`), kept in memory and in
+  `notam-cache.json`. `GET /api/notams?location=` answers from that cache and decides at
+  that moment which NOTAMs are in effect or upcoming. The display shows one view per
+  location (`lib/notams.js`).
 - NOTAM rewrite flow (optional, `notams.translate`): after each refresh a background task
   sends every NOTAM not yet attempted to an OpenAI-compatible endpoint (`llm.py`), checks
   the answer against the NOTAM (`notam_translate.py`), and keeps it only if nothing is
   wrong with it. A record's `plain` is the checked answer when there is one and the literal
   rendering otherwise.
 - `data/config.yaml` is the single source of truth for configuration, validated by the
-  pydantic model in `backend/app/config.py`. It is bind-mounted as a directory
-  (`./data:/data`) so atomic renames and backup rotation work.
+  pydantic model in `backend/app/config.py`. It holds nothing secret. It is bind-mounted as
+  a directory (`./data:/data`) so atomic renames and backup rotation work.
+- `data/secrets.json` (`store.py`) holds what must never be in the config or in an API
+  response: the account, sessions, API keys, upstream credentials and camera addresses.
 - Config flow: the admin page `PUT`s the config, the backend validates and writes it
   (temp file, fsync, rename, `.bak.1..3` rotation), then broadcasts SSE `config_changed`
-  and the display reloads.
+  and the display reloads. Stored secrets, streams, keys and the account change through
+  their own routes, apply at once and never reload the display.
 - Traffic flow: the display polls `/api/traffic?view=<id>` once a second. The backend
   answers from a per-view snapshot that a background loop keeps fresh at 1 s for every
   recently polled view; the request never waits on an upstream fetch.
@@ -58,14 +69,24 @@ robustness and low resource use come before features.
 
 ```
 backend/app/
-  main.py          routes, auth, security headers, SSE, static serving (AppStatic)
-  config.py        pydantic models + constraints, secret masking, durable load/save
+  main.py          routes with their access class, security headers, SSE, static serving
+                   (AppStatic), the admin and login pages
+  access.py        the admin account (scrypt), sessions, API keys, the sign-in throttle, the
+                   access dependencies, the one-time import of values an earlier version
+                   read from the environment, and the `python -m app.access` tool
+  access_api.py    routes: sign in, set up, account, API keys, stored credentials
+  store.py         the secrets store: data/secrets.json, written atomically with mode 0600
+  config.py        pydantic models + constraints, stream address rules, durable load/save
   manager.py       DataManager: sources, caches, rate limit, traffic/weather loops,
                    circuit breaker, blackout state, SSE subscribers
-  views.py         config -> ordered list of views (local, regional, satellite, cameras)
-  cameras.py       go2rtc relay: WebSocket pump per tile, relay state for /api/status
-  notams.py        FAA NMS-API client (token, NOTAMs by location), record normalization,
-                   affected-location check, time window and order, sample source
+  views.py         config -> ordered list of views (local, regional, satellite, cameras,
+                   notams)
+  cameras.py       go2rtc relay: WebSocket pump per tile, keeping the relay's streams those
+                   of the store, testing a stream, relay state for /api/status
+  notams.py        FAA NMS-API client (token, a location's NOTAMs, NOTAMs changed since a
+                   time), the pull gate, the usage record, record normalization,
+                   affected-location check, time window and order, comparing a merged set
+                   with a whole one, sample source
   notam_decode.py  NOTAM keyword (type) classification and the literal plain-language
                    rendering, from data/notam_terms.json, data/faa_contractions.json,
                    data/notam_words.json and data/english_words.json (all generated by
@@ -74,7 +95,8 @@ backend/app/
   notam_translate.py  the model rewrite: system prompt, worked examples, per-NOTAM
                    glossary and keep list, reply parsing, the answer check, and the
                    one retry of a refused answer
-  llm.py           OpenAI-compatible chat client (model list, one completion), key from env
+  llm.py           OpenAI-compatible chat client (model list, one completion), key from the
+                   secrets store
   weather.py       aviationweather.gov METAR fetch, decode, flight category
   nws_gateway.py   NWS gateway station files: the METAR of a configured airport that
                    aviationweather.gov does not serve
@@ -101,17 +123,27 @@ backend/tools/
   eval_notam_model.py   measures a model endpoint: answers accepted (at once, or after the
                         retry), refused and why; --jobs N, --out FILE; waits and tries
                         again when the endpoint fails
-backend/tests/    support.py (env, wait_until), conftest.py (client fixture), test_api.py,
-                  test_behaviour.py, test_cameras.py, test_metar_gateway.py, test_notams.py,
+  check_nms.py          asks an NMS-API test environment (never production) what the feed
+                        depends on: formats, classifications, spellings, the pull of changes
+backend/tests/    support.py (env, API keys, stand-ins, wait_until), conftest.py (client
+                  fixture, store restored after each test), test_api.py, test_access.py,
+                  test_secrets.py, test_behaviour.py, test_cameras.py,
+                  test_metar_gateway.py, test_notams.py, test_notam_feed.py,
                   test_notam_translate.py, notam_cases.py (wrong answers built from FAA
-                  records), data/ (FAA example NOTAMs, FAA sample API data, the lists
-                  the generator read)
+                  records), data/ (FAA example NOTAMs, FAA sample API data and printed
+                  answers, the lists the generator read, the scrypt vectors of RFC 7914)
 frontend/tests/   headless module tests (*.test.html), harness.js, run.sh
 frontend/src/
   index.html, main.js, styles.css    the display and its cycle
-  admin.html, admin.js, admin.css    the configuration page
+  admin.html, admin.js               the admin page: pages, save bar, streams, keys, secrets
+  login.html, login.js               sign in, or create the account on a display without one
+  admin.css                          the stylesheet of both (they do not load styles.css)
   lib/api.js        REST client with timeouts, ApiError, SSE subscription
   lib/adminForm.js  admin field schema, rendering, typed collection, error mapping
+  lib/adminNav.js   the admin's pages, their config sections, unsaved and refused pages
+  lib/adminStatus.js  the overview's health cards from /api/status
+  lib/access.js     sign-in texts, API key list, stored-secret state
+  lib/streams.js    stream list, test result, tile choices, the camera grid as a picture
   lib/dom.js        esc(), el(), sleep()
   lib/map.js        MapLibre wrapper: markers, barbs, radar layers, view framing
   lib/aircraft.js   aircraft store, dead reckoning, drop timeout, importance sort
@@ -121,8 +153,9 @@ frontend/src/
   lib/cycle.js      cycle index wrapping; which view a remote navigation request selects
   lib/camstream.js  one camera tile: go2rtc MSE protocol, buffer trim, live-edge chase,
                     reconnect with backoff, live/waiting state
-  lib/notams.js     NOTAM view: Z time and span formatting, status, grouping by type,
-                    page arithmetic, card markup
+  lib/notams.js     NOTAM view: times in the display's zone, clock times in the wording
+                    converted or marked UTC, status, grouping by type, page arithmetic,
+                    card markup, banner, source and caution texts
   lib/stations.js   which station set the regional view shows, footer state
   lib/windbarb.js   wind barb SVG, wind text, flight category chip
   lib/geo.js        client geo helpers
@@ -130,7 +163,8 @@ deploy/bootstrap.sh   idempotent OS provisioning for a fresh Pi (also --check / 
 deploy/harden-wifi.sh   Wi-Fi as NetworkManager keyfiles with read-only copies (also --check)
 deploy/grim-web-wrapper.sh   installed as /usr/local/bin/grim: web image formats via ImageMagick
 deploy/kiosk-launch.sh, getty-autologin.conf
-Dockerfile, docker-compose.yml (app + go2rtc), deploy/go2rtc.yaml, data/config.yaml, .env (ignored)
+Dockerfile, docker-compose.yml (app + go2rtc), deploy/go2rtc.yaml, data/config.yaml,
+data/secrets.json (ignored)
 ```
 
 ## Invariants
@@ -293,14 +327,22 @@ Dockerfile, docker-compose.yml (app + go2rtc), deploy/go2rtc.yaml, data/config.y
 - Satellite frame URLs come from parsing the NOAA STAR CDN directory listing
   (`satellite.py`), cached for 240 s per parameter set. Query parameters are validated
   before they reach a URL.
-- Camera stream URLs live only in `.env` (`HANGAR_CAM1` to `HANGAR_CAM12`, passed by compose
-  into the go2rtc container and expanded in `deploy/go2rtc.yaml`); `config.yaml` and the API
-  carry stream names. go2rtc's RTSP, WebRTC and SRTP listeners are off (set in that file) and
-  it publishes no port; the backend reaches it at `HANGAR_GO2RTC` over the compose network.
-  `/api/status` probes it (`cameras.status`, cached for `STATUS_TTL_S`) and returns only
-  stream names (tiles it does not know, slots with no URL), never go2rtc's stream list. UniFi Protect links are used without
-  their `?enableSrtp` suffix: go2rtc does not implement SRTP (AlexxIT/go2rtc#81) and would
-  relay encrypted payloads behind valid headers; `rtsps://` over TCP is inside TLS already.
+- Camera stream addresses live only in the secrets store (ids `cam1` to `cam12`);
+  `config.yaml` carries stream ids, and the API a stream's id, name and host. An address
+  must pass `validate_stream_url()`: `rtsp` or `rtsps` only, because go2rtc also opens
+  sources that run a program (`exec`, `echo`, `expr`, `ffmpeg`), which a web form must
+  never reach; no fragment, since go2rtc reads options from it. `enableSrtp` is removed
+  from the query: go2rtc does not implement SRTP (AlexxIT/go2rtc#81) and would relay
+  encrypted payloads behind valid headers; `rtsps://` over TCP is inside TLS already.
+- go2rtc's RTSP, WebRTC and SRTP listeners are off (`deploy/go2rtc.yaml`) and it publishes
+  no port; the backend reaches it at `HANGAR_GO2RTC` over the compose network. Its API:
+  `PATCH /api/streams?name=&src=` sets a stream in memory; `PUT` and `DELETE` also change
+  memory and then answer 400 because its config file is read-only, so `sync()` judges by
+  reading the stream list again; `GET /api/streams?src=&video=all` opens the camera and
+  names what it sends (the stream test). go2rtc's stream list carries the addresses:
+  nothing of it but stream ids leaves `cameras.py`, and an httpx error (which carries the
+  request URL) is reported by its class only. A changed address closes that stream's relay
+  sockets so its tiles reconnect onto the new one.
 
 ### NOTAMs
 
@@ -308,13 +350,24 @@ Dockerfile, docker-compose.yml (app + go2rtc), deploy/go2rtc.yaml, data/config.y
   with `location` (never `accountability`), and `affects()` checks each returned NOTAM's
   `location` / `icaoLocation` against the monitored identifier again. A restriction at one
   airport is routinely issued under another's accountability (`!SEA 11/012 S50 ...`).
-- A location is asked for and matched under both spellings (`query_forms()`): the API takes
-  the domestic or the ICAO form, and a U.S. field without an ICAO code (S50) is spelled
-  KS50 by a METAR-oriented config. A spelling the API answers 400 or 404 to is skipped
-  unless it knows none.
-- Times are the API's, as epoch seconds, and the display renders every one in UTC with the
-  Z designator (`fmtZ()`: `08 NOV 2026 1500Z`). Nothing computes or rewrites an issue,
-  update, start or end time. `parse_time()` reads ISO 8601 with a time, `YYYYMMDDHHMM` and
+- A location is matched under both spellings (`query_forms()`) and asked for under them in
+  turn until the API answers one: the API answers the domestic and the ICAO form of a
+  location it knows with the same set, and a form it does not know with 400 ("Location is
+  not valid"); a U.S. field without an ICAO code (S50) is spelled KS50 by a METAR-oriented
+  config. A spelling answered 400 or 404 is skipped next time unless the API knows none.
+- Times are the API's, as epoch seconds, and the display renders every one in
+  `display.timezone` with the zone's name for that date (`fmtTime()`: `08 NOV 2026 0700
+  PST`). Nothing computes or rewrites an issue, update, start or end time. Clock times in a
+  NOTAM's wording are UTC; the plain-language line and the schedule line give them in the
+  zone only where that is exact (`localizeLine()`, `scheduleText()`): the zone's offset
+  holds through what is left of the NOTAM (`steadyOffset()`; a permanent one over the
+  coming year; none without a stated end), and where a day or date is named
+  (`clockTimes().dayBound`) no start moves to another day. Otherwise each such time is
+  marked UTC, and a schedule line is shown as written under "SCHEDULE (UTC)". A clock time
+  is a range beside a schedule word (DLY, a day name, SR, SS), or a single figure with Z,
+  beside SR/SS or after AFT/BFR/FM/TIL; never a figure with a unit or after FL. Wording that
+  names local time (LCL, LOCAL) is left as written. The NOTAM as issued (`raw`) is never
+  changed. `parse_time()` reads ISO 8601 with a time, `YYYYMMDDHHMM` and
   `YYMMDDHHMM`, and nothing else: a date without a time is not a time. A NOTAM is permanent
   only when it says PERM; a missing start or end is shown as "not stated". An estimated end
   carries EST.
@@ -416,8 +469,9 @@ Dockerfile, docker-compose.yml (app + go2rtc), deploy/go2rtc.yaml, data/config.y
   lists or the FAA writes in NOTAM text of its own are spelled out (`terms_for()`): MAP is
   the missed approach point, not Order JO 7340.2's "aeronautical maps and charts".
 - Both directions are tested against the sources as read: nothing is spelled out that
-  they do not support, and nothing they define is left out without one of the reasons above. A wrong expansion
-  is worse than an unexpanded contraction: the NOTAM as issued is always shown beneath.
+  they do not support, and nothing they define is left out without one of the reasons
+  above. A wrong expansion is worse than an unexpanded contraction: the NOTAM as issued is
+  always shown beneath.
 - A model rewrite is shown only if `Plan.problems()` finds nothing wrong with it: every
   element of the NOTAM is in the answer in the NOTAM's order, and every other token is one
   of `GRAMMAR`, in lower case or with an initial capital (`The`; `A` only as the answer's
@@ -440,10 +494,11 @@ Dockerfile, docker-compose.yml (app + go2rtc), deploy/go2rtc.yaml, data/config.y
   (OR, IN) in lower case between two plain words: there only the sentence tells, so the
   literal decode keeps the capitals and the model may not. A full stop the NOTAM writes
   between two elements (`Item.stop`) must be kept as a full stop or a semicolon: two
-  statements run into one say something else ("WITHDRAWN MAINT. AVBL WITH 30 MIN PN"). Every other character is plain punctuation (`PLAIN_MARKS`) placed where
-  it cannot change how a number reads (`_alters()`): no symbol, no dash before a number, no
-  point, comma, slash or colon directly before one, no slash or colon between two, no quote
-  mark after one. A free-standing mark the NOTAM writes (`-`, `/`, `&`) is an element like
+  statements run into one say something else ("WITHDRAWN MAINT. AVBL WITH 30 MIN PN").
+  Every other character is plain punctuation (`PLAIN_MARKS`) placed where it cannot change
+  how a number reads (`_alters()`): no symbol, no dash before a number, no point, comma,
+  slash or colon directly before one, no slash or colon between two, no quote mark after
+  one. A free-standing mark the NOTAM writes (`-`, `/`, `&`) is an element like
   any other, and punctuation the NOTAM writes after an element (`STAND 12: 4323...`) may
   follow it in the answer, with its space. The check cannot judge whether a joining word
   relates two elements as the NOTAM means; the card therefore names the origin of its line
@@ -460,18 +515,83 @@ Dockerfile, docker-compose.yml (app + go2rtc), deploy/go2rtc.yaml, data/config.y
   (`checked_rewrite()`, `ATTEMPTS`); the second answer is checked like the first.
 - A view never waits for the model: each NOTAM is rewritten once per model and prompt version,
   an answer or its refusal is kept in `notam-cache.json`, a model outage ends the pass
-  (logged once per state change) and the next refresh starts another. The key
-  (`HANGAR_LLM_API_KEY`) lives only in `.env`; neither it nor a reply body appears in an
-  API response, a log line or an error message.
-- The view never waits on the FAA: the loop refreshes every `notams.refresh_s`, retries a
-  failed refresh after `NOTAM_RETRY_S`, logs once per state change, and a location that
-  fails keeps its last NOTAMs with the error and the retrieval time shown. FAA records are
+  (logged once per state change) and the next refresh starts another. The endpoint key
+  lives only in the secrets store; neither it nor a reply body appears in an API response,
+  a log line or an error message.
+- The FAA's limits for the NMS-API (its FAQ): in production one data pull every three
+  minutes and one bulk pull a day, HTTP 429 beyond; in its test environments one request a
+  second. `PullGate` paces every environment by the production limit, so a test
+  environment shows what production will see: data pulls at least `PULL_INTERVAL_S` apart,
+  any two requests `REQUEST_SPACING_S` apart. The time of the last pull is read back from
+  the usage record at start, so a restart never shortens an interval, and the first pull
+  after it records its interval from that one. A 429 doubles the wait up to
+  `BACKOFF_MAX_S` (never less than a `Retry-After`) until a pull is served. Nothing but
+  the NOTAM loop makes a data pull: the admin's Refresh now queues a location for the next
+  turn, and Check keys asks for a token only.
+- A bearer token lives 1,799 s (`expires_in`, a string); it is renewed `TOKEN_MARGIN_S`
+  before that. A data pull answered 401 renews the token and is made again at its next
+  turn, never at once. Refused keys (`CredentialsRejected`) stop the loop asking for
+  `NOTAM_RETRY_MAX_S` or until keys are stored again.
+- A location is fetched whole when it is new, when the environment changed, on request,
+  every `BASELINE_S`, and when its set is older than `DELTA_REACH_S` or dated after now
+  (the clock was put back), under the first spelling the API answers. Between those, one
+  pull of changes per turn (`lastUpdatedDate`, back to the oldest point a location is
+  complete through, less `DELTA_OVERLAP_S`) is merged by NOTAM id into the locations it
+  affects. The API takes a `lastUpdatedDate` within the last 24 hours (`DELTA_WINDOW_S`);
+  one outside that when the pull's turn comes is not sent. A changed NOTAM that names no
+  location belongs to none (`affects(strict=True)`). Expired NOTAMs are not among the
+  changes; `select()` drops them by their own end time. The initial-load, content,
+  checklist and location-series endpoints are not used.
+- An answer is read as NOTAMs only when it states `status` Success, lists no `errors` and
+  carries `data.geojson` (`NmsSource._features()`). A stated failure, AIXM, or a link to a
+  file is an error, never "no NOTAMs". A request waits `REQUEST_TIMEOUT_S`, longer than the
+  30 s after which the API answers 408 itself.
+- When a whole set arrives it is compared with the merged one (`compare_sets()`). What the
+  whole set explains is settled at once: `same`, `ended`, and `newer` (updated at or after
+  the last pull). The rest (`unsettled_ids()`: `gone`, `appeared`, `changed`) is settled by
+  the next pull of changes, which reaches back to before the last pull (`settle()`): a
+  NOTAM it carries was changed after the last pull; one it does not carry was missed,
+  which is counted, logged and recorded. Update and cancellation times come to the minute
+  only, so an update time before the last pull does not show that a change was missed.
+  Differences older than a pull of changes can reach are counted `unverified`.
+- GeoJSON classifications are `DOM`, `FDC`, `INTL` and `MIL` (the query parameter spells
+  them `DOMESTIC`, `FDC`, `INTERNATIONAL`, `MILITARY`). `INTL` holds the US's own
+  international series (series A, accountability the location's ICAO identifier, mostly
+  the domestic NOTAMs again in ICAO form) as well as foreign NOTAMs.
+- A view hides a US international-series NOTAM that exactly repeats a domestic or FDC
+  NOTAM shown in it: the same text (spacing aside), start and end (`repeats()`). Anything
+  less than an exact repeat is shown, and a repeat is shown again once the NOTAM it
+  repeats is cancelled or ended. The model rewrite skips repeats (`_rewrite_records()`),
+  so they cost no model call and are not counted pending.
+- Every request to the NMS-API is appended to `nms-usage.jsonl` (`UsageLog`: time, kind,
+  environment, status, size, seconds since the previous pull, and `rid`, the id the API
+  gave the request in `x-request-id`; never a key, token or NOTAM text).
+  `GET /api/notams/usage` serves it with totals.
+- `notams.environment` picks the host (`NMS_HOSTS`). The FAA keys are stored with the
+  environment they were entered for and sent to no other. A cache entry belongs to its
+  source and environment: nothing fetched from one is shown under another. A test
+  environment's views carry a banner (`bannerText()`), and a view holding NOTAMs issued
+  abroad the caution that the NMS is not their authoritative source (`cautionText()`). A
+  NOTAM is foreign when its accountability is longer than four characters (`is_foreign()`):
+  a foreign NOTAM office is named by its AFTN address (`CYHQYNYX`), a US account by a
+  domestic or ICAO identifier (`SEA`, `KSEA`, `SUAW`, the military `KQZC`).
+- The display names the source of its NOTAMs as `notam_source_label()`: "FAA NMS Processed
+  with <notams.translate.description> LLM" (the FAA's terms: redistributed data may not be
+  characterized as FAA data). Live NOTAM views therefore exist only with the rewrite
+  enabled and described (`live_notams_problem()`); that is checked when a config is saved
+  (422) and when the views are built, never by refusing to load a file. For the same
+  reason a `refresh_s` below 180 in a saved file is raised, not refused.
+- The view never waits on the FAA: a location that fails keeps its last NOTAMs with the
+  error and the retrieval time shown, failures are logged once per state change, and a
+  failing location is asked again after a growing wait. A wait kept as a time of day (a
+  failing location's, the one after refused keys, the interval between pulls of changes)
+  ends when the clock is put back past it (`_holding()`, `_delta_wait()`). The records are
   persisted next to the config by one coalescing writer and restored at start.
 - Sample NOTAMs (`notams.source: sample`) are invented, come from `SampleSource` in the
   API's own shape, are shown under a banner, are never persisted, and are never served
   when the source is `faa`: a cache entry belongs to the source that fetched it.
-- The FAA credentials (`HANGAR_NMS_CLIENT_ID`, `HANGAR_NMS_CLIENT_SECRET`) live only in
-  `.env`. They are not in `config.yaml`, in any API response, or in an error message.
+- The FAA keys live only in the secrets store. They are not in `config.yaml`, in any API
+  response, in the usage record, or in an error message.
 - Texts of real issued NOTAMs are used to check the decoder and the answer check
   (`check_notam_text.py FILE --answers`) and are never added to the repository.
 - The NOTAM view is an overlay (`#notams`) like the satellite and camera views. Cards flow
@@ -485,25 +605,50 @@ Dockerfile, docker-compose.yml (app + go2rtc), deploy/go2rtc.yaml, data/config.y
 
 - Everything interpolated into `innerHTML` goes through `esc()` from `lib/dom.js`. Aircraft
   strings, METAR text, station names, and config labels are untrusted input.
+- The admin and sign-in pages load `admin.css` only, never the display's `styles.css`.
 - The admin page renders from the field schema in `lib/adminForm.js`: typed inputs carry
   `data-f` (config path) and `data-t` (type), values are parsed by declared type, and all
   add/delete/move buttons are handled by one delegated click listener on the root. A
   button names its collection by dotted config path (`data-add="cameras.tiles"`,
   `data-del="airports.2"`, `data-move="regions.0.1"`), resolved through `COLLECTIONS` in
   `applyAction()`. Do not add per-render `addEventListener` calls and do not infer a
-  field's type from its text.
+  field's type from its text. Every page's inputs stay in the document while another page
+  is shown, so the whole config is collected and validated together; `lib/adminNav.js`
+  maps each config section to its page, and no form field holds a secret.
 - Config loading never raises at import time. `load_config()` falls back to the newest
   readable `.bak.N`, then to defaults, and reports the problem through `/healthz` and the
   admin banner. Saves are atomic with fsync and rotate three backups.
-- Secrets (`SECRET_FIELDS` in `config.py`) are masked in every API response; a PUT that
-  sends the mask keeps the stored value and an empty string clears it. `PUT /api/config`
-  rejects unknown keys and honors `If-Match` against the config version (409 on mismatch).
-- `HANGAR_ADMIN_PASSWORD` gates `/admin`, `PUT /api/config`, `POST /api/test-source`, and
-  `POST /api/display/*` with HTTP Basic auth, except `POST /api/display/showing`, the
-  display's report of the view it shows: the kiosk has no credentials and the report only
-  names a view. Read endpoints the display uses stay open.
-  `admin.html` is only reachable through `/admin` (`AppStatic` blocks the direct path).
-  `WS /api/cameras/ws` is open like the read endpoints and relays only streams named by
+- `PUT /api/config` rejects unknown keys and honors `If-Match` against the config version
+  (409 on mismatch).
+- Every route is in exactly one access class, declared by its dependency (`require()` in
+  `access.py`): open (what the display reads, the report of the view it shows, sign-in and
+  first-visit setup: the kiosk has no credentials); control (`POST /api/display/*` but
+  `showing`: a session, or any API key); settings (the config, the source, NOTAM and model
+  tests, the usage record: a session, or a key of scope `settings`); session (the account,
+  API keys, stored credentials, stream addresses: a signed-in browser only, never a key).
+  No credentials or an unknown key is 401, a key outside its scope 403, an unreadable
+  secrets store 503. HTTP Basic is not accepted. A new route is added to the table in
+  `tests/test_access.py`, which fails for a route it does not list.
+- The account's password is a scrypt hash (`hash_password()`); a session or API key token
+  is random, sent or shown once, and stored as its SHA-256. The session cookie is HttpOnly
+  and SameSite=Strict, and a request that carries it and writes must come from this site's
+  own pages (`_same_origin()`). Failed sign-ins are throttled per client and overall
+  (`LoginThrottle`). First-visit setup works only while no account exists.
+- The secrets store is written atomically with mode 0600 and one backup. A store that
+  cannot be read is never "no account yet": it falls back to its backup, else it is locked
+  and everything that needs it answers 503. It is read again when the file changed outside
+  the app (`python -m app.access set-password`).
+- No stored secret (a password, a session or API key token, an upstream credential, a
+  stream address) appears in a response, a header, a log line or a file other than the
+  store; `tests/test_secrets.py` plants one in every slot and searches for them. A new
+  kind of stored secret is added to that test.
+- Values an earlier version read from the environment (`LEGACY_ENV` in `access.py`) or
+  kept in `config.yaml` are copied into the store once (`import_legacy()`) and recorded; a
+  value imported before is never imported again, so clearing it in the store is not undone
+  by a restart.
+- `admin.html` is only reachable through `/admin`, which sends a browser without a session
+  to `/login` (`AppStatic` blocks the direct path).
+- `WS /api/cameras/ws` is open like the read endpoints and relays only streams named by
   configured tiles: an unknown name is closed with 1008 before accept, an unreachable relay
   with 1011.
 - The display never calls `location.reload()` while the backend is unreachable (Chromium's
@@ -572,29 +717,56 @@ Dockerfile, docker-compose.yml (app + go2rtc), deploy/go2rtc.yaml, data/config.y
   ```
 
   `tests/support.py` prepares the environment (throwaway config, stub static dir, temp tile
-  cache, admin password) before `app.main` is imported; `tests/conftest.py` provides the
-  `client` fixture with every upstream stubbed, including tile warm-up. `test_api.py`
-  covers the API surface; `test_behaviour.py` covers speed, reliability, and decoding
-  properties; `test_cameras.py` covers tile validation, the camera view descriptor, and
-  the relay (an upstream stub stands in for go2rtc; `HANGAR_GO2RTC` points at a closed
-  port); `test_metar_gateway.py` covers the raw-METAR decoder against
-  aviationweather.gov's decode of real reports (`data/metar_reports.json`, written by
-  `tools/check_metar_decode.py --fixture`, never by hand: each report form at least three
-  times), the forms the code defines beyond that record, the flight category under every
-  combination of open ranges and of real aviationweather.gov records that carry none,
-  gateway station files, and the fallback in the weather
-  refresh and the station sets (a stand-in for the gateway; the `client` fixture's gateway
-  client refuses every request); `test_notams.py` covers selection by affected location, the time window and time
-  formats (the FAA's sample API data in `data/nms_samples.json`), type classification and
-  order, the generated term table and the decoding of every FAA example NOTAM
-  (`data/faa_examples.json`), that every ICAO-usage contraction of Order JO 7340.2 is
-  spelled out or left for a stated reason, that no location identifier is read as a
-  contraction or a day, the FAA client (a stub transport; no credentials are set, so
-  the real source raises before any request), and outages; `test_notam_translate.py`
-  covers the answer check (the FAA wording of every FAA example is accepted; every wrong
-  answer `notam_cases.py` builds for it is refused; of the FAA's whole vocabulary only the
-  joining words can be added; plain punctuation is accepted), what the model is given, the endpoint client (a stub
-  transport and a stand-in HTTP server), and the pipeline with a stub model. No test needs
+  cache, temp secrets store, the retired `HANGAR_ADMIN_PASSWORD` so the app starts with the
+  account it imports) before `app.main` is imported, creates the API keys the tests send
+  (`AUTH` may change settings, `CONTROL` only control the display; `sign_in()` gives the
+  test client a session), and holds the stand-ins for the FAA (`StubNms`, `stub_faa()`) and
+  a clock that moves only when slept on (`FakeClock`). `tests/conftest.py` provides the
+  `client` fixture with every upstream stubbed, including tile warm-up, and puts the
+  secrets store back after each test. `test_api.py` covers the API surface;
+  `test_access.py` covers the access class of every route (each protected route against no
+  credentials, a wrong, a revoked, a control and a settings key, a session, an expired
+  session and a cross-site write), password hashing against the scrypt vectors of RFC 7914
+  (`data/rfc7914_scrypt.json`, extracted from the RFC's text), sessions, the throttle, API
+  keys, the store's durability and locking, the command-line tool, and the import of every
+  retired variable;
+  `test_secrets.py` covers the secrets API and that no stored secret is
+  in any response, header, log line or other file; `test_behaviour.py` covers speed,
+  reliability, and decoding properties; `test_cameras.py` covers tile validation, the
+  camera view descriptor, the relay (an upstream stub stands in for go2rtc; `HANGAR_GO2RTC`
+  points at a closed port), stream addresses (every scheme go2rtc 1.9.15 registers is
+  refused but `rtsp` and `rtsps`), the stream API, and keeping the relay's streams those of
+  the store (`Relay` stands in for go2rtc's API as it answers); `test_metar_gateway.py`
+  covers the raw-METAR decoder against aviationweather.gov's decode of real reports
+  (`data/metar_reports.json`, written by `tools/check_metar_decode.py --fixture`, never by
+  hand: each report form at least three times), the forms the code defines beyond that
+  record, the flight category under every combination of open ranges and of real
+  aviationweather.gov records that carry none, gateway station files, and the fallback in
+  the weather refresh and the station sets (a stand-in for the gateway; the `client`
+  fixture's gateway client refuses every request); `test_notams.py` covers selection by
+  affected location, the time window and time formats (the FAA's sample API data in
+  `data/nms_samples.json`), type classification and order, the generated term table and
+  the decoding of every FAA example NOTAM (`data/faa_examples.json`), that every ICAO-usage
+  contraction of Order JO 7340.2 is spelled out or left for a stated reason, that no
+  location identifier is read as a
+  contraction or a day, the FAA client on a simulated clock (hosts, token answer and
+  refusals as the FAA prints them in `data/nms_samples.json`, the pull interval, 429, 408,
+  the status an answer states, the 24-hour window of `lastUpdatedDate`, the usage record),
+  and outages; `faa_request_faults()` there holds what the FAA's OpenAPI specification
+  allows a request to carry, and the stand-ins refuse anything else; `test_notam_feed.py`
+  runs the NOTAM scheduler for two simulated days against a stand-in for the NMS-API whose
+  NOTAMs are filed, changed, cancelled, replaced and left to expire, with injected 401s,
+  408s, 429s, stated failures and outages, for 1 to 12 locations (no two pulls inside three
+  minutes; no request the specification does not allow; what is shown is right after every
+  served pull; nothing missed when a whole set arrives; update times to the minute, as the
+  API gives them), and covers the spellings asked, the merge, the comparison of sets and
+  its settling, a clock put back, and the source label, banner and caution (by
+  accountability) for every combination of settings; `test_notam_translate.py` covers the
+  answer check (the FAA wording of every FAA example is accepted; every wrong answer
+  `notam_cases.py` builds for it is refused; of the FAA's whole vocabulary only the joining
+  words can be added; plain punctuation is accepted), what the model is given, the
+  endpoint client (a stub transport and a stand-in HTTP server), and the pipeline with a
+  stub model. No test needs
   a model or the network. A change to the decoder, the term table or the answer check is
   also run over real NOTAM texts with `tools/check_notam_text.py FILE --answers`, which
   must report no failure. A change to `metar_decode.py` or to the flight category is also
@@ -602,20 +774,23 @@ Dockerfile, docker-compose.yml (app + go2rtc), deploy/go2rtc.yaml, data/config.y
   `tools/check_metar_decode.py` (its header gives the commands; the reports stay out of
   the repository): it must report no unexplained difference, and every group it lists as
   of no known kind is read for a form the decoder should take. Name each test for the
-  failure it prevents. The manager is a module
-  singleton whose loops keep refreshing views polled by earlier tests, so apply config
-  before installing a failing stub. Assert on background work by polling for the condition
-  with `wait_until` (`support.py`) inside a deadline, never after a fixed sleep. The SSE
-  endpoint is an endless stream and hangs Starlette's TestClient; exercise it with
-  `curl -N`.
+  failure it prevents. The manager is a module singleton whose loops keep refreshing views
+  polled by earlier tests, so apply config before installing a failing stub. Assert on
+  background work by polling for the condition with `wait_until` (`support.py`) inside a
+  deadline, never after a fixed sleep. The SSE endpoint is an endless stream and hangs
+  Starlette's TestClient; exercise it with `curl -N`.
 - Frontend module tests: `frontend/tests/*.test.html` run headlessly with
   `frontend/tests/run.sh` (needs a chromium binary, no npm packages) and cover the aircraft
-  store, icon assignment, station selection, wind barbs, the admin form, cycle navigation,
-  the camera stream client (fake WebSocket and MediaSource), NOTAM time formatting and card
-  markup, and per-frame cost bounds. `harness.js` prints the PASS/FAIL lines the runner parses. Run
-  it after any change under `frontend/src/lib`.
-- Try a build beside production: `docker build -t hangar-display:test .` then
-  `docker run -d -p 8001:8000 -v "$PWD/data:/data" hangar-display:test`.
+  store, icon assignment, station selection, wind barbs, the admin form, the admin's pages
+  and their unsaved and refused marks, the overview's health cards, sign-in texts and the
+  key and secret lists, the stream list and the camera grid picture, cycle navigation, the
+  camera stream client (fake WebSocket and MediaSource), NOTAM time formatting, card markup
+  and source texts, and per-frame cost bounds. `harness.js` prints the PASS/FAIL lines
+  the runner parses. Run it after any change under `frontend/src/lib`.
+- Try a build beside production: `docker build -t hangar-display:test .` then run it on a
+  copy of `data/` (two apps must not write one `secrets.json` or `config.yaml`) and with
+  the relay pointed at nothing, so it does not set streams in production's go2rtc:
+  `docker run -d -p 8001:8000 -e HANGAR_GO2RTC=http://127.0.0.1:9 -v "<copy of data>:/data" hangar-display:test`.
 - Frontend checks: `node --check` on each module. Headless Chromium
   (`chromium --headless=new --disable-gpu --dump-dom URL`) works for the admin page and for
   module tests loaded with `--allow-file-access-from-files`. Headless Chromium has no WebGL,
@@ -631,7 +806,7 @@ Dockerfile, docker-compose.yml (app + go2rtc), deploy/go2rtc.yaml, data/config.y
   `window.__tpcMap` is the MapLibre instance.
 - To check one view, switch the display to it instead of waiting for the cycle:
   `POST /api/display/view` with `{"view": id}` (ids from `GET /api/views`; `/next` and
-  `/previous` step; HTTP Basic auth when `HANGAR_ADMIN_PASSWORD` is set). `GET /api/display`
+  `/previous` step; sent with an API key, `Authorization: Bearer <key>`). `GET /api/display`
   names the view under `showing` once the display has switched, within a second. The
   display then carries on from that view on its own dwell timer.
 - Per-process CPU comes from `top` and GPU memory from `CmaFree` in `/proc/meminfo`.
@@ -669,25 +844,25 @@ which gives 1920x1080 from the 3840x2160 mode; the local and satellite frames ar
 1920x1012, from a 4096x2160 mode at scale 0.46875) once each view is fully rendered: the KSEA
 local view a few seconds in, the regional view with the radar loop and barbs loaded, and the
 satellite view once its loop is animating, and the camera view with every tile live.
-`docs/display-notams.jpg` is the NOTAM view with `notams.source: sample`, taken from a
-second container of the same image (its own copy of `data/`, port 8001) that the kiosk is
-pointed at through the DevTools port and then pointed back from, so that production never
-shows sample NOTAMs.
+Switch the display to the view with `POST /api/display/view` before a capture, and check
+that the frame shows real data (aircraft listed, stations listed, frames loaded) before
+keeping it. `docs/display-notams.jpg` is the NOTAM view with `notams.source: sample`,
+taken from a second container of the same image (its own copy of `data/`, port 8001) that
+the kiosk is pointed at through the DevTools port and then pointed back from, so that
+production never shows sample NOTAMs.
+
 `docs/admin.png` is headless Chromium against a running backend at 1120 px wide, cropped
-to the page. Switch the display to the view with `POST /api/display/view` before a
-capture, and check that the frame shows real data (aircraft listed, stations listed,
-frames loaded) before keeping it.
+to the page.
 
 ## Runtime environment
 
-- Environment variables: `HANGAR_CONFIG` (default `/data/config.yaml`), `HANGAR_STATIC`
-  (default `/app/static`), `HANGAR_TILE_CACHE` (default `/data/tiles`), `HANGAR_GO2RTC`
-  (default `http://go2rtc:1984`), `HANGAR_ADMIN_PASSWORD` (optional; compose reads it from
-  `.env`; `ADMIN_PASSWORD` is accepted as a fallback name). `HANGAR_CAM1` to `HANGAR_CAM12`
-  are read from `.env` by compose for the go2rtc container only, not by the backend.
-  `HANGAR_NMS_CLIENT_ID` and `HANGAR_NMS_CLIENT_SECRET` (the FAA NMS-API credentials;
-  compose reads them from `.env`) and `HANGAR_NMS_BASE` (default
-  `https://api-nms.aim.faa.gov`; the FAA's staging host for staging credentials).
+- Environment variables: `HANGAR_CONFIG` (default `/data/config.yaml`), `HANGAR_SECRETS`
+  (default `secrets.json` beside the config), `HANGAR_STATIC` (default `/app/static`),
+  `HANGAR_TILE_CACHE` (default `/data/tiles`), `HANGAR_GO2RTC` (default
+  `http://go2rtc:1984`). Retired, read once to be imported into the secrets store and
+  passed by compose for that only: `HANGAR_ADMIN_PASSWORD` (or `ADMIN_PASSWORD`),
+  `HANGAR_NMS_CLIENT_ID`, `HANGAR_NMS_CLIENT_SECRET`, `HANGAR_NMS_BASE` (it tells which
+  environment those keys are for), `HANGAR_LLM_API_KEY`, `HANGAR_CAM1` to `HANGAR_CAM12`.
 - Docker runs rootless as the kiosk user (Docker CE from Docker's apt repo, user
   `docker.service`, linger enabled, CLI on the `rootless` context; the rootful daemon is
   disabled by the bootstrap). A drop-in on the user unit waits up to 60 s for a nameserver
@@ -731,9 +906,31 @@ frames loaded) before keeping it.
 
 ## HTTP API
 
+The access class of each route is in "Safety and robustness"; a route is open unless
+marked (control), (settings) or (session).
+
 - `GET /healthz` liveness, `boot_id`, source status, config load state.
-- `GET /api/config` config with secrets masked plus `version` (also the `ETag`).
-  `PUT /api/config` validates and writes; optional `If-Match`; 422 with `[{loc, msg}]`.
+- `GET /admin` the admin page for a session, else 303 to `/login`; `GET /login`.
+- `GET /api/auth/session` `{authenticated, username, setup_required, locked, detail}`.
+  `POST /api/auth/setup` and `POST /api/auth/login` (`{username, password}`; they set the
+  session cookie; 401, 409, 422, 429 with `Retry-After`, 503). `POST /api/auth/logout`,
+  `POST /api/auth/logout-all`, `PUT /api/auth/account` (`{current_password, username?,
+  new_password?}`) (session).
+- `GET /api/keys`, `POST /api/keys` (`{name, scope}`: the answer carries `key`, once),
+  `DELETE /api/keys/{id}` (session).
+- `GET /api/secrets` `{secrets: {nms: {set, environment, changed}, llm_api_key: {set,
+  changed}, aggregator_api_key: {...}}, imported, leftovers}`, never a value.
+  `PUT /api/secrets/nms` (`{client_id, client_secret, environment}`),
+  `PUT /api/secrets/{name}` (`{value}`), `DELETE /api/secrets/{name}`,
+  `POST /api/secrets/nms/check` (asks the FAA for a token; no data pull) (session).
+- `GET /api/cameras/streams` `{streams: [{id, name, host, changed, tiles, pending}], relay,
+  error, max}`, `POST /api/cameras/streams` (`{name, url}`),
+  `PUT /api/cameras/streams/{id}` (`{name?, url?}`), `DELETE /api/cameras/streams/{id}`
+  (409 while a tile uses it), `POST /api/cameras/streams/test` (`{id}` or `{url}`:
+  `{ok, video, error}`) (session).
+- `GET /api/config` the config plus `version` (also the `ETag`).
+  `PUT /api/config` validates and writes; optional `If-Match`; 422 with `[{loc, msg}]`
+  (settings).
 - `GET /api/views` ordered view descriptors the display cycles through; the camera view is
   `{id: "cameras", type: "cameras", label, dwell_s, tiles: [{name, stream, cols}]}`; a NOTAM
   view is `{id: "notams:<ident>", type: "notams", label, dwell_s, location, name,
@@ -754,44 +951,57 @@ frames loaded) before keeping it.
   type_label, issued, updated, start, end, permanent, end_estimated, times_differ,
   schedule, text, raw, plain {text, source, model}, status` (`plain.source` is `rules` or
   `model`); 404 for a location that is not monitored.
-  `POST /api/notams/check` (`{"ident", "source"}`, admin) asks a source now and saves
-  nothing. `POST /api/notams/model-test` (`{"base_url", "model", "timeout_s"}`, admin) has
-  that endpoint rewrite one FAA example NOTAM and returns `{ok, notam, answer, refused,
-  ms, models, key, error}`, saving nothing.
+  The answer also carries `source_label`, `environment`, `test_environment`, `non_us` and
+  `repeats_hidden` (the international-series repeats left out of `notams`).
+  `POST /api/notams/check` (`{"ident", "source"}`): for `sample`, what the sample holds,
+  saving nothing; for `faa`, queues a monitored location's whole fetch for the next turn
+  (`{ok, queued, wait_s}`) (settings). `POST /api/notams/model-test` (`{"base_url",
+  "model", "timeout_s"}`) has that endpoint rewrite one FAA example NOTAM and returns `{ok,
+  notam, answer, refused, ms, models, key, error}`, saving nothing (settings).
+  `GET /api/notams/usage?limit=&download=` the requests sent to the NMS-API: `{summary
+  (last 24 h), all_time, rows}` (settings).
 - `GET /api/status` source, health, uptime, weather (`last_refresh_ts` of the last
   aviationweather.gov answer, `stations`, `error`, and `gateway`: the `stations` read from
   the NWS gateway and its `error`), config, display, and tile cache state,
-  plus `cameras` (`enabled`, `tiles`, `relay` ok or down, `error`, `unknown_streams`) and
-  `notams` (`enabled`, `source`, `credentials` set or not, `locations`, `last_refresh_ts`,
-  `error`, and `translate`: `enabled`, `model`, `key` set or not, `error`, and the counts
+  plus `cameras` (`enabled`, `tiles`, `streams`, `relay` ok or down, `error`,
+  `unknown_streams`: tiles naming no stored stream, `pending_streams`: stored streams the
+  relay lacks) and `notams` (`enabled`, `source`, `environment`, `test_environment`,
+  `source_label`, `blocked`: why live views are held back, `credentials` set or not for the
+  environment, `locations`, `detail` per location, `last_refresh_ts`, `error`,
+  `next_pull_in_s`, `rate_limited`, `usage`: the last 24 hours of the usage record, and
+  `translate`: `enabled`, `model`, `description`, `key` set or not, `error`, and the counts
   `shown`, `refused`, `pending`).
 - `GET /tiles/{z}/{x}/{y}.png` cached basemap tile (fetched upstream on a miss; a stale
   tile is served if upstream fails; 404 for invalid coordinates).
 - `GET /radar/{layer}/{z}/{x}/{y}.png?v=<bucket>` NEXRAD tile (`layer` is `n0q`, `n0r`, or
   either with a `-mNNm` lag) with returns below `radar.min_dbz` removed; 502 when IEM
   fails, 404 for an unknown layer or invalid coordinates.
-- `POST /api/test-source` tries a `data_source` block from the first enabled airport.
-- `GET /api/display` blackout state plus `nav` (the last navigation request: `seq`,
-  `action`, `view`, `age_s`) and `showing` (the display's reported view: `view`, `index`,
-  `label`, `count`, `age_s`). `POST /api/display/blackout` (`{"seconds", "reason"}`, both
-  optional), `POST /api/display/restore`, `POST /api/display/next`,
-  `POST /api/display/previous`, `POST /api/display/view` (`{"view": id}`; 404 for an
-  unknown id), `POST /api/display/showing` (`{"view", "index"}`, sent by the display, no
-  auth).
+- `POST /api/test-source` tries a `data_source` block from the first enabled airport
+  (settings).
+- `GET /api/display` blackout state (`active`, `until`, `reason`, `remaining_s`) plus `nav`
+  (the last navigation request: `seq`, `action`, `view`, `ts`, `age_s`) and `showing` (the
+  display's reported view: `view`, `index`, `since`, `label`, `count`, `age_s`).
+  `POST /api/display/blackout` (`{"seconds", "reason"}`, both optional),
+  `POST /api/display/restore`, `POST /api/display/next`, `POST /api/display/previous`,
+  `POST /api/display/view` (`{"view": id}`; 404 for an unknown id) (control);
+  `POST /api/display/showing` (`{"view", "index"}`, sent by the display).
 - `GET /api/stream` SSE: `connected`, `config_changed`, `weather_updated`,
   `notams_updated`, `display`.
 
 ## Configuration model
 
 `Config` in `config.py` has sections `airports`, `regions`, `cycle`, `data_source`,
-`display`, `weather`, `satellite`, `radar`, `cameras`, and `notams`. Every numeric field has bounds,
-ICAO identifiers match `^[A-Z0-9]{3,4}$`, airport ICAOs and region names are unique, the
-timezone must be a valid IANA name, `local_url` and `tile_url` must be http(s) and not
-link-local, satellite `sector`/`band`/`size` are constrained to safe characters, the radar
-loop span is capped at 55 minutes, and camera tiles (at most `CAMERA_MAX_TILES`) name a
-stream matching `^[A-Za-z0-9_.-]{1,64}$` and span 1 to `CAMERA_GRID_COLS` columns, and NOTAM
-locations (at most `NOTAM_MAX_LOCATIONS`, unique) are identifiers matching the ICAO pattern
-with a look-ahead of 0 to 720 hours and a refresh of 120 to 3600 seconds; `notams.translate`
-(`enabled`, `base_url` validated like a source URL, `model`, `timeout_s` 5 to 600) cannot be
-enabled without a URL and a model. Add new settings to the model with constraints,
-to the admin field schema in `lib/adminForm.js`, and to the config reference in README.md.
+`display`, `weather`, `satellite`, `radar`, `cameras`, and `notams`. Every numeric field
+has bounds, ICAO identifiers match `^[A-Z0-9]{3,4}$`, airport ICAOs and region names are
+unique, the timezone must be a valid IANA name, `local_url` and `tile_url` must be http(s)
+and not link-local, satellite `sector`/`band`/`size` are constrained to safe characters,
+the radar loop span is capped at 55 minutes, camera tiles (at most `CAMERA_MAX_TILES`) name
+a stream matching `^[A-Za-z0-9_.-]{1,64}$` and span 1 to `CAMERA_GRID_COLS` columns, and
+NOTAM locations (at most `NOTAM_MAX_LOCATIONS`, unique) are identifiers matching the ICAO
+pattern with a look-ahead of 0 to 720 hours and a refresh of 180 to 3600 seconds (a lower
+value is raised); `notams.environment` is `production`, `staging` or `fit`;
+`notams.translate` (`enabled`, `base_url` validated like a source URL, `model`,
+`description` up to 60 characters, `timeout_s` 5 to 600) cannot be enabled without a URL
+and a model. No section holds a secret. Add new settings to the model with constraints, to
+the admin field schema in `lib/adminForm.js`, and to the config reference in README.md
+(the example there must load as a `Config` and name every field).

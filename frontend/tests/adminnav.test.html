@@ -1,0 +1,41 @@
+<!doctype html><html><body><div id="nav"></div><pre id="out"></pre><script type="module">
+import { check, done } from "./harness.js";
+import { PAGES, changedPages, changedText, errorPages, navHtml, pageFromHash, pageOfSection } from "../src/lib/adminNav.js";
+// The admin's pages: every config section belongs to exactly one page, an address
+// names a page or falls back to the overview, and unsaved or refused values are
+// found on the page that holds them.
+const SECTIONS = ["airports", "regions", "cycle", "data_source", "display", "weather", "satellite", "radar", "cameras", "notams"];
+const owners = SECTIONS.map((s) => PAGES.filter((p) => p.sections.includes(s)).length);
+check("every section of the config is edited on exactly one page", owners.every((n) => n === 1));
+check("no page claims a section the config does not have", PAGES.every((p) => p.sections.every((s) => SECTIONS.includes(s))));
+check("page ids are unique and usable in an address", new Set(PAGES.map((p) => p.id)).size === PAGES.length && PAGES.every((p) => /^[a-z]+$/.test(p.id)));
+check("an address names its page", PAGES.every((p) => pageFromHash(`#/${p.id}`) === p.id));
+check("anything else is the overview", ["", "#", "#/", "#/nope", "#cameras", "#/Cameras", "#/cameras/x", "#/<script>", null, undefined].every((h) => pageFromHash(h) === "overview"));
+check("a section leads to its page", pageOfSection("radar") === "regions" && pageOfSection("weather") === "display" && pageOfSection("cycle") === "rotation" && pageOfSection("data_source") === "traffic" && pageOfSection("nope") === null);
+
+const saved = {
+  airports: [{ icao: "KSEA", lat: 47.4, lon: -122.3, enabled: true }], regions: [], cycle: { local_dwell_s: 20, interleave_regional: true },
+  data_source: { mode: "auto" }, display: { timezone: "UTC" }, weather: { refresh_s: 300 }, satellite: { enabled: true }, radar: { opacity: 0.75 },
+  cameras: { enabled: true, tiles: [{ stream: "cam1", cols: 2 }] }, notams: { enabled: false, translate: { enabled: false } },
+};
+const edit = (change) => { const c = structuredClone(saved); change(c); return c; };
+check("an untouched config has no unsaved page", changedPages(saved, structuredClone(saved)).length === 0);
+check("the same values in another key order are not a change", changedPages(saved, { ...saved, cycle: { interleave_regional: true, local_dwell_s: 20 } }).length === 0);
+check("a change is found on the page of its section", changedPages(saved, edit((c) => (c.radar.opacity = 0.5))).join() === "regions" && changedPages(saved, edit((c) => (c.weather.refresh_s = 600))).join() === "display");
+check("a change deep in a list is found", changedPages(saved, edit((c) => (c.cameras.tiles[0].cols = 4))).join() === "cameras" && changedPages(saved, edit((c) => (c.notams.translate.enabled = true))).join() === "notams");
+check("a reordered list is a change", changedPages({ ...saved, airports: [{ icao: "A" }, { icao: "B" }] }, { ...saved, airports: [{ icao: "B" }, { icao: "A" }] }).join() === "airports");
+check("several pages are named in menu order", changedPages(saved, edit((c) => { c.cycle.local_dwell_s = 30; c.airports.push({ icao: "KBFI" }); })).join() === "airports,rotation");
+check("a number typed as text is a change, not the same value", changedPages(saved, edit((c) => (c.cycle.local_dwell_s = "20"))).join() === "rotation");
+check("the save bar names the pages in words", changedText(["airports"]) === "Unsaved changes on Airports" && changedText(["airports", "rotation"]) === "Unsaved changes on Airports and Rotation" && changedText(["airports", "regions", "display"]) === "Unsaved changes on Airports, Regions and radar and Display" && changedText([]) === "");
+check("a refusal points at the pages of its fields, once each", errorPages([{ loc: ["body", "radar", "frames"], msg: "x" }, { loc: ["regions", "0", "name"], msg: "x" }, { loc: ["notams", "translate", "enabled"], msg: "x" }, { loc: [], msg: "duplicate" }, { loc: ["nope"], msg: "x" }]).join() === "regions,notams");
+
+const nav = document.getElementById("nav");
+nav.innerHTML = navHtml("cameras", ["airports", "cameras"], ["airports"]);
+const links = [...nav.querySelectorAll("a")];
+check("the menu lists every page under its group", links.length === PAGES.length && [...nav.querySelectorAll(".grp")].map((g) => g.textContent).join() === "Views,System");
+check("the current page is marked for sight and for a screen reader", nav.querySelectorAll("a.on").length === 1 && nav.querySelector("a.on").getAttribute("href") === "#/cameras" && nav.querySelector('[aria-current="page"]') === nav.querySelector("a.on"));
+check("a page with unsaved changes carries a mark that says so", nav.querySelector('a[href="#/cameras"] .dot.unsaved').getAttribute("aria-label") === "has unsaved changes");
+check("a page with a refused value says that instead", !!nav.querySelector('a[href="#/airports"] .dot.invalid') && !nav.querySelector('a[href="#/airports"] .dot.unsaved'));
+check("other pages carry no mark", nav.querySelectorAll(".dot").length === 2);
+done();
+</script></body></html>

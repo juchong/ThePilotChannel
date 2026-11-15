@@ -2,14 +2,15 @@
 
 Used for one thing: asking a locally hosted model to rewrite a NOTAM. The
 endpoint and the model name come from the configuration; the API key lives in
-the environment (HANGAR_LLM_API_KEY) and is never logged, returned or stored.
+the secrets store and is never logged or returned.
 """
 from __future__ import annotations
 
-import os
 from typing import Dict, List, Optional
 
 import httpx
+
+from .store import STORE
 
 MAX_TOKENS = 700            # a rewrite is one line; this bounds a runaway answer
 SCHEMA_NAME = "notam_rewrite"
@@ -20,7 +21,7 @@ class ModelError(RuntimeError):
 
 
 def api_key() -> str:
-    return os.environ.get("HANGAR_LLM_API_KEY", "")
+    return STORE.credential("llm_api_key")
 
 
 class ChatModel:

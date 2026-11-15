@@ -5,21 +5,31 @@ import asyncio
 import json
 import logging
 import os
-import secrets
+import time
 from contextlib import asynccontextmanager
 from typing import List, Literal, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, WebSocket
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import cameras
-from .config import ICAO_RE, Config, mask_secrets, unknown_keys, unmask_secrets, validate_source_url
+from . import access_api, cameras
+from .access import ACCESS, SESSION_COOKIE, require
+from .config import (
+    ICAO_RE,
+    STREAM_URL_MAX,
+    Config,
+    live_notams_problem,
+    stream_host,
+    unknown_keys,
+    validate_source_url,
+    validate_stream_url,
+)
 from .manager import DataManager, TooManySubscribers, UnknownView
 from .radar import LAYER_RE
+from .store import MAX_STREAMS, STORE, StoreLocked
 from .tiles import valid_tile
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -32,25 +42,34 @@ log = logging.getLogger("hangar.api")
 manager = DataManager()
 
 STATIC_DIR = os.environ.get("HANGAR_STATIC", "/app/static")
-# Optional admin password. When set, the admin page and every mutating endpoint
-# require HTTP Basic auth (any username). Read-only endpoints the kiosk uses stay open.
-ADMIN_PASSWORD = os.environ.get("HANGAR_ADMIN_PASSWORD") or os.environ.get("ADMIN_PASSWORD") or ""
 
 CODE_PATTERN = r"^[A-Za-z0-9_-]{1,32}$"
+CREDENTIAL_CHECK_S = 10.0   # the FAA is asked for a token on request at most this often
+
+# Every route is in one access class (see access.py). The kiosk has no
+# credentials, so what the display reads stays open.
+control = require("control")
+settings = require("settings")
+session_only = require("session")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if manager.config_error:
         log.error("config problem (running with %s): %s", manager.config_source, manager.config_error)
-    if not ADMIN_PASSWORD:
-        log.warning("HANGAR_ADMIN_PASSWORD is not set: /admin and config writes are open to the whole LAN")
+    state = ACCESS.state()
+    if state["locked"]:
+        log.error("the secrets store cannot be read: the admin page and every protected route refuse until it is repaired")
+    elif not state["account"]:
+        log.warning("no admin account yet: the first visitor to /admin creates it")
     await manager.start()
     yield
     await manager.stop()
 
 
-app = FastAPI(title="The Pilot Channel", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="The Pilot Channel", version="0.3.0", lifespan=lifespan)
+app.include_router(access_api.router)
+access_api.changed.append(manager.secret_changed)
 
 
 # ---- security headers (pure ASGI so it also wraps the SSE stream) -----------
@@ -77,7 +96,7 @@ class SecurityHeaders:
                 ]
                 if path.startswith("/api/") or path == "/healthz":
                     extra.append((b"cache-control", b"no-store"))
-                elif path == "/" or path.endswith(".html") or path == "/admin":
+                elif path == "/" or path.endswith(".html") or path in ("/admin", "/login"):
                     # The kiosk must always revalidate the page so a rebuilt
                     # bundle is picked up on reload; Chromium otherwise serves
                     # a heuristically cached index.html and keeps the old JS.
@@ -95,24 +114,6 @@ class SecurityHeaders:
 app.add_middleware(SecurityHeaders)
 
 
-# ---- auth ----------------------------------------------------------------------
-_basic = HTTPBasic(auto_error=False)
-
-
-async def require_admin(credentials: Optional[HTTPBasicCredentials] = Depends(_basic)):
-    if not ADMIN_PASSWORD:
-        return
-    ok = credentials is not None and secrets.compare_digest(
-        credentials.password.encode("utf-8"), ADMIN_PASSWORD.encode("utf-8")
-    )
-    if not ok:
-        raise HTTPException(
-            status_code=401,
-            detail="admin password required",
-            headers={"WWW-Authenticate": 'Basic realm="The Pilot Channel admin"'},
-        )
-
-
 def _errors(exc: ValidationError) -> List[dict]:
     return [{"loc": [str(x) for x in e["loc"]], "msg": e["msg"]} for e in exc.errors()]
 
@@ -123,23 +124,39 @@ async def healthz():
     return {"ok": True, "boot_id": manager.boot_id, "status": manager.status()}
 
 
-@app.get("/admin", dependencies=[Depends(require_admin)])
-async def admin_page():
-    path = os.path.join(STATIC_DIR, "admin.html")
+def _page(name: str):
+    path = os.path.join(STATIC_DIR, name)
     if os.path.isfile(path):
         return FileResponse(path, headers={"Cache-Control": "no-cache"})
-    raise HTTPException(status_code=404, detail="admin page not built")
+    raise HTTPException(status_code=404, detail="page not built")
+
+
+@app.get("/admin")
+def admin_page(request: Request):
+    """The admin page, for a signed-in browser; anyone else is sent to sign in."""
+    try:
+        signed_in = ACCESS.session(request.cookies.get(SESSION_COOKIE)) is not None
+    except StoreLocked:
+        signed_in = False
+    if not signed_in:
+        return RedirectResponse("/login", status_code=303)
+    return _page("admin.html")
+
+
+@app.get("/login")
+def login_page():
+    return _page("login.html")
 
 
 @app.get("/api/config")
 async def get_config(response: Response):
-    data = mask_secrets(manager.get_config().model_dump(mode="json"))
+    data = manager.get_config().model_dump(mode="json")
     data["version"] = manager.config_version
     response.headers["ETag"] = f'"{manager.config_version}"'
     return data
 
 
-@app.put("/api/config", dependencies=[Depends(require_admin)])
+@app.put("/api/config", dependencies=[Depends(settings)])
 async def put_config(request: Request, payload: dict):
     if_match = request.headers.get("if-match")
     if if_match and if_match.strip().strip('"') != manager.config_version:
@@ -152,11 +169,13 @@ async def put_config(request: Request, payload: dict):
             status_code=422,
             content={"detail": [{"loc": u.split("."), "msg": "unknown field"} for u in unknown]},
         )
-    payload = unmask_secrets(payload, manager.get_config())
     try:
         cfg = Config.model_validate(payload)
     except ValidationError as exc:
         return JSONResponse(status_code=422, content={"detail": _errors(exc)})
+    problem = live_notams_problem(cfg)
+    if problem:
+        return JSONResponse(status_code=422, content={"detail": [problem]})
     version = await manager.update_config(cfg)
     return {"ok": True, "version": version}
 
@@ -229,9 +248,10 @@ class NotamCheck(BaseModel):
     source: Literal["faa", "sample"] = "faa"
 
 
-@app.post("/api/notams/check", dependencies=[Depends(require_admin)])
+@app.post("/api/notams/check", dependencies=[Depends(settings)])
 async def notams_check(req: NotamCheck):
-    """Ask the NOTAM source for a location now, without saving it."""
+    """Sample data: what it holds for a location. The FAA: fetch a monitored
+    location's whole set at the next turn the pull limit allows."""
     ident = req.ident.strip().upper()
     if not ICAO_RE.match(ident):
         raise HTTPException(status_code=422, detail="identifier must be 3 or 4 letters or digits")
@@ -244,7 +264,7 @@ class ModelTest(BaseModel):
     timeout_s: int = Field(60, ge=5, le=600)
 
 
-@app.post("/api/notams/model-test", dependencies=[Depends(require_admin)])
+@app.post("/api/notams/model-test", dependencies=[Depends(settings)])
 async def notams_model_test(req: ModelTest):
     """Ask a model endpoint to rewrite one FAA example NOTAM and check the answer; saves nothing."""
     try:
@@ -252,6 +272,31 @@ async def notams_model_test(req: ModelTest):
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     return await manager.test_model(url, req.model.strip(), req.timeout_s)
+
+
+@app.get("/api/notams/usage", dependencies=[Depends(settings)])
+async def notams_usage(limit: Optional[int] = Query(None, ge=1, le=10000), download: bool = False):
+    """Every request sent to the NMS-API (time, kind, status, size, seconds since
+    the previous data pull) with totals for the last 24 hours and for the record."""
+    data = manager.notam_usage(limit)
+    if download:
+        name = time.strftime("nms-usage-%Y%m%dT%H%MZ.json", time.gmtime())
+        return JSONResponse(data, headers={"Content-Disposition": f'attachment; filename="{name}"'})
+    return data
+
+
+_credential_check = {"at": 0.0}
+
+
+@app.post("/api/secrets/nms/check", dependencies=[Depends(session_only)])
+async def secrets_check_nms():
+    """Ask the FAA for a token with the stored credentials. Costs no data pull."""
+    wait = CREDENTIAL_CHECK_S - (time.monotonic() - _credential_check["at"])
+    if _credential_check["at"] and wait > 0:
+        raise HTTPException(status_code=429, detail=f"wait {round(wait)} s before checking again",
+                            headers={"Retry-After": str(round(wait) or 1)})
+    _credential_check["at"] = time.monotonic()
+    return await manager.check_nms_credentials()
 
 
 @app.get("/api/status")
@@ -299,10 +344,111 @@ async def get_radar_tile(layer: str, z: int, x: int, y: int, v: int = 0):
     return Response(content=data, media_type="image/png", headers={"Cache-Control": "public, max-age=300"})
 
 
-@app.post("/api/test-source", dependencies=[Depends(require_admin)])
+# ---- camera stream addresses ---------------------------------------------------------
+class NewStream(BaseModel):
+    name: str = Field(max_length=40)
+    url: str = Field(max_length=STREAM_URL_MAX)
+
+
+class StreamChange(BaseModel):
+    name: Optional[str] = Field(None, max_length=40)
+    url: Optional[str] = Field(None, max_length=STREAM_URL_MAX)
+
+
+class StreamTest(BaseModel):
+    id: Optional[str] = Field(None, max_length=64)
+    url: Optional[str] = Field(None, max_length=STREAM_URL_MAX)
+
+
+def _stream_name(name: str) -> str:
+    name = " ".join((name or "").split())
+    if not name:
+        raise HTTPException(status_code=422, detail=[{"loc": ["name"], "msg": "give the stream a name"}])
+    return name
+
+
+def _stream_url(url: str) -> str:
+    try:
+        return validate_stream_url(url)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=[{"loc": ["url"], "msg": str(exc)}])
+
+
+def _stream_view(entry: dict) -> dict:
+    """A stored stream as the API shows it: the address is reduced to its host."""
+    tiles = [t.name or t.stream for t in manager.get_config().cameras.tiles if t.stream == entry["id"]]
+    return {"id": entry["id"], "name": entry["name"], "host": stream_host(entry["url"]),
+            "changed": entry.get("changed"), "tiles": tiles}
+
+
+@app.get("/api/cameras/streams", dependencies=[Depends(session_only)])
+async def streams_list():
+    state = await cameras.status([])
+    pending = set(state.get("pending_streams") or [])
+    return {
+        "streams": [{**_stream_view(s), "pending": s["id"] in pending} for s in STORE.streams()],
+        "relay": state["relay"],
+        "error": state["error"],
+        "max": MAX_STREAMS,
+    }
+
+
+@app.post("/api/cameras/streams", dependencies=[Depends(session_only)])
+async def streams_add(req: NewStream):
+    name, url = _stream_name(req.name), _stream_url(req.url)
+    try:
+        entry = await asyncio.to_thread(STORE.add_stream, name, url)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    cameras.request_sync()
+    return _stream_view(entry)
+
+
+@app.put("/api/cameras/streams/{stream_id}", dependencies=[Depends(session_only)])
+async def streams_change(stream_id: str, req: StreamChange):
+    name = _stream_name(req.name) if req.name is not None else None
+    url = _stream_url(req.url) if req.url is not None else None
+    entry = await asyncio.to_thread(STORE.update_stream, stream_id, name, url)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="no such stream")
+    if url is not None:
+        cameras.request_sync()
+    return _stream_view(entry)
+
+
+@app.delete("/api/cameras/streams/{stream_id}", dependencies=[Depends(session_only)])
+async def streams_remove(stream_id: str):
+    entry = STORE.stream(stream_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="no such stream")
+    used = _stream_view(entry)["tiles"]
+    if used:
+        raise HTTPException(status_code=409, detail=f"used by the tile {', '.join(used)}: remove it and save first")
+    await asyncio.to_thread(STORE.remove_stream, stream_id)
+    cameras.request_sync()
+    return {"ok": True}
+
+
+_stream_test = asyncio.Lock()
+
+
+@app.post("/api/cameras/streams/test", dependencies=[Depends(session_only)])
+async def streams_test(req: StreamTest):
+    """Have the relay open a stored stream (`id`) or an address not stored yet
+    (`url`) and say what video it sends."""
+    if (req.id is None) == (req.url is None):
+        raise HTTPException(status_code=422, detail="send either id or url")
+    if req.id is not None and STORE.stream(req.id) is None:
+        raise HTTPException(status_code=404, detail="no such stream")
+    url = _stream_url(req.url) if req.url is not None else None
+    async with _stream_test:
+        return await cameras.test(url=url, stream=req.id)
+
+
+@app.post("/api/test-source", dependencies=[Depends(settings)])
 async def test_source(payload: dict):
     """Validate connectivity for a candidate data source without saving it."""
-    payload = unmask_secrets({"data_source": dict(payload)}, manager.get_config())["data_source"]
+    payload = dict(payload)
     try:
         return await manager.test_source(payload)
     except ValidationError as exc:
@@ -320,14 +466,14 @@ async def get_display():
     return manager.display_state()
 
 
-@app.post("/api/display/blackout", dependencies=[Depends(require_admin)])
+@app.post("/api/display/blackout", dependencies=[Depends(control)])
 async def display_blackout(req: Optional[BlackoutRequest] = None):
     """Black out the kiosk picture for `seconds`, or until /api/display/restore."""
     req = req or BlackoutRequest()
     return manager.set_blackout(req.seconds, req.reason)
 
 
-@app.post("/api/display/restore", dependencies=[Depends(require_admin)])
+@app.post("/api/display/restore", dependencies=[Depends(control)])
 async def display_restore():
     return manager.restore_display()
 
@@ -341,19 +487,19 @@ class ShowingReport(BaseModel):
     index: Optional[int] = Field(None, ge=0)
 
 
-@app.post("/api/display/next", dependencies=[Depends(require_admin)])
+@app.post("/api/display/next", dependencies=[Depends(control)])
 async def display_next():
     """Move the display on to the next view in its cycle."""
     return manager.navigate("next")
 
 
-@app.post("/api/display/previous", dependencies=[Depends(require_admin)])
+@app.post("/api/display/previous", dependencies=[Depends(control)])
 async def display_previous():
     """Move the display back to the previous view in its cycle."""
     return manager.navigate("previous")
 
 
-@app.post("/api/display/view", dependencies=[Depends(require_admin)])
+@app.post("/api/display/view", dependencies=[Depends(control)])
 async def display_view(req: NavigateRequest):
     """Jump the display to a view by id (see /api/views)."""
     try:

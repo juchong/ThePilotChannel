@@ -1,0 +1,53 @@
+<!doctype html><html><body><div id="box"></div><pre id="out"></pre><script type="module">
+import { check, done } from "./harness.js";
+import { cardsHtml, fmtAgo, fmtUptime, healthCards, usageCard } from "../src/lib/adminStatus.js";
+// The overview says of each feed what it is doing and, in one pill, whether that
+// is all right. A failure is never shown as healthy, and nothing is shown as
+// failing while it works.
+const NOW = 1_800_000_000;
+const ok = {
+  active: "local", healthy: true, last_error: null, uptime_s: 3.2 * 86400, config: { error: null, source: "file" },
+  weather: { last_refresh_ts: NOW - 120, stations: 42, error: null, gateway: { stations: [], error: null } },
+  cameras: { enabled: true, tiles: 5, streams: 5, relay: "ok", error: null, unknown_streams: [], pending_streams: [] },
+  notams: { enabled: true, source: "faa", environment: "production", test_environment: false, blocked: null, credentials: true, locations: 2,
+    error: null, rate_limited: false, usage: { pulls: 478, baselines: 8, deltas: 470, tokens: 50, shortest_gap_s: 181, limit_gap_s: 180, status_429: 0, status_401: 0, failed: 0, compared: 8, mismatches: 0 } },
+};
+const cards = (change = () => {}) => { const s = structuredClone(ok); change(s); return healthCards(s, NOW); };
+const card = (label, change) => cards(change).find((c) => c.label.startsWith(label));
+const kind = (label, change) => card(label, change).pill.kind;
+
+check("a healthy display shows every feed as good", cards().every((c) => c.pill.kind === "good") && cards().length === 6);
+check("each card says what the feed is doing", card("Traffic").value === "Local receiver" && card("Weather").value === "Refreshed 2 min ago" && card("Cameras").value === "5 streams, 5 tiles" && card("NOTAMs").value === "2 locations, Production" && card("FAA").value === "478 pulls" && card("Backend").value === "Up 3.2 days");
+check("a failing traffic source is bad and carries its error", kind("Traffic", (s) => { s.healthy = false; s.last_error = "ConnectError"; }) === "bad" && card("Traffic", (s) => { s.healthy = false; s.last_error = "ConnectError"; }).pill.text === "ConnectError");
+check("a failing weather refresh is bad, from either source", kind("Weather", (s) => (s.weather.error = "HTTP 502")) === "bad" && kind("Weather", (s) => (s.weather.gateway.error = "HTTP 500")) === "bad");
+check("airports read from the Weather Service files are named, not flagged", card("Weather", (s) => (s.weather.gateway.stations = ["KS50"])).pill.text === "KS50 from the Weather Service files");
+check("a relay that does not answer is bad", kind("Cameras", (s) => (s.cameras.relay = "down")) === "bad");
+check("a tile without a stream is a warning that names it", card("Cameras", (s) => (s.cameras.unknown_streams = ["cam9"])).pill.text === "Tiles without a stream: cam9" && kind("Cameras", (s) => (s.cameras.unknown_streams = ["cam9"])) === "warn");
+check("a stream the relay still lacks is a warning", kind("Cameras", (s) => (s.cameras.pending_streams = ["cam3"])) === "warn");
+check("a view that is off is neither good nor bad", kind("Cameras", (s) => (s.cameras = { enabled: false })) === "" && kind("NOTAMs", (s) => (s.notams.enabled = false)) === "");
+check("missing FAA keys are bad and name the environment", card("NOTAMs", (s) => { s.notams.credentials = false; s.notams.environment = "staging"; }).pill.text === "No FAA keys for staging" && kind("NOTAMs", (s) => (s.notams.credentials = false)) === "bad");
+check("a test environment is a warning", card("NOTAMs", (s) => { s.notams.environment = "staging"; s.notams.test_environment = true; }).pill.text === "Test environment" && card("NOTAMs", (s) => { s.notams.environment = "staging"; s.notams.test_environment = true; }).value === "2 locations, Staging");
+check("views held back for the rewrite say so", card("NOTAMs", (s) => (s.notams.blocked = "live NOTAM views need the model rewrite")).pill.text === "Needs the model rewrite");
+check("an error outranks the test-environment note, and rate limiting is named", kind("NOTAMs", (s) => { s.notams.test_environment = true; s.notams.error = "FAA NMS answered HTTP 503"; }) === "bad" && card("NOTAMs", (s) => (s.notams.rate_limited = true)).pill.text === "The FAA is limiting requests");
+check("sample data is marked as not real and has no FAA card", card("NOTAMs", (s) => (s.notams.source = "sample")).pill.text === "Not real NOTAMs" && !card("FAA", (s) => (s.notams.source = "sample")));
+check("an unreadable config is bad", kind("Backend", (s) => (s.config.error = "bad yaml")) === "bad");
+
+// The FAA's limits: one data pull every 180 seconds, and 429 beyond.
+const usage = (change) => usageCard({ ...ok.notams.usage, ...change });
+check("pulls inside the limit are good and show the shortest interval", usage({}).pill.kind === "good" && usage({}).pill.text === "Shortest interval 181 s");
+check("an interval at the limit is good, one under it is bad", usage({ shortest_gap_s: 180 }).pill.kind === "good" && usage({ shortest_gap_s: 179.9 }).pill.kind === "bad");
+check("a refused pull is bad and counted", usage({ status_429: 2 }).pill.kind === "bad" && usage({ status_429: 2 }).pill.text === "2 refused for pace (429)");
+check("a refusal outranks everything else on the card", usage({ status_429: 1, mismatches: 3, shortest_gap_s: 100 }).pill.text.includes("429"));
+check("NOTAMs missed by the pulls of changes are a warning", usage({ mismatches: 1 }).pill.kind === "warn");
+check("no pulls is neither good nor bad", usageCard({ pulls: 0 }).pill.kind === "" && usageCard(undefined).value === "No pulls");
+check("a single pull has no interval to judge", usage({ pulls: 1, shortest_gap_s: null }).pill.text === "None refused" && usage({ pulls: 1 }).value === "1 pull");
+
+check("uptime reads in minutes, hours and days", fmtUptime(40) === "1 min" && fmtUptime(1800) === "30 min" && fmtUptime(7200) === "2.0 h" && fmtUptime(3 * 86400) === "3.0 days" && fmtUptime(null) === "");
+check("an age reads as words", fmtAgo(20) === "just now" && fmtAgo(600) === "10 min ago" && fmtAgo(7200) === "2 h ago" && fmtAgo(5 * 86400) === "5 days ago" && fmtAgo(-5) === "");
+const box = document.getElementById("box");
+box.innerHTML = cardsHtml(healthCards({ ...ok, healthy: false, last_error: '<img src=x onerror="alert(1)">' }, NOW));
+check("an error text is shown as text, never as markup", !box.querySelector("img") && box.textContent.includes("<img"));
+check("the overview holds one card per feed", box.querySelectorAll(".card").length === 6 && box.querySelectorAll(".pill").length === 6);
+check("a status without any section still renders", healthCards({}, NOW).length === 5 && healthCards(null, NOW).length === 5);
+done();
+</script></body></html>

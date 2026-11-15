@@ -16,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import httpx
 import pytest
 from notam_cases import AUXILIARIES, RELATING_WORDS, wrong_answers
-from support import AUTH, base_cfg, put, wait_until
+from support import AUTH, base_cfg, put, set_llm_key, wait_until
 from test_notams import feature, shown, stub_faa
 
 from app import llm
@@ -505,7 +505,7 @@ def chat_model(handler):
 
 
 def test_the_model_is_asked_once_at_temperature_zero_for_schema_constrained_json(monkeypatch):
-    monkeypatch.setenv("HANGAR_LLM_API_KEY", "sk-the-key")
+    set_llm_key(monkeypatch, "sk-the-key")
     seen = []
 
     def handler(request):
@@ -556,7 +556,7 @@ def test_an_endpoint_that_refuses_the_schema_is_asked_again_without_it_and_remem
     ],
 )
 def test_an_unusable_endpoint_is_reported_without_the_key_or_the_reply(monkeypatch, response, message):
-    monkeypatch.setenv("HANGAR_LLM_API_KEY", "sk-the-key")
+    set_llm_key(monkeypatch, "sk-the-key")
     with pytest.raises(llm.ModelError) as err:
         asyncio.run(chat_model(lambda request: response).complete("https://llm.example.net/v1", "qwen", [], 30))
     assert message in str(err.value) and "sk-the-key" not in str(err.value) and "exploded" not in str(err.value)
@@ -624,7 +624,7 @@ def stand_in():
 
 
 def test_a_rewrite_travels_over_real_http_and_comes_back_checked(stand_in, monkeypatch):
-    monkeypatch.setenv("HANGAR_LLM_API_KEY", "sk-stand-in")
+    set_llm_key(monkeypatch, "sk-stand-in")
     text = "RWY 16/34 CLSD TO ACFT WINGSPAN MORE THAN 70FT AND TAIL HGT MORE THAN 49FT"
 
     async def run():
@@ -644,10 +644,10 @@ def test_over_real_http_a_wrong_key_and_a_slow_model_are_errors_not_hangs(stand_
         async with httpx.AsyncClient() as client:
             return await llm.ChatModel(client).complete(stand_in, "qwen-local", nt.messages_for("RWY 20 CLSD", "RWY"), timeout_s)
 
-    monkeypatch.setenv("HANGAR_LLM_API_KEY", "sk-wrong")
+    set_llm_key(monkeypatch, "sk-wrong")
     with pytest.raises(llm.ModelError, match="rejected the API key"):
         asyncio.run(ask(10))
-    monkeypatch.setenv("HANGAR_LLM_API_KEY", "sk-stand-in")
+    set_llm_key(monkeypatch, "sk-stand-in")
     StandIn.delay_s = 3.0
     t0 = time.time()
     with pytest.raises(llm.ModelError, match="did not answer within 1 s"):
@@ -662,7 +662,8 @@ def rewrite_cfg(idents=("KS50",), **translate):
     body["notams"] = {
         "enabled": True, "source": "faa", "lookahead_h": 24,
         "locations": [{"ident": i, "name": "", "enabled": True} for i in idents],
-        "translate": {"enabled": True, "base_url": "https://llm.example.net/v1", "model": "qwen-local", "timeout_s": 30, **translate},
+        "translate": {"enabled": True, "base_url": "https://llm.example.net/v1", "model": "qwen-local",
+                      "description": "Qwen Local", "timeout_s": 30, **translate},
     }
     return body
 
@@ -731,6 +732,20 @@ def test_the_display_sends_a_refused_answer_back_once_and_shows_the_corrected_on
     assert asked == {fixed: 2, stubborn: 2}
 
 
+def test_a_repeat_the_view_hides_is_never_sent_to_the_model_and_is_not_counted_pending(client, monkeypatch):
+    text = "RWY 17/35 CLSD"      # a NOTAM of no other test: a rewrite is asked for once
+    stub_faa(monkeypatch, {"KPWT": [
+        feature("1", location="PWT", account="PWT", text=text),
+        feature("2", location="PWT", account="KPWT", classification="INTL", text=text),
+    ]})
+    calls = stub_model(monkeypatch, lambda notam: json.dumps({"plain": nt.Plan(notam).literal()}))
+    assert put(client, rewrite_cfg(("KPWT",))).status_code == 200
+    assert wait_until(lambda: counts(client)["pending"] == 0 and counts(client)["shown"] == 1, 4)
+    assert [c[2] for c in calls] == [text]
+    r = shown(client, "KPWT")
+    assert r["count"] == 1 and r["repeats_hidden"] == 1 and r["notams"][0]["plain"]["source"] == "model"
+
+
 def test_the_view_never_waits_for_the_model(client, monkeypatch):
     stub_faa(monkeypatch, {"KPWT": [feature("1", location="PWT", text="RWY 02/20 CLSD")]})
 
@@ -786,17 +801,28 @@ def test_a_model_outage_leaves_the_literal_text_and_is_logged_once(client, monke
     assert counts(client)["error"] is None
 
 
-def test_turning_the_rewrite_off_shows_the_literal_text_again(client, monkeypatch):
+def test_live_views_cannot_be_saved_without_the_rewrite_the_display_names_as_their_source(client, monkeypatch):
     stub_faa(monkeypatch, {"KS50": [feature("1", text="RWY 16/34 CLSD")]})
     stub_model(monkeypatch, lambda notam: json.dumps({"plain": "Runway 16/34 is closed"}))
     assert put(client, rewrite_cfg()).status_code == 200
     assert wait_until(lambda: plain_of(client).get("RWY 16/34 CLSD", {}).get("source") == "model", 4)
-    assert put(client, rewrite_cfg(enabled=False)).status_code == 200
-    assert wait_until(lambda: plain_of(client).get("RWY 16/34 CLSD", {}).get("source") == "rules", 3)
+    assert shown(client)["source_label"] == "FAA NMS Processed with Qwen Local LLM"
+    for change, loc in (({"enabled": False}, ["notams", "translate", "enabled"]),
+                        ({"description": "  "}, ["notams", "translate", "description"])):
+        r = put(client, rewrite_cfg(**change))
+        assert r.status_code == 422 and [e["loc"] for e in r.json()["detail"]] == [loc], r.text
+    # the refused change left the views and the rewrite as they were
+    assert plain_of(client)["RWY 16/34 CLSD"]["source"] == "model"
+    # sample views name no model, so they may run without the rewrite and show the literal text
+    body = rewrite_cfg(enabled=False)
+    body["notams"]["source"] = "sample"
+    assert put(client, body).status_code == 200
+    assert wait_until(lambda: shown(client)["count"] > 0, 3)
+    assert {n["plain"]["source"] for n in shown(client)["notams"]} == {"rules"} and shown(client)["source_label"] == "sample data"
 
 
 def test_the_model_key_is_never_returned_and_the_test_endpoint_needs_the_admin_password(client, monkeypatch):
-    monkeypatch.setenv("HANGAR_LLM_API_KEY", "sk-the-key")
+    set_llm_key(monkeypatch, "sk-the-key")
     stub_faa(monkeypatch, {})
     stub_model(monkeypatch, lambda notam: json.dumps({"plain": "Runway 20 runway end identifier light is unserviceable"}))
 

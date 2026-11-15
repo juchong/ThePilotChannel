@@ -4,107 +4,270 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>The Pilot Channel - Admin</title>
-    <link rel="stylesheet" href="./styles.css" />
     <link rel="stylesheet" href="./admin.css" />
   </head>
-  <body class="admin">
-    <div class="admin-wrap" id="admin-root">
-      <header class="admin-header">
-        <h1>The Pilot Channel Admin</h1>
-        <div class="actions">
-          <span id="status" class="status">—</span>
-          <a href="/" target="_blank" rel="noopener" class="btn ghost">Open display ↗</a>
-          <button id="save" type="button" class="btn primary">Save &amp; reload kiosk</button>
-        </div>
-      </header>
+  <body>
+    <div class="topbar">
+      <button type="button" class="btn" id="menu-toggle" aria-expanded="false" aria-controls="side">Menu</button>
+      <span class="brand">The Pilot Channel</span>
+      <span class="sub" id="who-top"></span>
+    </div>
+    <div class="shell">
+      <nav class="side" id="side" aria-label="Admin pages">
+        <div class="brand">The Pilot Channel</div>
+        <div id="nav"></div>
+        <div class="grow"></div>
+        <div class="sub" id="who" style="padding: 0 12px 6px"></div>
+        <a href="/" target="_blank" rel="noopener">Open the display</a>
+        <button type="button" class="link" id="sign-out">Sign out</button>
+      </nav>
 
-      <div id="config-alert" class="alert" style="display:none"></div>
-      <p id="backend-status" class="hint"></p>
+      <main class="main" id="admin-root">
+        <div id="config-alert" class="notice bad" hidden></div>
+        <p id="saved-note" class="status ok" role="status" hidden></p>
 
-      <section class="card" data-section="airports">
-        <h2>Airports <button type="button" class="btn sm" data-add="airports">+ add</button></h2>
-        <div id="airports"></div>
-      </section>
-
-      <section class="card" data-section="regions">
-        <h2>Regions <button type="button" class="btn sm" data-add="regions">+ add</button></h2>
-        <div id="regions"></div>
-      </section>
-
-      <div class="grid2">
-        <section class="card" data-section="cycle">
-          <h2>Cycle &amp; timing</h2>
-          <div id="cycle"></div>
+        <section class="page" data-page="overview">
+          <div class="page-head"><div>
+            <h1>Overview</h1>
+            <p class="sub">What the TV shows now, and whether every feed is healthy.</p>
+          </div></div>
+          <div id="leftovers" class="notice" hidden><span id="leftovers-text"></span></div>
+          <div class="card">
+            <div class="card-head">
+              <div class="grow"><span class="sub">On screen now</span><h2 id="screen-now">…</h2></div>
+              <div class="row-actions">
+                <button id="screen-previous" type="button" class="btn">Previous</button>
+                <button id="screen-next" type="button" class="btn">Next</button>
+                <button id="blackout-10" type="button" class="btn">Black out 10 s</button>
+                <button id="blackout-hold" type="button" class="btn">Black out</button>
+                <button id="screen-restore" type="button" class="btn primary" hidden>Restore picture</button>
+              </div>
+            </div>
+            <div class="chips" id="screen-views"></div>
+            <p class="sub">Choose a view to put it on the TV; the rotation carries on from there. An automation makes the same
+              calls with an API key (see Access).</p>
+            <span id="screen-state" class="status" role="status"></span>
+          </div>
+          <div class="cards" id="health"></div>
         </section>
-        <section class="card" data-section="data_source">
-          <h2>Data source</h2>
-          <div id="datasource"></div>
-          <div class="row-actions" style="justify-content:flex-start;margin-top:10px">
-            <button id="test-source" type="button" class="btn sm">Test connection</button>
-            <span id="test-result" class="status"></span>
+
+        <section class="page" data-page="airports" hidden>
+          <div class="page-head"><div>
+            <h1>Airports</h1>
+            <p class="sub">One local traffic view per airport, in this order. Use the identifier its weather reports carry:
+              KSEA, or for a US field without one, K and its FAA identifier (KS50).</p>
+          </div><button type="button" class="btn" data-add="airports">Add airport</button></div>
+          <div class="card" data-section="airports"><div id="airports"></div></div>
+        </section>
+
+        <section class="page" data-page="regions" hidden>
+          <div class="page-head"><div>
+            <h1>Regions and radar</h1>
+            <p class="sub">A wider view for the weather: wind barbs for every reporting airport inside it, over the radar loop.</p>
+          </div><button type="button" class="btn" data-add="regions">Add region</button></div>
+          <div class="card" data-section="regions"><div id="regions"></div></div>
+          <div class="card" data-section="radar"><h2>Radar on the regional view</h2><div id="radar"></div></div>
+        </section>
+
+        <section class="page" data-page="satellite" hidden>
+          <div class="page-head"><div>
+            <h1>Satellite</h1>
+            <p class="sub">The NOAA GOES loop. The sector code is the short code in the address of your region's page on
+              the NOAA STAR image viewer (pnw, psw, ne, …).</p>
+          </div></div>
+          <div class="card" data-section="satellite"><div id="satellite"></div></div>
+        </section>
+
+        <section class="page" data-page="cameras" hidden>
+          <div class="page-head"><div>
+            <h1>Cameras</h1>
+            <p class="sub">Live video tiles in the rotation. A stream's address is stored on the Pi; after storing, only its
+              host is shown.</p>
+          </div></div>
+          <div class="card">
+            <div class="card-head"><h2>Streams</h2><span id="relay-state"></span></div>
+            <p class="sub">Changes here apply at once and never reload the TV. Paste the RTSPS link from UniFi Protect (the
+              camera's settings, Advanced, RTSP); its ?enableSrtp ending is removed.</p>
+            <div id="streams"></div>
+            <div class="row end">
+              <div style="flex: 0 1 200px"><label for="stream-new-name">Name</label>
+                <input id="stream-new-name" maxlength="40" placeholder="Hangar door"></div>
+              <div style="flex: 1 1 280px"><label for="stream-new-url">Address</label>
+                <input id="stream-new-url" maxlength="500" spellcheck="false" autocapitalize="none" inputmode="url"
+                  placeholder="rtsps://192.168.1.1:7441/AbCdEfGhIjKl"></div>
+              <button type="button" class="btn" id="stream-new-test">Test</button>
+              <button type="button" class="btn primary" id="stream-new-add">Add stream</button>
+            </div>
+            <span id="stream-new-status" class="status" role="status"></span>
+          </div>
+          <div class="card" data-section="cameras">
+            <div class="card-head"><h2>Layout on the TV</h2>
+              <button type="button" class="btn" data-add="cameras.tiles">Add tile</button></div>
+            <p class="sub">Six columns wide. A tile two columns wide shows 16:9 video at full size; four columns suits a
+              panoramic camera.</p>
+            <div id="cam-layout"></div>
+            <div id="tiles"></div>
+          </div>
+          <div class="card"><h2>In the rotation</h2><div id="cameras"></div></div>
+        </section>
+
+        <section class="page" data-page="notams" hidden>
+          <div class="page-head"><div>
+            <h1>NOTAMs</h1>
+            <p class="sub">One view per location: the NOTAMs in effect and those starting soon, grouped by type, with times
+              in the display's time zone. Each card also shows the NOTAM as issued, with its UTC times.</p>
+          </div></div>
+          <div id="notam-blocked" class="notice" hidden><span id="notam-blocked-text"></span></div>
+          <div class="card" data-section="notams"><h2>In the rotation</h2><div id="notam-settings"></div></div>
+          <div class="card">
+            <div class="card-head"><h2>FAA NOTAM service</h2><span id="nms-state"></span></div>
+            <p class="sub">The FAA issues a key and a secret for one environment (email NOTAMS@faa.gov for access). They are
+              stored on the Pi and sent only to the environment they were stored for.</p>
+            <div id="notam-environment"></div>
+            <div class="fields">
+              <div><label for="nms-id">Client ID (KEY)</label>
+                <input id="nms-id" maxlength="200" spellcheck="false" autocomplete="off" autocapitalize="none"></div>
+              <div><label for="nms-secret">Client secret (SECRET)</label>
+                <input id="nms-secret" type="password" maxlength="200" autocomplete="new-password"></div>
+            </div>
+            <div class="row-actions">
+              <button type="button" class="btn primary" id="nms-store">Store keys</button>
+              <button type="button" class="btn" id="nms-check">Check keys</button>
+              <button type="button" class="btn danger" id="nms-remove">Remove keys</button>
+              <span id="nms-status" class="status" role="status"></span>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h2>Locations</h2><span id="notam-gate" class="pill"></span></div>
+            <p class="sub">An airport, NAVAID or center by its identifier (S50 or KS50, KSEA, ZSE). The FAA allows one pull
+              every three minutes, so a new location and Refresh now wait for the next turn.</p>
+            <div id="notam-locations"></div>
+            <div class="row end">
+              <div style="flex: 1 1 240px"><label for="notam-new">Add locations</label>
+                <input id="notam-new" placeholder="KS50, KBFI, ZSE" autocapitalize="characters" spellcheck="false"></div>
+              <button id="notam-add" type="button" class="btn" data-add="notams.locations" data-from="notam-new">Add</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h2>Requests to the FAA, last 24 hours</h2>
+              <a class="btn" href="/api/notams/usage?download=true" download>Download the record</a></div>
+            <div class="stats" id="notam-usage"></div>
+            <p class="sub">Every request is recorded with its time, kind and status: the record to send with a request for
+              production keys.</p>
+          </div>
+          <div class="card">
+            <div class="card-head"><h2>Model rewrite and source label</h2><span id="model-state"></span></div>
+            <div id="notam-model"></div>
+            <div class="row end">
+              <div style="flex: 1 1 260px"><label for="llm-key">Endpoint API key</label>
+                <input id="llm-key" type="password" maxlength="400" autocomplete="new-password"></div>
+              <span id="llm-key-state"></span>
+              <button type="button" class="btn" data-secret-store="llm_api_key" data-secret-input="llm-key">Store key</button>
+              <button type="button" class="btn danger" data-secret-clear="llm_api_key">Remove key</button>
+            </div>
+            <div class="row-actions">
+              <button type="button" class="btn" data-test-model="1">Test model</button>
+              <span class="status" id="model-test-result" role="status"></span>
+            </div>
+            <div class="quote"><span class="sub">The footer of every NOTAM view reads</span>
+              <span class="mono" id="source-label"></span></div>
           </div>
         </section>
-      </div>
 
-      <section class="card" data-section="display">
-        <h2>Display &amp; weather</h2>
-        <div id="display" data-section="weather"></div>
-      </section>
+        <section class="page" data-page="rotation" hidden>
+          <div class="page-head"><div>
+            <h1>Rotation</h1>
+            <p class="sub">How long the map views stay up and how they alternate. Each other view sets its own time on
+              its page.</p>
+          </div></div>
+          <div class="card" data-section="cycle"><div id="cycle"></div></div>
+          <div class="card"><h2>The rotation as saved</h2><div id="rotation-list"></div></div>
+        </section>
 
-      <section class="card" data-section="satellite">
-        <h2>Satellite loop (NOAA GOES)</h2>
-        <div id="satellite"></div>
-      </section>
+        <section class="page" data-page="traffic" hidden>
+          <div class="page-head"><div>
+            <h1>Traffic source</h1>
+            <p class="sub">Where aircraft positions come from.</p>
+          </div></div>
+          <div class="card" data-section="data_source">
+            <div id="datasource"></div>
+            <div class="row-actions">
+              <button id="test-source" type="button" class="btn">Test connection</button>
+              <span id="test-result" class="status" role="status"></span>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h2>airplanes.live API key</h2><span id="agg-key-state"></span></div>
+            <p class="sub">Optional, and only used with the airplanes.live feed.</p>
+            <div class="row end">
+              <div style="flex: 1 1 260px"><label for="agg-key">Key</label>
+                <input id="agg-key" type="password" maxlength="400" autocomplete="new-password"></div>
+              <button type="button" class="btn" data-secret-store="aggregator_api_key" data-secret-input="agg-key">Store key</button>
+              <button type="button" class="btn danger" data-secret-clear="aggregator_api_key">Remove key</button>
+            </div>
+          </div>
+        </section>
 
-      <section class="card" data-section="radar">
-        <h2>NEXRAD radar overlay (on regional view)</h2>
-        <div id="radar"></div>
-      </section>
+        <section class="page" data-page="display" hidden>
+          <div class="page-head"><div>
+            <h1>Display</h1>
+            <p class="sub">The clock, the map and how often weather refreshes.</p>
+          </div></div>
+          <div class="card" data-section="display"><div id="display" data-section="weather"></div></div>
+        </section>
 
-      <section class="card" data-section="cameras">
-        <h2>Cameras (live video) <button type="button" class="btn sm" data-add="cameras.tiles">+ add tile</button></h2>
-        <p class="hint" style="margin-top:0">A view of live camera streams. Each tile plays a stream slot, <code>cam1</code> to
-          <code>cam12</code>; the camera URLs live in <code>.env</code> as <code>HANGAR_CAM1</code> to
-          <code>HANGAR_CAM12</code> (see the README). Tiles fill
-          rows of six columns; a two-column tile is 16:9 and a four-column tile 32:9.</p>
-        <div id="cameras"></div>
-      </section>
+        <section class="page" data-page="access" hidden>
+          <div class="page-head"><div>
+            <h1>Access</h1>
+            <p class="sub">Who may change the display, and what the display keeps in secret. Everything here applies at
+              once.</p>
+          </div></div>
+          <div class="card">
+            <h2>Account</h2>
+            <div class="fields">
+              <div><label for="acct-user">Username</label>
+                <input id="acct-user" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="32"></div>
+              <div><label for="acct-new">New password (leave empty to keep)</label>
+                <input id="acct-new" type="password" autocomplete="new-password" maxlength="256"></div>
+              <div><label for="acct-current">Current password, to confirm</label>
+                <input id="acct-current" type="password" autocomplete="current-password" maxlength="256"></div>
+            </div>
+            <div class="row-actions">
+              <button type="button" class="btn primary" id="acct-save">Update account</button>
+              <button type="button" class="btn" id="logout-all">Sign out everywhere</button>
+              <span id="acct-status" class="status" role="status"></span>
+            </div>
+          </div>
+          <div class="card">
+            <h2>API keys</h2>
+            <p class="sub">For Home Assistant and scripts. A key is sent as the header <code>Authorization: Bearer</code>
+              followed by the key. It can never read or change what is on this page.</p>
+            <div id="keys"></div>
+            <div class="row end">
+              <div style="flex: 1 1 220px"><label for="key-name">Name, after what will use it</label>
+                <input id="key-name" maxlength="60" placeholder="Home Assistant"></div>
+              <div style="flex: 0 1 300px"><label for="key-scope">May</label>
+                <select id="key-scope"><option value="control">Control the display</option>
+                  <option value="settings">Control the display and change settings</option></select></div>
+              <button type="button" class="btn primary" id="key-create">Create key</button>
+            </div>
+            <span id="key-status" class="status" role="status"></span>
+            <div id="key-new"></div>
+          </div>
+          <div class="card">
+            <h2>Stored secrets</h2>
+            <p class="sub">Kept in <code>data/secrets.json</code> on the Pi. A stored value is never sent back to a browser.</p>
+            <div id="secrets"></div>
+          </div>
+          <div id="leftovers-access" class="notice" hidden><span id="leftovers-access-text"></span></div>
+        </section>
+      </main>
+    </div>
 
-      <section class="card" data-section="notams">
-        <h2>NOTAMs</h2>
-        <p class="hint" style="margin-top:0">One view per location, showing the NOTAMs that affect it: those in effect now and
-          those taking effect within the look-ahead, grouped by type with issue and effective times in UTC (Z). A location is the
-          identifier of an airport, NAVAID or ARTCC (S50 or KS50, KSEA, ZSE). Live data comes from the FAA NOTAM Management
-          Service; its client ID and secret go in <code>.env</code> (see the README).</p>
-        <div id="notam-settings"></div>
-        <div class="row-actions" style="justify-content:flex-start;margin-top:10px">
-          <input id="notam-new" type="text" style="width:16em" placeholder="KS50, KBFI, ZSE" autocapitalize="characters"
-            spellcheck="false" aria-label="Location identifiers to add">
-          <button id="notam-add" type="button" class="btn sm primary" data-add="notams.locations" data-from="notam-new">Add locations</button>
-          <span class="status">type one or more identifiers, then Enter</span>
-        </div>
-      </section>
-
-      <section class="card" data-section="screen">
-        <h2>Screen</h2>
-        <p class="hint" style="margin-top:0">Step the display through its views or black out the picture, from here or from an
-          automation (for example Home Assistant): <code>POST /api/display/next</code>, <code>/previous</code>, <code>/view</code>,
-          <code>/blackout</code>, and <code>/restore</code>; see the README for ready-made <code>rest_command</code>s. These
-          controls call the same endpoints.</p>
-        <div class="row-actions" style="justify-content:flex-start">
-          <button id="screen-previous" type="button" class="btn sm">&#9664; Previous view</button>
-          <button id="screen-next" type="button" class="btn sm">Next view &#9654;</button>
-          <select id="screen-view" style="width:auto"><option value="">Jump to view…</option></select>
-        </div>
-        <div class="row-actions" style="justify-content:flex-start;margin-top:8px">
-          <button id="blackout-10" type="button" class="btn sm">Black out for 10 s</button>
-          <button id="blackout-hold" type="button" class="btn sm">Black out until restored</button>
-          <button id="screen-restore" type="button" class="btn sm primary">Restore</button>
-          <span id="screen-state" class="status"></span>
-        </div>
-      </section>
-
-      <p class="hint">Saving writes <code>config.yaml</code> (keeping the previous versions as <code>config.yaml.bak.1..3</code>) and pushes a reload to the kiosk.</p>
+    <div class="savebar" id="savebar" hidden>
+      <div><strong id="save-what"></strong><span id="status" class="status" role="status"></span></div>
+      <button type="button" class="btn" id="discard">Discard</button>
+      <button type="button" class="btn primary" id="save">Save and reload display</button>
     </div>
     <datalist id="tz-list"></datalist>
     <datalist id="llm-models"></datalist>

@@ -9,21 +9,31 @@ services:
     ports:
       - "8000:8000"
     environment:
-      # Optional. When set, /admin and config writes require this password
-      # (HTTP Basic auth, any username). Put it in a .env file next to this
-      # compose file: HANGAR_ADMIN_PASSWORD=... (the camera URLs live in the
-      # same file, see the go2rtc service below).
-      HANGAR_ADMIN_PASSWORD: ${HANGAR_ADMIN_PASSWORD:-}
       # The camera stream relay (the go2rtc service below), reached over the
       # compose network only.
       HANGAR_GO2RTC: http://go2rtc:1984
-      # FAA NOTAM Management Service credentials for the NOTAM views (issued by the
-      # FAA on request, see the README). Set both in .env.
+      # Retired. The admin account, the camera addresses, the FAA keys and the model
+      # key are set on the admin page and kept in data/secrets.json. A value that is
+      # still in a .env file next to this one is copied there once, at the first
+      # start, and never read again: delete it from .env once the admin page shows
+      # it stored (Access, Stored secrets).
+      HANGAR_ADMIN_PASSWORD: ${HANGAR_ADMIN_PASSWORD:-}
       HANGAR_NMS_CLIENT_ID: ${HANGAR_NMS_CLIENT_ID:-}
       HANGAR_NMS_CLIENT_SECRET: ${HANGAR_NMS_CLIENT_SECRET:-}
-      # API key of the OpenAI-compatible endpoint that rewrites NOTAMs (optional; the
-      # endpoint and model name are set on the admin page).
+      HANGAR_NMS_BASE: ${HANGAR_NMS_BASE:-}
       HANGAR_LLM_API_KEY: ${HANGAR_LLM_API_KEY:-}
+      HANGAR_CAM1: ${HANGAR_CAM1:-}
+      HANGAR_CAM2: ${HANGAR_CAM2:-}
+      HANGAR_CAM3: ${HANGAR_CAM3:-}
+      HANGAR_CAM4: ${HANGAR_CAM4:-}
+      HANGAR_CAM5: ${HANGAR_CAM5:-}
+      HANGAR_CAM6: ${HANGAR_CAM6:-}
+      HANGAR_CAM7: ${HANGAR_CAM7:-}
+      HANGAR_CAM8: ${HANGAR_CAM8:-}
+      HANGAR_CAM9: ${HANGAR_CAM9:-}
+      HANGAR_CAM10: ${HANGAR_CAM10:-}
+      HANGAR_CAM11: ${HANGAR_CAM11:-}
+      HANGAR_CAM12: ${HANGAR_CAM12:-}
     volumes:
       # bind-mount the data DIRECTORY (not a single file) so atomic writes work
       - ./data:/data
@@ -56,29 +66,15 @@ services:
 
   # Camera stream relay for the camera view. It pulls the cameras' RTSPS streams and
   # serves them to the app's /api/cameras/ws relay as fragmented MP4 without
-  # re-encoding. The stream URLs carry access tokens, so they are in neither this file
-  # nor deploy/go2rtc.yaml: each stream slot there (cam1 to cam12) expands its URL from
-  # the environment below, which compose fills from .env (HANGAR_CAM1 to HANGAR_CAM12).
-  # It publishes no port and its RTSP, WebRTC and SRTP listeners are off: only the app
-  # container reaches it, through the API on 1984.
+  # re-encoding. It starts with no streams: the app gives it the addresses stored on
+  # the admin page through its API, and gives them again after a restart. It publishes
+  # no port and its RTSP, WebRTC and SRTP listeners are off: only the app container
+  # reaches it, through the API on 1984.
   go2rtc:
     image: alexxit/go2rtc:1.9.15
     container_name: hangar-go2rtc
     restart: unless-stopped
     command: [go2rtc, -config, /config/go2rtc.yaml]
-    environment:
-      HANGAR_CAM1: ${HANGAR_CAM1:-}
-      HANGAR_CAM2: ${HANGAR_CAM2:-}
-      HANGAR_CAM3: ${HANGAR_CAM3:-}
-      HANGAR_CAM4: ${HANGAR_CAM4:-}
-      HANGAR_CAM5: ${HANGAR_CAM5:-}
-      HANGAR_CAM6: ${HANGAR_CAM6:-}
-      HANGAR_CAM7: ${HANGAR_CAM7:-}
-      HANGAR_CAM8: ${HANGAR_CAM8:-}
-      HANGAR_CAM9: ${HANGAR_CAM9:-}
-      HANGAR_CAM10: ${HANGAR_CAM10:-}
-      HANGAR_CAM11: ${HANGAR_CAM11:-}
-      HANGAR_CAM12: ${HANGAR_CAM12:-}
     volumes:
       - ./deploy/go2rtc.yaml:/config/go2rtc.yaml:ro
     cap_drop:

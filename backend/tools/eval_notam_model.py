@@ -4,15 +4,16 @@ would (a refused answer goes back once, with what was wrong with it), check
 every answer with the display's own check, and report what it accepted and
 what it refused.
 
-Run it inside the app image, with the endpoint's key in the environment:
+Run it inside the app image, with the data directory mounted: the endpoint's
+key is read from the secrets store, where the admin page keeps it:
 
-  docker run --rm --env-file .env -v "$PWD/backend:/work:ro" -w /work hangar-display:latest \\
+  docker run --rm -v "$PWD/data:/data" -v "$PWD/backend:/work:ro" -w /work hangar-display:latest \\
       python tools/eval_notam_model.py --base-url https://llm.example.net/v1 --model NAME
 
 To use the NOTAMs the display holds for its monitored locations, share the
 running app's network and name it:
 
-  docker run --rm --network container:hangar-display --env-file .env -v "$PWD/backend:/work:ro" -w /work \\
+  docker run --rm --network container:hangar-display -v "$PWD/data:/data" -v "$PWD/backend:/work:ro" -w /work \\
       hangar-display:latest python tools/eval_notam_model.py --display http://localhost:8000 \\
       --base-url https://llm.example.net/v1 --model NAME
 

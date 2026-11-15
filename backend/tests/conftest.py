@@ -1,8 +1,25 @@
+import copy
 import time
 
 import support  # noqa: F401  (environment must be prepared before app.main is imported)
 import pytest
 from fastapi.testclient import TestClient
+
+
+@pytest.fixture(autouse=True)
+def _store_as_found():
+    """The secrets store is shared by every test: put back what a test changed."""
+    from app.access import ACCESS
+    from app.store import STORE
+
+    before = copy.deepcopy(STORE.data)
+    yield
+    with STORE.lock:
+        if STORE.data != before:
+            STORE.data.clear()
+            STORE.data.update(before)
+            STORE.save()
+    ACCESS.throttle.success("testclient")
 
 
 @pytest.fixture()

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Pilot Channel - Sign in</title>
+    <link rel="stylesheet" href="./admin.css" />
+  </head>
+  <body>
+    <main class="gate">
+      <div>
+        <span class="sub">The Pilot Channel</span>
+        <h1 id="gate-title">Sign in to the admin</h1>
+        <p class="sub" id="gate-lead" hidden>This display has no account yet. The one you create now is the only one that can change its settings.</p>
+      </div>
+
+      <div id="gate-locked" class="notice bad" hidden><span id="gate-locked-text"></span></div>
+
+      <form id="signin" class="card" hidden novalidate>
+        <div><label for="si-user">Username</label>
+          <input id="si-user" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required maxlength="64"></div>
+        <div><label for="si-pass">Password</label>
+          <input id="si-pass" name="password" type="password" autocomplete="current-password" required maxlength="256"></div>
+        <p id="si-error" class="notice bad" role="alert" hidden></p>
+        <button class="btn primary" type="submit">Sign in</button>
+      </form>
+
+      <form id="setup" class="card" hidden novalidate>
+        <div><label for="fv-user">Username</label>
+          <input id="fv-user" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required
+            maxlength="32" pattern="[A-Za-z0-9._\-]{1,32}" placeholder="admin"></div>
+        <div><label for="fv-pass">Password</label>
+          <input id="fv-pass" name="password" type="password" autocomplete="new-password" required minlength="8" maxlength="256"
+            aria-describedby="fv-hint"><small class="help" id="fv-hint">At least 8 characters.</small></div>
+        <div><label for="fv-again">Repeat the password</label>
+          <input id="fv-again" type="password" autocomplete="new-password" required maxlength="256"></div>
+        <p id="fv-error" class="notice bad" role="alert" hidden></p>
+        <button class="btn primary" type="submit">Create account and sign in</button>
+      </form>
+
+      <p class="sub" id="gate-foot" hidden>The display itself needs no sign-in. Forgot the password? On the Pi:
+        <code>docker compose exec app python -m app.access set-password</code></p>
+      <a href="/">Open the display</a>
+    </main>
+    <script type="module" src="./login.js"></script>
+  </body>
+</html>

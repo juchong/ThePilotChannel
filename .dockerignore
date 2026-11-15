@@ -5,4 +5,6 @@ frontend/dist
 .git
 .venv
 deploy
+data
+.env
 README.md

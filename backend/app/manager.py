@@ -19,23 +19,49 @@ from typing import Any, Dict, List, Optional, Set
 
 import httpx
 
+from . import cameras
+from .access import CONFIG_API_KEY, import_legacy
 from .config import (
     CONFIG_PATH,
     Config,
     DataSource,
     config_version,
+    live_notams_problem,
     load_config,
+    notam_source_label,
+    read_raw,
     save_config,
 )
 from .llm import ChatModel, ModelError, api_key
 from .notam_translate import PROMPT_VERSION, RESPONSE_SCHEMA, checked_rewrite
-from .notams import NmsSource, SampleSource, affects, normalize, query_forms, select
+from .notams import (
+    BASELINE_S,
+    DELTA_OVERLAP_S,
+    DELTA_REACH_S,
+    PULL_INTERVAL_S,
+    CredentialsRejected,
+    NmsSource,
+    RateLimited,
+    SampleSource,
+    TokenRefused,
+    affects,
+    UNSETTLED,
+    compare_sets,
+    is_foreign,
+    repeats,
+    settle,
+    unsettled_ids,
+    normalize,
+    query_forms,
+    select,
+)
 from .nws_gateway import SOURCE as GATEWAY_SOURCE, GatewaySource
 from .satellite import SatelliteSource
 from .sources.aggregator import AggregatorSource
 from .radar import RadarTiles
 from .tiles import TileCache
 from .sources.local import LocalReadsbSource
+from .store import NMS, STORE
 from .views import build_views
 from .weather import MetarSource
 
@@ -55,7 +81,10 @@ MAX_SUBSCRIBERS = 32
 WEATHER_RETRY_S = 60.0         # after a failed METAR refresh, try again this soon
 WEATHER_COLD_WAIT_S = 6.0      # a station query with nothing cached may wait this long for upstream
 WEATHER_STORE = os.path.join(os.path.dirname(CONFIG_PATH) or ".", "weather-cache.json")
-NOTAM_RETRY_S = 60.0           # after a failed NOTAM refresh, try again this soon
+NOTAM_RETRY_S = 60.0           # after a failed NOTAM loop pass, look again this soon
+NOTAM_IDLE_S = 30.0            # how often the NOTAM loop looks for a pull that became due
+NOTAM_RETRY_MAX_S = 1800.0     # a location that keeps failing is asked again at most this far apart
+NOTAM_SAVE_S = 900.0           # the NOTAM cache reaches the disk at least this often while pulls succeed
 NOTAM_STORE = os.path.join(os.path.dirname(CONFIG_PATH) or ".", "notam-cache.json")
 
 
@@ -80,6 +109,11 @@ class DataManager:
         self.config_version = config_version()
         self.boot_id = uuid.uuid4().hex[:12]
         self.started_at = time.time()
+        # Values an earlier version read from the environment or kept in
+        # config.yaml move into the secrets store once.
+        self.imported = import_legacy(STORE, os.environ, read_raw())
+        if CONFIG_API_KEY in self.imported and loaded.source == "file":
+            self.config_version = save_config(self.cfg)   # the file no longer carries the key
 
         self.client = httpx.AsyncClient(
             follow_redirects=True,
@@ -91,7 +125,7 @@ class DataManager:
         self.satellite = SatelliteSource(self.client)
         self.tiles = TileCache(self.client)
         self.radar = RadarTiles(self.client)
-        self.nms = NmsSource(self.client)
+        self.nms = NmsSource(self.client, environment=self.cfg.notams.environment)
         self.notam_sample = SampleSource()
         self.llm = ChatModel(self.client)
         self._warm_task: Optional[asyncio.Task] = None
@@ -111,9 +145,18 @@ class DataManager:
         self._store_task: Optional[asyncio.Task] = None
         self._store_failing = False
         self._load_weather_store()
-        self._notam_cache: Dict[str, Dict] = {}       # ident -> {ts (wall), source, records, error}
+        # ident -> {ts (wall time of the last whole fetch), synced (wall time the set
+        # is complete through), source, environment, records, error, unknown,
+        # unknown_forms, requested, retry_at, failures, diff}
+        self._notam_cache: Dict[str, Dict] = {}
         self._notam_ts: Optional[float] = None
         self._notam_error: Optional[str] = None
+        self._notam_job: Optional[Dict] = None        # a whole fetch in progress: one pull per spelling
+        self._delta_tried = 0.0                       # wall time of the last pull of changes
+        self._last_kind: Optional[str] = None
+        self._notam_saved = 0.0
+        self._nms_hold = 0.0                          # wall time until which the FAA is not asked: its keys were refused
+        self._now = time.time                         # the NOTAM scheduler's clock
         self._rewrites: Dict[str, Dict] = {}          # content key -> {"text"} or {"refused": [...]}
         self._rewrite_task: Optional[asyncio.Task] = None
         self._rewrite_error: Optional[str] = None
@@ -150,10 +193,12 @@ class DataManager:
         self._weather_wake = asyncio.Event()
         self._notam_wake = asyncio.Event()
         self._agg_lock = asyncio.Lock()
+        self._loop = asyncio.get_running_loop()
         self._loops = [
             asyncio.create_task(self._weather_loop(), name="weather-loop"),
             asyncio.create_task(self._traffic_loop(), name="traffic-loop"),
             asyncio.create_task(self._notam_loop(), name="notam-loop"),
+            asyncio.create_task(cameras.sync_loop(), name="camera-sync-loop"),
         ]
         self.warm_tiles()
 
@@ -179,6 +224,16 @@ class DataManager:
             t.cancel()
         await asyncio.gather(*self._loops, *self._tasks, return_exceptions=True)
         await self.client.aclose()
+        await asyncio.to_thread(STORE.flush)
+
+    def secret_changed(self, name: str) -> None:
+        """A stored credential was set or cleared (called from a worker thread)."""
+        if name == NMS:
+            self.nms.reset_token()
+            self._nms_hold = 0.0
+            loop = getattr(self, "_loop", None)
+            if loop is not None and not loop.is_closed():
+                loop.call_soon_threadsafe(self._notam_wake.set)
 
     def _spawn(self, coro, name: str) -> asyncio.Task:
         """create_task with a strong reference kept until the task finishes."""
@@ -201,8 +256,14 @@ class DataManager:
         self._area_cache.clear()
         self._local_state = None  # let a changed local_url be tried right away
         self._showing = {"view": None, "index": None, "since": None}  # the display reloads and reports again
+        self.nms.use(cfg.notams.environment)
+        # A saved change has the NOTAM loop look again at its next turn.
+        self._delta_tried = 0.0
+        for entry in self._notam_cache.values():
+            entry["retry_at"] = 0.0
         self._weather_wake.set()  # refresh METARs for any new airports now
-        self._notam_wake.set()    # fetch NOTAMs for any new locations or a changed source now
+        self._notam_wake.set()    # fetch NOTAMs for any new locations or a changed source at the next turn
+        self._kick_rewrites()     # a changed model is asked about the NOTAMs already held
         self.warm_tiles(delay_s=5.0)  # cache basemap tiles for any new or moved views
         self._broadcast({"event": "config_changed", "version": self.config_version})
         return self.config_version
@@ -216,7 +277,7 @@ class DataManager:
 
     def _aggregator_source(self, ds: Optional[DataSource] = None) -> AggregatorSource:
         ds = ds or self.cfg.data_source
-        return AggregatorSource(self.client, ds.aggregator, ds.api_key)
+        return AggregatorSource(self.client, ds.aggregator, STORE.credential("aggregator_api_key"))
 
     async def _rate_limited_aggregator_fetch(self, lat, lon, nm, ds: Optional[DataSource] = None) -> List[Dict]:
         async with self._agg_lock:
@@ -658,34 +719,98 @@ class DataManager:
         )
 
     # ---- NOTAMs ----------------------------------------------------------
-    # Fetched per monitored location by a background loop and kept on disk, so
-    # the NOTAM views never wait on the FAA and survive an outage or a restart
-    # with the data's age shown. Which NOTAMs are in effect or upcoming is
-    # decided when a view asks, from the times in the cached records.
+    # Kept per monitored location by a background loop and on disk, so the NOTAM
+    # views never wait on the FAA and survive an outage or a restart with the
+    # data's age shown. The loop is the only caller of the FAA's data endpoint:
+    # one pull at a time, at the pace notams.PullGate allows. A location's whole
+    # set is fetched by location; between those fetches one pull of everything
+    # changed since the last one keeps every location current. Which NOTAMs are
+    # in effect or upcoming is decided when a view asks, from the cached times.
     def _notam_source(self):
         return self.notam_sample if self.cfg.notams.source == "sample" else self.nms
 
+    def notams_blocked(self) -> Optional[str]:
+        """Why the live NOTAM views are not shown although they are enabled."""
+        problem = live_notams_problem(self.cfg)
+        return problem["msg"] if problem else None
+
     def _notam_idents(self) -> List[str]:
         cfg = self.cfg.notams
-        return [loc.ident for loc in cfg.locations if loc.enabled] if cfg.enabled else []
+        if not cfg.enabled or live_notams_problem(self.cfg):
+            return []
+        return [loc.ident for loc in cfg.locations if loc.enabled]
+
+    def _notam_key(self) -> tuple:
+        """The source and environment a cache entry must come from to be used."""
+        cfg = self.cfg.notams
+        return (cfg.source, cfg.environment if cfg.source == "faa" else None)
+
+    @staticmethod
+    def _new_notam_entry(source: str, environment: Optional[str]) -> Dict:
+        return {
+            "ts": 0.0, "synced": 0.0, "source": source, "environment": environment, "records": [],
+            "error": None, "unknown": False, "unknown_forms": [], "requested": False,
+            "retry_at": 0.0, "failures": 0, "diff": None, "unseen": None,
+        }
+
+    def _notam_entry(self, ident: str, create: bool = True) -> Optional[Dict]:
+        """The location's cache entry, if it comes from the configured source and
+        environment (a fresh one otherwise, when `create`)."""
+        entry = self._notam_cache.get(ident)
+        if entry is not None and (entry["source"], entry["environment"]) == self._notam_key():
+            return entry
+        if not create:
+            return None
+        entry = self._notam_cache[ident] = self._new_notam_entry(*self._notam_key())
+        return entry
+
+    def _prune_notam_cache(self) -> None:
+        idents, key = set(self._notam_idents()), self._notam_key()
+        self._notam_cache = {
+            k: v for k, v in self._notam_cache.items() if k in idents and (v["source"], v["environment"]) == key
+        }
+        if self._notam_job and self._notam_job["ident"] not in idents:
+            self._notam_job = None
+
+    def _notam_state(self, error: Optional[str]) -> None:
+        if error != self._notam_error:
+            if error:
+                log.error("NOTAM refresh failed: %s", error)
+            else:
+                log.info("NOTAM refresh recovered")
+        self._notam_error = error
+
+    def _notams_changed(self, save: bool = True) -> None:
+        self._notam_ts = self._now()
+        if save or self._now() - self._notam_saved >= NOTAM_SAVE_S:
+            self._save_notam_store()
+        if save:
+            self._broadcast({"event": "notams_updated"})
+        self._kick_rewrites()
 
     async def _notam_loop(self):
         while True:
             self._notam_wake.clear()
-            wait = max(120, self.cfg.notams.refresh_s)
+            wait = NOTAM_IDLE_S
             try:
-                if await self._refresh_notams():
-                    wait = NOTAM_RETRY_S
-                self._kick_rewrites()
+                self._prune_notam_cache()
+                if not self._notam_idents():
+                    self._notam_state(None)
+                elif self.cfg.notams.source == "sample":
+                    await self._refresh_sample_notams()
+                    wait = max(PULL_INTERVAL_S, self.cfg.notams.refresh_s)
+                else:
+                    wait = await self._nms_step()
             except asyncio.CancelledError:
                 raise
             except Exception as exc:  # noqa: BLE001  (never let the loop die)
                 log.error("NOTAM loop error: %s", exc)
                 wait = NOTAM_RETRY_S
-            try:
-                await asyncio.wait_for(self._notam_wake.wait(), timeout=wait)
-            except asyncio.TimeoutError:
-                pass
+            if wait > 0:
+                try:
+                    await asyncio.wait_for(self._notam_wake.wait(), timeout=wait)
+                except asyncio.TimeoutError:
+                    pass
 
     async def _fetch_notams(self, source, ident: str) -> List[Dict]:
         """The location's NOTAMs as display records: what the source returns for
@@ -693,90 +818,312 @@ class DataManager:
         records = [normalize(f) for f in await source.fetch(ident)]
         return [r for r in records if r and affects(r, ident)]
 
-    async def _refresh_notams(self) -> bool:
-        """Fetch every monitored location. A location that fails keeps its last
-        NOTAMs and records the error. Returns whether any location failed."""
-        idents = self._notam_idents()
-        source = self._notam_source()
-        self._notam_cache = {
-            k: v for k, v in self._notam_cache.items() if k in idents and v["source"] == source.name
-        }
-        failed: Optional[str] = None
-        fetched = False
-        for ident in idents:
-            try:
-                records = await self._fetch_notams(source, ident)
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:  # noqa: BLE001
-                err = str(exc) or exc.__class__.__name__
-                failed = failed or err
-                entry = self._notam_cache.get(ident)
-                if entry is not None:
-                    entry["error"] = err
-                else:
-                    self._notam_cache[ident] = {"ts": 0.0, "source": source.name, "records": [], "error": err}
-                continue
-            self._notam_cache[ident] = {"ts": time.time(), "source": source.name, "records": records, "error": None}
-            fetched = True
-        if failed != self._notam_error:
-            if failed:
-                log.error("NOTAM refresh failed: %s", failed)
+    async def _refresh_sample_notams(self) -> None:
+        now = self._now()
+        for ident in self._notam_idents():
+            records = await self._fetch_notams(self.notam_sample, ident)
+            self._notam_entry(ident).update(ts=now, synced=now, records=records, error=None)
+        self._notam_state(None)
+        self._notam_ts = now
+        self._broadcast({"event": "notams_updated"})
+        self._kick_rewrites()
+
+    # -- the FAA: which pull is due, and making it
+    @staticmethod
+    def _holding(until: float, now: float) -> bool:
+        """Whether a wait that was set to end at `until` still runs. None is set
+        further ahead than NOTAM_RETRY_MAX_S: one that is ended when the clock
+        was put back."""
+        return 0 < until - now <= NOTAM_RETRY_MAX_S
+
+    def _needs_whole(self, entry: Dict, now: float) -> bool:
+        """Whether the location's whole set is to be fetched: never fetched, asked
+        for, due again, or not to be brought up to date by a pull of changes (too
+        old, or dated after `now` because the clock was set back)."""
+        if self._holding(entry["retry_at"], now):
+            return False
+        return (entry["requested"] or entry["ts"] <= 0 or now - entry["ts"] >= BASELINE_S
+                or not 0 <= now - entry["synced"] <= DELTA_REACH_S)
+
+    def _delta_targets(self, now: float) -> List[str]:
+        """The locations a pull of changes keeps current: those with a whole set
+        recent enough to patch."""
+        out = []
+        for ident in self._notam_idents():
+            entry = self._notam_entry(ident, create=False)
+            if entry and entry["ts"] > 0 and 0 <= now - entry["synced"] <= DELTA_REACH_S:
+                out.append(ident)
+        return out
+
+    def _delta_wait(self, now: float) -> float:
+        since = now - self._delta_tried
+        return max(PULL_INTERVAL_S, self.cfg.notams.refresh_s) - since if since >= 0 else 0.0
+
+    def _nms_pick(self, now: float) -> Optional[tuple]:
+        """The pull to make now: ("whole", ident), ("changes",) or None. A whole
+        fetch in progress is finished first; otherwise whole fetches and pulls of
+        changes take turns while both are due."""
+        if self._notam_job:
+            return ("whole", self._notam_job["ident"])
+        entries = {i: self._notam_entry(i) for i in self._notam_idents()}
+        need = [i for i, e in entries.items() if self._needs_whole(e, now)]
+        need.sort(key=lambda i: (not entries[i]["requested"], entries[i]["ts"] > 0, entries[i]["synced"]))
+        changes_due = bool(self._delta_targets(now)) and self._delta_wait(now) <= 0
+        if need and changes_due:
+            return ("changes",) if self._last_kind == "whole" else ("whole", need[0])
+        if need:
+            return ("whole", need[0])
+        return ("changes",) if changes_due else None
+
+    async def _nms_step(self) -> float:
+        """Make the next pull that is due, at its turn. -> seconds until the loop
+        should look again (0: at once)."""
+        self.nms.use(self.cfg.notams.environment)
+        if not self.nms.configured:
+            self._notam_state(f"no FAA credentials are stored for the {self.cfg.notams.environment} environment")
+            return NOTAM_IDLE_S
+        now = self._now()
+        if self._holding(self._nms_hold, now):
+            return NOTAM_IDLE_S
+        if self._nms_pick(now) is None:
+            wait = self._delta_wait(now) if self._delta_targets(now) else NOTAM_IDLE_S
+            return min(NOTAM_IDLE_S, max(1.0, wait))
+        await self.nms.gate.wait_turn()
+        self._prune_notam_cache()     # the configuration may have changed during the wait
+        job = self._nms_pick(self._now())
+        if job is None or not self.nms.configured:
+            return 1.0
+        try:
+            if job[0] == "changes":
+                await self._nms_changes()
             else:
-                log.info("NOTAM refresh recovered")
-        self._notam_error = failed
-        if fetched:
-            self._notam_ts = time.time()
-            self._save_notam_store()
-            self._broadcast({"event": "notams_updated"})
-        return failed is not None
+                await self._nms_whole(job[1])
+        except (RateLimited, TokenRefused) as exc:
+            self._notam_state(str(exc))   # the same pull is made again at the next turn
+        except CredentialsRejected as exc:
+            self._notam_job = None
+            self._nms_hold = self._now() + NOTAM_RETRY_MAX_S   # until then, or until the keys are replaced
+            self._notam_state(str(exc))
+        return 0.0
+
+    async def _nms_whole(self, ident: str) -> None:
+        """One pull of a location's whole set: the next spelling still to ask,
+        until the API answers one. It answers every spelling of a location it
+        knows with the same set; one it does not know is answered 400."""
+        entry = self._notam_entry(ident)
+        job = self._notam_job
+        if job is None or job["ident"] != ident:
+            forms = query_forms(ident)
+            known = [f for f in forms if f not in entry["unknown_forms"]]
+            job = self._notam_job = {
+                "ident": ident, "forms": forms if entry["requested"] or not known else known,
+                "features": {}, "unknown": [], "started": None,
+            }
+        form = job["forms"][0]
+        started = self._now()
+        self._last_kind = "whole"
+        try:
+            features = await self.nms.baseline(form, ident)
+        except (RateLimited, TokenRefused, CredentialsRejected, asyncio.CancelledError):
+            raise
+        except Exception as exc:  # noqa: BLE001
+            self._notam_job = None
+            entry["failures"] += 1
+            entry["retry_at"] = self._now() + min(NOTAM_RETRY_MAX_S, PULL_INTERVAL_S * 2 ** entry["failures"])
+            entry["error"] = str(exc) or exc.__class__.__name__
+            self._notam_state(entry["error"])
+            return
+        job["started"] = job["started"] or started
+        job["forms"].pop(0)
+        if features is None:
+            job["unknown"].append(form)
+        else:
+            job.setdefault("answered", []).append(form)
+            for n, feature in enumerate(features):
+                notam = (((feature or {}).get("properties") or {}).get("coreNOTAMData") or {}).get("notam") or {}
+                job["features"].setdefault(str(notam.get("id") or f"{form}:{n}"), feature)
+            job["forms"].clear()
+        if job["forms"]:
+            return                     # another spelling is asked at the next turn
+        self._notam_job = None
+        done = {"ts": job["started"], "synced": job["started"], "error": None, "requested": False,
+                "failures": 0, "retry_at": 0.0}
+        if not job.get("answered"):
+            entry.update(done, records=[], unknown=True, unknown_forms=[], diff=None, unseen=None)
+        else:
+            records = [r for r in (normalize(f) for f in job["features"].values()) if r and affects(r, ident)]
+            diff = unseen = None
+            if entry["ts"] > 0 and entry["synced"] <= job["started"]:   # a set dated after now is not compared
+                now = self._now()
+                diff = compare_sets(entry["records"], records, now, entry["synced"])
+                pending = unsettled_ids(entry["records"], records, now, entry["synced"])
+                if any(pending.values()) and job["started"] - entry["synced"] <= DELTA_REACH_S:
+                    # the next pull of changes reaches back to here and settles them
+                    unseen = {"since": entry["synced"], "ids": pending}
+                elif any(pending.values()):
+                    # too long ago for a pull of changes to tell
+                    diff["unverified"] = sum(diff.pop(k) for k in UNSETTLED)
+                self._note_compare(ident, diff)
+            entry.update(done, records=records, unknown=False, unknown_forms=job["unknown"], diff=diff, unseen=unseen)
+        self._notam_state(None)
+        self._notams_changed()
+
+    def _note_compare(self, ident: str, diff: Dict) -> None:
+        """Record how a merged set compared with a whole one; say so when the
+        pulls of changes had missed something."""
+        self.nms.usage.add({"t": round(self._now(), 1), "kind": "compare", "env": self.nms.environment,
+                            "what": ident, "diff": diff})
+        missed = {k: v for k, v in diff.items() if k.startswith("missed_") and v}
+        if missed:
+            log.warning("NOTAMs for %s: the pulls of changes had not brought %s", ident, missed)
+
+    async def _nms_changes(self) -> None:
+        """One pull of every NOTAM changed since the oldest point a location is
+        complete through, merged by NOTAM id into the locations it affects."""
+        now = self._now()
+        targets = self._delta_targets(now)
+        self._delta_tried = now
+        self._last_kind = "changes"
+        if not targets:
+            return
+        entries = {i: self._notam_entry(i) for i in targets}
+        # back to the oldest point a location is complete through, and to the
+        # point before a whole fetch whose withdrawals are still to be settled
+        since = min(min(e["synced"], e["unseen"]["since"] if e["unseen"] else e["synced"]) for e in entries.values())
+        since -= DELTA_OVERLAP_S
+        try:
+            features = await self.nms.changes(since)
+        except (RateLimited, TokenRefused, CredentialsRejected, asyncio.CancelledError):
+            raise
+        except Exception as exc:  # noqa: BLE001
+            error = str(exc) or exc.__class__.__name__
+            for entry in entries.values():
+                entry["error"] = error
+            self._notam_state(error)
+            return
+        records = [r for r in (normalize(f) for f in features) if r]
+        changed = False
+        for ident, entry in entries.items():
+            at = {r["id"]: n for n, r in enumerate(entry["records"])}
+            for record in records:
+                if not affects(record, ident, strict=True):
+                    continue
+                n = at.get(record["id"])
+                if n is None:
+                    at[record["id"]] = len(entry["records"])
+                    entry["records"].append(record)
+                    changed = True
+                elif entry["records"][n] != record:
+                    entry["records"][n] = record
+                    changed = True
+            if entry["unseen"]:
+                # a difference this pull reports was made after the last pull; one it
+                # does not report was made earlier, and no pull brought it
+                settled = settle(entry["unseen"]["ids"], {r["id"] for r in records})
+                self._note_compare(ident, settled)
+                if entry["diff"]:
+                    entry["diff"] = {**entry["diff"], **{k: 0 for k in UNSETTLED},
+                                     **settled, "newer": entry["diff"]["newer"] + settled["newer"]}
+                entry["unseen"] = None
+            entry["synced"], entry["error"] = now, None
+        self._notam_state(None)
+        self._notams_changed(save=changed)
 
     def get_notams(self, ident: str) -> Optional[Dict]:
         """The NOTAMs to show for a monitored location now, with the age of the
         data. Answers from the cache; None for a location that is not monitored."""
         cfg = self.cfg.notams
-        loc = next((l for l in cfg.locations if l.enabled and l.ident == ident), None) if cfg.enabled else None
+        loc = next((l for l in cfg.locations if l.enabled and l.ident == ident), None) if self._notam_idents() else None
         if loc is None:
             return None
-        source = self._notam_source()
-        entry = self._notam_cache.get(ident)
-        if entry is not None and entry["source"] != source.name:
-            entry = None
-        now = time.time()
-        fetched = entry["ts"] if entry and entry["ts"] > 0 else None
+        entry = self._notam_entry(ident, create=False)
+        faa = cfg.source == "faa"
+        now = self._now()
+        fetched = entry["synced"] if entry and entry["ts"] > 0 else None
         age = max(0.0, now - fetched) if fetched else None
-        error = entry["error"] if entry else None
-        notams = [self._with_rewrite(n) for n in select(entry["records"], now, cfg.lookahead_h)] if entry else []
+        error = None
+        if entry:
+            error = entry["error"] or (
+                f"FAA NMS does not know location {' or '.join(query_forms(ident))}" if entry["unknown"] else None)
+        shown = select(entry["records"], now, cfg.lookahead_h) if entry else []
+        hidden = repeats(shown)   # the international series repeating a domestic NOTAM shown beside it
+        notams = [self._with_rewrite(n) for n in shown if n["id"] not in hidden]
         return {
             "location": ident,
             "name": loc.name,
-            "source": source.name,
+            "source": cfg.source,
+            "source_label": notam_source_label(self.cfg),
+            "environment": cfg.environment if faa else None,
+            "test_environment": faa and cfg.environment != "production",
+            "non_us": any(is_foreign(n) for n in notams),
             "notams": notams,
             "count": len(notams),
+            "repeats_hidden": len(hidden),
             "now": int(now),
             "lookahead_h": cfg.lookahead_h,
             "fetched": int(fetched) if fetched else None,
             "age_s": round(age) if age is not None else None,
-            "stale": age is not None and age > 2 * max(120, cfg.refresh_s),
+            "stale": age is not None and age > 2 * max(PULL_INTERVAL_S, cfg.refresh_s) + PULL_INTERVAL_S,
             "pending": fetched is None and error is None,
             "error": error,
         }
 
+    def _notam_detail(self) -> List[Dict]:
+        """The state of each monitored location, for the admin page."""
+        out = []
+        for ident in self._notam_idents():
+            entry = self._notam_entry(ident, create=False) or self._new_notam_entry(*self._notam_key())
+            out.append({
+                "ident": ident,
+                "whole_ts": entry["ts"] or None,
+                "synced_ts": entry["synced"] or None,
+                "count": len(entry["records"]),
+                "error": entry["error"],
+                "unknown": entry["unknown"],
+                "unknown_forms": entry["unknown_forms"],
+                "requested": entry["requested"],
+                "in_progress": bool(self._notam_job and self._notam_job["ident"] == ident),
+                "diff": entry["diff"],
+            })
+        return out
+
     async def check_notam_location(self, ident: str, source_name: str) -> Dict:
-        """Ask a source for a location now, without saving anything (admin)."""
-        source = self.notam_sample if source_name == "sample" else self.nms
-        try:
-            records = await self._fetch_notams(source, ident)
-        except Exception as exc:  # noqa: BLE001
-            return {"ok": False, "ident": ident, "source": source.name, "error": str(exc) or exc.__class__.__name__}
-        shown = select(records, time.time(), self.cfg.notams.lookahead_h)
+        """Sample data: what the sample holds for a location, saving nothing. The
+        FAA: ask for the location's whole set at the next turn; the answer shows
+        in the status once the pull was made."""
+        if source_name == "sample":
+            try:
+                records = await self._fetch_notams(self.notam_sample, ident)
+            except Exception as exc:  # noqa: BLE001
+                return {"ok": False, "ident": ident, "source": "sample", "error": str(exc) or exc.__class__.__name__}
+            shown = select(records, self._now(), self.cfg.notams.lookahead_h)
+            return {"ok": True, "ident": ident, "source": "sample", "asked_as": query_forms(ident),
+                    "total": len(records), "shown": len(shown)}
+        if self.cfg.notams.source != "faa" or ident not in self._notam_idents():
+            return {"ok": False, "ident": ident, "source": "faa",
+                    "error": "save this location with the NOTAM views on first; it is then fetched at the FAA's next turn"}
+        entry = self._notam_entry(ident)
+        entry["requested"], entry["retry_at"] = True, 0.0
+        self._notam_wake.set()
+        return {"ok": True, "queued": True, "ident": ident, "source": "faa", "asked_as": query_forms(ident),
+                "wait_s": round(self.nms.gate.wait_s())}
+
+    async def check_nms_credentials(self) -> Dict:
+        """Whether the stored FAA credentials get a token for the configured environment."""
+        self.nms.use(self.cfg.notams.environment)
+        result = await self.nms.check_credentials()
+        if result["ok"]:
+            self._nms_hold = 0.0
+            self._notam_wake.set()
+        return result
+
+    def notam_usage(self, limit: Optional[int] = None) -> Dict:
+        """The record of the requests sent to the NMS-API."""
+        rows = list(self.nms.usage.rows)
         return {
-            "ok": True,
-            "ident": ident,
-            "source": source.name,
-            "asked_as": query_forms(ident),
-            "total": len(records),
-            "shown": len(shown),
+            "summary": self.nms.usage.summary(self._now()),
+            "all_time": self.nms.usage.summary(self._now(), window_s=None),
+            "rows": rows[-limit:] if limit else rows,
         }
 
     # ---- NOTAM rewrites by a model ---------------------------------------------
@@ -822,15 +1169,23 @@ class DataManager:
             lambda messages: self.llm.complete(cfg.base_url, cfg.model, messages, cfg.timeout_s, RESPONSE_SCHEMA), text, type_code, protect)
         return {"text": result["text"]} if "text" in result else {"refused": result["refused"]}
 
+    def _rewrite_records(self) -> List[Dict]:
+        """The cached NOTAMs a rewrite is wanted for: all but the repeats a view
+        hides (repeats())."""
+        now, out = self._now(), []
+        for entry in list(self._notam_cache.values()):
+            skip = repeats(entry["records"], now)
+            out += [r for r in entry["records"] if r["id"] not in skip]
+        return out
+
     async def _rewrite_notams(self) -> None:
         """One pass over the cached NOTAMs: rewrite those not yet attempted with
         the current model and prompt. An unusable endpoint ends the pass; the
         next refresh starts another."""
         cfg = self.cfg.notams.translate
         wanted = {}
-        for entry in list(self._notam_cache.values()):
-            for record in entry["records"]:
-                wanted[self._rewrite_key(record, cfg.model)] = record
+        for record in self._rewrite_records():
+            wanted[self._rewrite_key(record, cfg.model)] = record
         self._rewrites = {k: v for k, v in self._rewrites.items() if k in wanted}
         changed = False
         for key, record in wanted.items():
@@ -852,15 +1207,14 @@ class DataManager:
     def _rewrite_counts(self) -> Dict:
         cfg = self.cfg.notams.translate
         shown = refused = pending = 0
-        for entry in self._notam_cache.values():
-            for record in entry["records"]:
-                kept = self._rewrites.get(self._rewrite_key(record, cfg.model))
-                if kept is None:
-                    pending += 1
-                elif "text" in kept:
-                    shown += 1
-                else:
-                    refused += 1
+        for record in self._rewrite_records():
+            kept = self._rewrites.get(self._rewrite_key(record, cfg.model))
+            if kept is None:
+                pending += 1
+            elif "text" in kept:
+                shown += 1
+            else:
+                refused += 1
         return {"shown": shown, "refused": refused, "pending": pending}
 
     async def test_model(self, base_url: str, model: str, timeout_s: int) -> Dict:
@@ -894,7 +1248,14 @@ class DataManager:
             return
         for ident, entry in (store.get("locations") or {}).items():
             if isinstance(entry, dict) and isinstance(entry.get("records"), list) and entry.get("ts"):
-                self._notam_cache[ident] = {"ts": entry["ts"], "source": "faa", "records": entry["records"], "error": None}
+                self._notam_cache[ident] = {
+                    **self._new_notam_entry("faa", entry.get("environment") or "production"),
+                    "ts": entry["ts"],
+                    "synced": entry.get("synced") or entry["ts"],
+                    "records": entry["records"],
+                    "unknown": bool(entry.get("unknown")),
+                    "unknown_forms": list(entry.get("unknown_forms") or []),
+                }
         self._notam_ts = store.get("ts")
         self._rewrites = {k: v for k, v in (store.get("rewrites") or {}).items() if isinstance(v, dict)}
         if self._notam_cache:
@@ -915,11 +1276,15 @@ class DataManager:
 
         while self._notam_store_dirty:
             self._notam_store_dirty = False
+            self._notam_saved = self._now()
             store = {
                 "ts": self._notam_ts,
                 "rewrites": dict(self._rewrites),
                 "locations": {
-                    k: {"ts": v["ts"], "records": v["records"]}
+                    k: {
+                        "ts": v["ts"], "synced": v["synced"], "environment": v["environment"],
+                        "records": list(v["records"]), "unknown": v["unknown"], "unknown_forms": v["unknown_forms"],
+                    }
                     for k, v in self._notam_cache.items()
                     if v["source"] == "faa" and v["ts"] > 0
                 },
@@ -1078,13 +1443,22 @@ class DataManager:
             "notams": {
                 "enabled": self.cfg.notams.enabled,
                 "source": self.cfg.notams.source,
+                "environment": self.cfg.notams.environment,
+                "test_environment": self.cfg.notams.source == "faa" and self.cfg.notams.environment != "production",
+                "source_label": notam_source_label(self.cfg),
+                "blocked": self.notams_blocked(),
                 "credentials": self.nms.configured,
                 "locations": len(self._notam_idents()),
+                "detail": self._notam_detail(),
                 "last_refresh_ts": self._notam_ts,
                 "error": self._notam_error,
+                "next_pull_in_s": round(self.nms.gate.wait_s()),
+                "rate_limited": self.nms.gate.limited,
+                "usage": self.nms.usage.summary(time.time()),
                 "translate": {
                     "enabled": self.cfg.notams.translate.enabled,
                     "model": self.cfg.notams.translate.model,
+                    "description": self.cfg.notams.translate.description,
                     "key": bool(api_key()),
                     "error": self._rewrite_error,
                     **self._rewrite_counts(),

@@ -16,7 +16,7 @@ import re
 import threading
 from dataclasses import dataclass
 from typing import Any, Dict, List, Literal, Optional
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import yaml
@@ -27,11 +27,6 @@ log = logging.getLogger("hangar.config")
 CONFIG_PATH = os.environ.get("HANGAR_CONFIG", "/data/config.yaml")
 BACKUPS = 3
 _LOCK = threading.Lock()
-
-# Secrets are never returned by the API. GET replaces them with SECRET_MASK and a
-# PUT that sends the mask back keeps the stored value (empty string clears it).
-SECRET_MASK = "********"
-SECRET_FIELDS = (("data_source", "api_key"),)
 
 # IEM publishes NEXRAD time-lagged layers every 5 minutes up to -m55m.
 RADAR_MAX_AGE_MIN = 55
@@ -46,6 +41,20 @@ CAMERA_GRID_COLS = 6
 CAMERA_MAX_TILES = 12
 
 NOTAM_MAX_LOCATIONS = 12
+# The FAA allows one data pull every three minutes.
+NOTAM_MIN_REFRESH_S = 180
+
+# The NMS-API environments, by the host the FAA names for each.
+NMS_HOSTS = {
+    "production": "https://api-nms.aim.faa.gov",
+    "staging": "https://api-staging.cgifederal-aim.com",
+    "fit": "https://api-fit.cgifederal-aim.com",
+}
+
+# A camera address may only use these schemes: the relay also accepts sources
+# that run a program (exec, echo, expr, ffmpeg), which a web form must never reach.
+STREAM_SCHEMES = ("rtsp", "rtsps")
+STREAM_URL_MAX = 500
 
 
 def validate_source_url(url: str) -> str:
@@ -64,6 +73,43 @@ def validate_source_url(url: str) -> str:
     if ip.is_link_local or ip.is_multicast or ip.is_unspecified:
         raise ValueError("URL must not use a link-local or multicast address")
     return url
+
+
+def validate_stream_url(url: str) -> str:
+    """A camera stream address the relay will open: rtsp or rtsps only, with a
+    host that is not link-local, and no fragment (the relay reads options from
+    it). UniFi Protect's `enableSrtp` parameter is removed: the relay does not
+    decrypt SRTP, and rtsps is carried inside TLS without it."""
+    url = (url or "").strip()
+    if not url or len(url) > STREAM_URL_MAX:
+        raise ValueError(f"address must be 1 to {STREAM_URL_MAX} characters")
+    if any(c.isspace() or ord(c) < 32 for c in url):
+        raise ValueError("address must not contain spaces or control characters")
+    scheme = url.split(":", 1)[0].lower() if ":" in url else ""
+    if scheme not in STREAM_SCHEMES:
+        raise ValueError("address must start with rtsp:// or rtsps://")
+    parts = urlsplit(url)
+    if not parts.netloc or not parts.hostname:
+        raise ValueError("address must include a host")
+    if parts.fragment or "#" in url:
+        raise ValueError("address must not contain '#'")
+    try:
+        ip = ipaddress.ip_address(parts.hostname)
+    except ValueError:
+        ip = None
+    if ip is not None and (ip.is_link_local or ip.is_multicast or ip.is_unspecified):
+        raise ValueError("address must not use a link-local or multicast address")
+    query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if k.lower() != "enablesrtp"]
+    return urlunsplit((scheme, parts.netloc, parts.path, urlencode(query), ""))
+
+
+def stream_host(url: str) -> str:
+    """The host and port of a stream address: the only part of it shown again."""
+    parts = urlsplit(url)
+    host = parts.hostname or ""
+    if ":" in host:
+        host = f"[{host}]"
+    return f"{host}:{parts.port}" if parts.port else host
 
 
 class Airport(BaseModel):
@@ -116,7 +162,6 @@ class DataSource(BaseModel):
     mode: Literal["local", "aggregator", "auto"] = "auto"
     local_url: str = "http://localhost/tar1090/data/aircraft.json"
     aggregator: Literal["adsbfi", "adsblol", "airplaneslive"] = "adsbfi"
-    api_key: str = Field("", max_length=200)
     drop_timeout_s: int = Field(15, ge=1, le=300)
 
     @field_validator("local_url")
@@ -242,8 +287,9 @@ class CameraTile(BaseModel):
 
 
 class Cameras(BaseModel):
-    """Live camera view: a grid of tiles playing go2rtc streams. The stream URLs
-    (with their access tokens) live in go2rtc's own config file, never here."""
+    """Live camera view: a grid of tiles playing relayed streams. A tile names a
+    stream; the stream addresses (with their access tokens) live in the secrets
+    store, never here."""
     enabled: bool = False
     label: str = Field("Cameras", max_length=80)
     dwell_s: int = Field(30, ge=5, le=3600)
@@ -279,10 +325,12 @@ class NotamLocation(BaseModel):
 class NotamTranslate(BaseModel):
     """Rewriting NOTAMs with a locally hosted model through an OpenAI-compatible
     endpoint. An answer is shown only if it passes the check in notam_translate;
-    the API key lives in the environment, never here."""
+    the API key lives in the secrets store, never here. `description` names the
+    model on the display ("FAA NMS Processed with <description> LLM")."""
     enabled: bool = False
     base_url: str = Field("", max_length=300)     # e.g. https://llm.example.net/v1
     model: str = Field("", max_length=120)
+    description: str = Field("", max_length=60)   # e.g. Qwen 3.8 27B
     timeout_s: int = Field(60, ge=5, le=600)
 
     @field_validator("base_url")
@@ -291,10 +339,10 @@ class NotamTranslate(BaseModel):
         v = v.strip().rstrip("/")
         return validate_source_url(v) if v else v
 
-    @field_validator("model")
+    @field_validator("model", "description")
     @classmethod
     def _model(cls, v: str) -> str:
-        return v.strip()
+        return " ".join(v.split())
 
     @model_validator(mode="after")
     def _complete(self):
@@ -307,13 +355,15 @@ class Notams(BaseModel):
     """NOTAM views, one per monitored location. A NOTAM is shown while it is in
     effect or when it takes effect within `lookahead_h` hours. `source` "sample"
     shows invented NOTAMs, marked as such, for previewing the view; the FAA
-    credentials live in the environment, never here."""
+    credentials live in the secrets store, never here. `environment` picks the
+    NMS-API host; anything but production is a test environment."""
     enabled: bool = False
     source: Literal["faa", "sample"] = "faa"
+    environment: Literal["production", "staging", "fit"] = "production"
     label: str = Field("NOTAMs", max_length=80)
     dwell_s: int = Field(30, ge=5, le=3600)
     lookahead_h: int = Field(24, ge=0, le=720)
-    refresh_s: int = Field(600, ge=120, le=3600)
+    refresh_s: int = Field(NOTAM_MIN_REFRESH_S, le=3600)
     locations: List[NotamLocation] = Field(default_factory=list, max_length=NOTAM_MAX_LOCATIONS)
     translate: NotamTranslate = Field(default_factory=NotamTranslate)
 
@@ -321,6 +371,14 @@ class Notams(BaseModel):
     @classmethod
     def _label(cls, v: str) -> str:
         return v.strip() or "NOTAMs"
+
+    @field_validator("refresh_s", mode="before")
+    @classmethod
+    def _refresh(cls, v):
+        # A file saved with a shorter interval still loads: the value is raised.
+        if isinstance(v, (int, float)) and not isinstance(v, bool) and v < NOTAM_MIN_REFRESH_S:
+            return NOTAM_MIN_REFRESH_S
+        return v
 
     @model_validator(mode="after")
     def _unique(self):
@@ -392,23 +450,30 @@ def _model_of(ann) -> Optional[type[BaseModel]]:
     return None
 
 
-# ---- secrets ---------------------------------------------------------------
+# ---- live NOTAM views ----------------------------------------------------------
 
-def mask_secrets(data: Dict[str, Any]) -> Dict[str, Any]:
-    for section, key in SECRET_FIELDS:
-        sec = data.get(section)
-        if isinstance(sec, dict) and sec.get(key):
-            sec[key] = SECRET_MASK
-    return data
+def live_notams_problem(cfg: "Config") -> Optional[Dict[str, Any]]:
+    """Why live NOTAM views cannot be shown with this config, as {loc, msg}, or
+    None. The display names its NOTAM source "FAA NMS Processed with <description>
+    LLM", so live views need the model rewrite and its description. Checked when a
+    config is saved and when the views are built, never when a file is loaded."""
+    n = cfg.notams
+    if not n.enabled or n.source != "faa":
+        return None
+    if not n.translate.enabled:
+        return {"loc": ["notams", "translate", "enabled"],
+                "msg": "live NOTAM views need the model rewrite: enable it, or turn the NOTAM views off"}
+    if not n.translate.description:
+        return {"loc": ["notams", "translate", "description"],
+                "msg": "describe the model (for example \"Qwen 3.8 27B\"): the display names it as the source"}
+    return None
 
 
-def unmask_secrets(payload: Dict[str, Any], current: Config) -> Dict[str, Any]:
-    cur = current.model_dump(mode="json")
-    for section, key in SECRET_FIELDS:
-        sec = payload.get(section)
-        if isinstance(sec, dict) and sec.get(key) == SECRET_MASK:
-            sec[key] = cur.get(section, {}).get(key, "")
-    return payload
+def notam_source_label(cfg: "Config") -> str:
+    """How the display names the source of its NOTAMs."""
+    if cfg.notams.source == "sample":
+        return "sample data"
+    return f"FAA NMS Processed with {cfg.notams.translate.description} LLM"
 
 
 # ---- load / save -----------------------------------------------------------
@@ -440,6 +505,17 @@ def _read(path: str) -> Config:
     if not isinstance(raw, dict):
         raise ValueError("top level of config.yaml must be a mapping")
     return Config.model_validate(raw)
+
+
+def read_raw(path: str | None = None) -> Dict[str, Any]:
+    """The config file as written, unvalidated ({} when unreadable): what a file
+    from an earlier version still carries."""
+    try:
+        with open(path or CONFIG_PATH, "r") as fh:
+            raw = yaml.safe_load(fh)
+    except (OSError, yaml.YAMLError):
+        return {}
+    return raw if isinstance(raw, dict) else {}
 
 
 def load_config(path: str | None = None) -> LoadedConfig:

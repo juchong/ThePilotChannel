@@ -1,6 +1,86 @@
 {
- "note": "FAA NMS-API sample data. spec_example: the GeoJSON example in the FAA OpenAPI specification (nms-api.yaml v1.0.17), verbatim. sample_initial_load: the two NOTAMs of the FAA sample initial-load file (AIXM), field values exactly as given there, placed in the GeoJSON structure. checklist: the FAA checklist example, verbatim.",
+ "note": "FAA NMS-API sample data. spec_example: the GeoJSON example in the FAA OpenAPI specification (nms-api.yaml v1.0.18), verbatim. spec_example_1_0_17: the same example as v1.0.17 of the specification gave it, verbatim. sample_initial_load: the two NOTAMs of the FAA sample initial-load file (AIXM), field values exactly as given there, placed in the GeoJSON structure. checklist: the FAA checklist example, verbatim. token_answer: the bearer-token answer in the FAA's NMS-API FAQ and curl examples, as printed. token_expired and invalid_client: the two refusals the FAQ quotes (an expired access token; invalid keys). initial_load: the FAA's initial-load answer, its signed link cut after the file name. invalid_location: the members and values of the FAA staging environment's answer (HTTP 400) to a location it does not know.",
  "spec_example": [
+  {
+   "type": "Feature",
+   "properties": {
+    "coreNOTAMData": {
+     "notamEvent": {
+      "encoding": "ANNOTATION",
+      "scenario": "123"
+     },
+     "notam": {
+      "id": "NMS_ID_1234567812345678",
+      "series": "A",
+      "number": "01/123",
+      "year": "2025",
+      "type": "N",
+      "issued": "2025-03-17T17:08:00.000Z",
+      "affectedFir": "ZTL",
+      "selectionCode": "QXXXX",
+      "traffic": "IV",
+      "purpose": "BO",
+      "scope": "A",
+      "minimumFl": "000",
+      "maximumFl": "999",
+      "location": "CLT",
+      "effectiveStart": "2025-03-17T17:02:00.000Z",
+      "effectiveEnd": "2025-09-18T21:11:00.000Z",
+      "estimated": "true",
+      "text": "27 RWY END ID LGT U/S",
+      "classification": "DOM",
+      "cancelationDate": "2025-09-18T21:11:00.000Z",
+      "accountId": "XYZ",
+      "lastUpdated": "2025-03-17T17:08:00.000Z",
+      "icaoLocation": "KCLT",
+      "schedule": "DAILY 0500-1900",
+      "lowerLimit": "SFC",
+      "upperLimit": "280M",
+      "coordinates": "3939N04302E",
+      "radius": "5"
+     },
+     "notamTranslation": [
+      {
+       "type": "LOCAL_FORMAT",
+       "simpleText": "!CLT 01/123 SAMPLE NOTAM"
+      },
+      {
+       "type": "ICAO",
+       "formattedText": "01/123 NOTAMR \nQ) Q_CODE \nA) CLT \nB) 2503171702 \nC) 2509182111EST \n\nE) SAMPLE NOTAM \n U/S"
+      }
+     ]
+    }
+   },
+   "geometry": {
+    "type": "GeometryCollection",
+    "geometries": [
+     {
+      "type": "Point",
+      "coordinates": [
+       -81.1918244444444,
+       40.0024157777778
+      ]
+     },
+     {
+      "type": "Polygon",
+      "coordinates": [
+       [
+        [
+         -81.198961471121,
+         40.0021595400093
+        ],
+        [
+         -81.1989468623111,
+         40.0019815155841
+        ]
+       ]
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "spec_example_1_0_17": [
   {
    "type": "Feature",
    "properties": {
@@ -182,5 +262,47 @@
     }
    ]
   }
+ },
+ "token_answer": {
+  "refresh_token_expires_in": "0",
+  "api_product_list": "[FAA Staging Preprod APIs]",
+  "api_product_list_json": [
+   "FAA Staging Preprod APIs"
+  ],
+  "organization_name": "faa-XXXX",
+  "developer.email": "whoever@email.com",
+  "token_type": "BearerToken",
+  "issued_at": "1752851243984",
+  "client_id": "KEY provided unique to entity",
+  "access_token": "BEARER TOKEN HERE",
+  "application_name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "scope": "",
+  "expires_in": "1799",
+  "refresh_count": "0",
+  "status": "approved"
+ },
+ "token_expired": {
+  "timestamp": "2026-06-11 08:25:45-0500",
+  "status": "401",
+  "message": "Access Token is Invalid or Expired"
+ },
+ "invalid_client": {
+  "ErrorCode": "invalid_client",
+  "Error": "Client credentials are invalid"
+ },
+ "initial_load": {
+  "status": "Success",
+  "data": {
+   "url": "https://storage.googleapis.com/faa-nms-cfn-nms-initial-load-preprod/INITIAL_LOAD/DOM/initial_load_aixm_20250912T172401Z.gz"
+  }
+ },
+ "invalid_location": {
+  "status": "Failure",
+  "errors": [
+   {
+    "code": "6.2",
+    "message": "Location is not valid"
+   }
+  ]
  }
 }

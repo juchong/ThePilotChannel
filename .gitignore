@@ -9,3 +9,5 @@ data/config.yaml.bak.*
 data/tiles/
 data/weather-cache.json*
 data/notam-cache.json*
+data/secrets.json*
+data/nms-usage.jsonl*

@@ -1,0 +1,53 @@
+<!doctype html><html><body><div id="box"></div><pre id="out"></pre><script type="module">
+import { check, done } from "./harness.js";
+import { SCOPE_TEXT, keysHtml, leftoversText, newKeyHtml, nextPage, secretsHtml, signInError, storedPill, waitText, whenText } from "../src/lib/access.js";
+// Signing in and the Access page: the address to return to is never taken on
+// trust, a refusal is explained in words, a key is shown once and a stored
+// secret never.
+check("after signing in the browser goes to the admin page", nextPage("") === "/admin" && nextPage("?next=%2Fadmin") === "/admin" && nextPage(null) === "/admin");
+check("or to one of its pages", nextPage("?next=%2Fadmin%23%2Fcameras") === "/admin#/cameras");
+const elsewhere = ["https://evil.example/", "//evil.example", "/admin/../etc", "/admin?x=1", "javascript:alert(1)", "/admin#/<script>", "/", "/login", "/admin#/Cameras", "/api/config", "/admin#cameras", "/adminx"];
+check("and never to an address someone put in the link", elsewhere.every((n) => nextPage("?next=" + encodeURIComponent(n)) === "/admin"));
+
+check("a wrong password is said plainly and names neither half", signInError({ status: 401, detail: "the username or password is not right" }) === "The username or password is not right.");
+check("a lock-out says how long to wait", signInError({ status: 429, retryAfter: 20 }) === "Too many failed sign-ins. Try again in 20 seconds." && signInError({ status: 429, retryAfter: 300 }) === "Too many failed sign-ins. Try again in 5 minutes." && signInError({ status: 429, retryAfter: null }) === "Too many failed sign-ins. Try again in 1 second.");
+check("a refused new account carries the reason", signInError({ status: 422, detail: "password: 8 to 256 characters" }) === "password: 8 to 256 characters" && signInError({ status: 422, detail: [{ msg: "x" }] }) === "Check the username and the password.");
+check("an account that exists and a locked store are explained", signInError({ status: 409 }).includes("exists already") && signInError({ status: 503, detail: "the secrets store cannot be read; repair it" }).includes("repair"));
+check("a backend that does not answer is not blamed on the password", signInError({}) === "The display's backend is not answering. Try again in a moment." && signInError({ status: 500 }).includes("not answering"));
+check("a wait reads in seconds, then minutes", waitText(1) === "1 second" && waitText(0.2) === "1 second" && waitText(89) === "89 seconds" && waitText(130) === "3 minutes");
+
+const NOW = Date.UTC(2026, 10, 14, 12, 0) / 1000;
+check("a time in a list reads as an age, then as a date", whenText(NOW - 5, NOW) === "just now" && whenText(NOW - 600, NOW) === "10 min ago" && whenText(NOW - 5 * 3600, NOW) === "5 h ago" && whenText(null, NOW) === "never" && /^\d{1,2} Nov$/.test(whenText(NOW - 4 * 86400, NOW)));
+
+const box = document.getElementById("box");
+const keys = [
+  { id: "a1b2c3", name: "Home Assistant", prefix: "tpc_3fK2", scope: "control", created: NOW - 86400, last_used: NOW - 120 },
+  { id: "d4e5f6", name: '<img src=x onerror="alert(1)">', prefix: "tpc_9aQx", scope: "settings", created: NOW, last_used: null },
+];
+box.innerHTML = keysHtml(keys, NOW);
+check("each key has a row with its name, the start of the key, what it may do and when it was used", box.querySelectorAll(".row").length === 2 && box.querySelector(".row").textContent.replace(/\s+/g, " ").includes("Home Assistant tpc_3fK2… Control the display used 2 min ago"));
+check("a key that was never used says so", box.querySelectorAll(".row")[1].textContent.includes("never used") && box.querySelectorAll(".row")[1].textContent.includes(SCOPE_TEXT.settings));
+check("a key's name is shown as text, never as markup", !box.querySelector("img") && box.textContent.includes("<img"));
+check("each key can be revoked by its id, and the button says which", box.querySelector("[data-revoke-key]").dataset.revokeKey === "a1b2c3" && box.querySelector("[data-revoke-key]").getAttribute("aria-label") === "Revoke the key Home Assistant");
+check("no part of the list could be the key itself", !/tpc_[A-Za-z0-9_-]{9,}/.test(box.innerHTML));
+box.innerHTML = keysHtml([], NOW);
+check("no keys is said, not left blank", box.textContent === "No keys yet.");
+box.innerHTML = newKeyHtml("tpc_Zk3vQ9mT1xYb7LwRc2NfHs8JpUe4DgAa6oVtXyMn0Ei");
+check("a new key is shown in full with the warning that it is shown once", box.querySelector("#new-key-value").textContent === "tpc_Zk3vQ9mT1xYb7LwRc2NfHs8JpUe4DgAa6oVtXyMn0Ei" && box.textContent.includes("not shown again") && box.querySelector("[data-copy]").dataset.copy === "new-key-value");
+
+check("retired variables are listed with camera slots folded into runs", leftoversText(["HANGAR_ADMIN_PASSWORD", "HANGAR_CAM1", "HANGAR_CAM2", "HANGAR_CAM3", "HANGAR_CAM4", "HANGAR_CAM5", "HANGAR_LLM_API_KEY"]) === "HANGAR_ADMIN_PASSWORD, HANGAR_LLM_API_KEY, HANGAR_CAM1 to HANGAR_CAM5");
+check("separate camera slots stay separate, in number order", leftoversText(["HANGAR_CAM10", "HANGAR_CAM2", "HANGAR_CAM1", "HANGAR_CAM7"]) === "HANGAR_CAM1 to HANGAR_CAM2, HANGAR_CAM7, HANGAR_CAM10" && leftoversText([]) === "" && leftoversText(undefined) === "");
+
+box.innerHTML = storedPill({ set: true, changed: NOW - 7200 }, NOW);
+check("a stored credential says when it was stored, never what it is", box.textContent === "Stored, 2 h ago" && box.querySelector(".pill.good"));
+box.innerHTML = storedPill({ set: false, changed: null }, NOW) + storedPill(undefined, NOW);
+check("a credential that is not stored says so", box.textContent === "Not storedNot stored" && !box.querySelector(".good"));
+const secrets = { nms: { set: true, environment: "staging", changed: NOW - 60 }, llm_api_key: { set: true, changed: NOW - 86400 * 4 }, aggregator_api_key: { set: false, changed: null } };
+box.innerHTML = secretsHtml(secrets, 5, NOW);
+const rows = [...box.querySelectorAll(".row")].map((r) => `${r.querySelector(".name").textContent}: ${r.querySelector(".pill").textContent}`);
+check("the stored secrets are listed by kind with their state", rows.join(" | ") === "Camera stream addresses: 5 stored | FAA NOTAM key and secret: Staging: Stored, 1 min ago | Model endpoint API key: Stored, 14 Nov | airplanes.live API key: Not stored".replace("14 Nov", rows[2].split("Stored, ")[1]) && /^\d{1,2} Nov$/.test(rows[2].split("Stored, ")[1]));
+check("each leads to the page where it is changed", [...box.querySelectorAll("a")].map((a) => a.getAttribute("href")).join() === "#/cameras,#/notams,#/notams,#/traffic");
+box.innerHTML = secretsHtml(undefined, 0, NOW);
+check("nothing stored renders as nothing stored", box.querySelectorAll(".pill.good").length === 0 && box.textContent.includes("0 stored"));
+done();
+</script></body></html>

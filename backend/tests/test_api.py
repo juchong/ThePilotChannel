@@ -5,10 +5,10 @@ import os
 import time
 
 import pytest
-from support import AUTH, CFG, base_cfg, put, wait_until
+from support import AUTH, CFG, base_cfg, put, sign_in, wait_until
 
 from app import main as main_mod
-from app.config import SECRET_MASK, Config, load_config, save_config
+from app.config import Config, load_config, save_config
 from app.views import build_views
 
 
@@ -67,20 +67,6 @@ def test_put_rejects_unknown_key(client):
     assert ["display", "units"] in locs
 
 
-def test_secret_is_masked_and_mask_keeps_value(client):
-    body = base_cfg()
-    body["data_source"] = {"mode": "aggregator", "aggregator": "airplaneslive", "api_key": "s3cr3t"}
-    assert put(client, body).status_code == 200
-    got = client.get("/api/config").json()
-    assert got["data_source"]["api_key"] == SECRET_MASK
-    got.pop("version")
-    assert put(client, got).status_code == 200
-    assert main_mod.manager.get_config().data_source.api_key == "s3cr3t"
-    got["data_source"]["api_key"] = ""
-    assert put(client, got).status_code == 200
-    assert main_mod.manager.get_config().data_source.api_key == ""
-
-
 def test_if_match_conflict(client):
     r = client.get("/api/config")
     etag = r.headers["etag"]
@@ -90,15 +76,7 @@ def test_if_match_conflict(client):
     assert put(client, body, headers={"If-Match": etag}).status_code == 200
 
 
-# ---- auth ---------------------------------------------------------------------
-
-def test_admin_requires_password(client):
-    assert client.get("/admin").status_code == 401
-    assert client.get("/admin", auth=("x", "wrong")).status_code == 401
-    assert client.get("/admin", auth=AUTH).status_code == 200
-    assert client.put("/api/config", json=base_cfg()).status_code == 401
-    assert client.post("/api/test-source", json={}).status_code == 401
-
+# ---- pages ---------------------------------------------------------------------
 
 def test_admin_html_not_served_by_static(client):
     assert client.get("/admin.html").status_code == 404
@@ -116,7 +94,10 @@ def test_security_headers(client):
     assert "referrer-policy" not in page.headers
     # HTML must be revalidated on every load so a rebuilt bundle is picked up.
     assert page.headers["cache-control"] == "no-cache"
-    assert client.get("/admin", auth=AUTH).headers["cache-control"] == "no-cache"
+    assert client.get("/login").headers["cache-control"] == "no-cache"
+    sign_in(client)
+    admin = client.get("/admin")
+    assert admin.status_code == 200 and admin.text == "<html>admin</html>" and admin.headers["cache-control"] == "no-cache"
 
 
 # ---- traffic / weather / satellite ---------------------------------------------

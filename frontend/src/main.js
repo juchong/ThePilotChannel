@@ -4,7 +4,7 @@ import { CamStream } from "./lib/camstream.js";
 import { navTarget, wrapIndex } from "./lib/cycle.js";
 import { el, esc, sleep } from "./lib/dom.js";
 import { ALT_STOPS, HangarMap } from "./lib/map.js";
-import { counts, current, fmtSpan, fmtZ, listHtml, pageCount, visitSeconds } from "./lib/notams.js";
+import { bannerText, cautionText, counts, current, fmtSpan, fmtTime, listHtml, pageCount, sourceText, visitSeconds } from "./lib/notams.js";
 import { radarStep } from "./lib/radarloop.js";
 import { nextStations, sameStations, stationsFooter } from "./lib/stations.js";
 import { UNKNOWN_COLOR, categoryChip, windBarbSVG, windText } from "./lib/windbarb.js";
@@ -503,6 +503,7 @@ async function showNotams(view, { keepPage = false } = {}) {
   const head = el("notams-head");
   if (!keepPage) {
     el("notams-banner").textContent = "";
+    el("notams-caution").textContent = "";
     head.innerHTML = `<div class="nt-title">${esc(view.location)} <span>${esc(view.name || "")}</span></div>`;
     el("notams-list").innerHTML = `<div class="nt-note">Loading NOTAMs…</div>`;
   }
@@ -527,10 +528,10 @@ function renderNotams(view, r, page, restartDwell) {
   const nowS = Date.now() / 1000;
   const notams = current(r.notams, nowS);
   const c = counts(notams, nowS);
-  const sample = r.source === "sample";
-  el("notams-banner").textContent = sample ? "SAMPLE DATA · NOT REAL NOTAMS · FOR PREVIEW ONLY" : "";
+  el("notams-banner").textContent = bannerText(r);
+  el("notams-caution").textContent = cautionText(r);
 
-  if (notams.length) list.innerHTML = listHtml(notams, nowS);
+  if (notams.length) list.innerHTML = listHtml(notams, nowS, state.tz);
   else if (r.pending) list.innerHTML = `<div class="nt-note">Waiting for NOTAM data…</div>`;
   else if (r.fetched == null) list.innerHTML = `<div class="nt-note bad">NOTAM data unavailable<small>${esc(r.error || "")}</small></div>`;
   else list.innerHTML = `<div class="nt-note">No NOTAMs in effect or starting within ${esc(r.lookahead_h)} h</div>`;
@@ -555,7 +556,7 @@ function renderNotams(view, r, page, restartDwell) {
     state.notamTimer = setTimeout(step, view.dwell_s * 1000);
   }
   updateFooter(
-    { source: sample ? "sample data" : "FAA NMS", healthy: !r.error && r.fetched != null, stale: r.stale, ts: r.fetched, age_s: r.age_s, error: r.error, pending: r.pending },
+    { source: sourceText(r), healthy: !r.error && r.fetched != null, stale: r.stale, ts: r.fetched, age_s: r.age_s, error: r.error, pending: r.pending },
     notams.length,
     "NOTAMs"
   );
@@ -565,7 +566,7 @@ function renderNotamHead(view, r, c, page, pages) {
   const summary = c.total
     ? `${c.active} in effect · ${c.upcoming} starting within ${esc(r.lookahead_h)} h`
     : "";
-  const got = r.fetched != null ? `RETRIEVED ${esc(fmtZ(r.fetched))} (${esc(fmtSpan(r.age_s || 0))} ago)` : "NOT YET RETRIEVED";
+  const got = r.fetched != null ? `RETRIEVED ${esc(fmtTime(r.fetched, state.tz))} (${esc(fmtSpan(r.age_s || 0))} ago)` : "NOT YET RETRIEVED";
   const trouble = r.error && r.fetched != null ? `<span class="nt-trouble">NOT REFRESHING</span>` : "";
   const pager = pages > 1 ? `<span class="nt-page">PAGE ${page + 1} / ${pages}</span>` : "";
   el("notams-head").innerHTML =

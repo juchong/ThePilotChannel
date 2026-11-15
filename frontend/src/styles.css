@@ -114,6 +114,9 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 .nt-trouble { background: var(--warn); color: #0b0f14; font-weight: 800; border-radius: calc(4 * var(--u));
   padding: 0 calc(7 * var(--u)); }
 .nt-page { color: var(--accent); font-weight: 700; }
+#notams-caution { flex: none; font-size: calc(14 * var(--u)); font-weight: 700; letter-spacing: calc(1 * var(--u));
+  color: var(--warn); margin: calc(-4 * var(--u)) 0 calc(8 * var(--u)); }
+#notams-caution:empty { display: none; }
 #notams-body { flex: 1; min-height: 0; overflow: hidden; }
 #notams-list { height: 100%; column-count: 2; column-gap: calc(20 * var(--u)); column-fill: auto; }
 .nt-note { column-span: all; text-align: center; color: var(--muted); font-size: calc(24 * var(--u));

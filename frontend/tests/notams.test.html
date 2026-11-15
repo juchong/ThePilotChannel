@@ -1,18 +1,26 @@
 <!doctype html><html><body><pre id="out"></pre><script type="module">
 import { check, done } from "./harness.js";
-import { cardHtml, counts, current, effective, fmtSpan, fmtZ, groupByType, listHtml, pageCount, statusOf, visitSeconds, MAX_PAGES } from "../src/lib/notams.js";
-// The NOTAM view must state times exactly and unmistakably: UTC with the Z
-// designator, from the seconds the FAA gave, and say plainly what is not stated.
-const NOW = Date.UTC(2026, 10, 8, 15, 0) / 1000; // 08 NOV 2026 1500Z
+import { bannerText, cardHtml, cautionText, clockTimes, counts, current, effective, fmtSpan, fmtTime, groupByType, listHtml, localizeLine, offsetMin, pageCount, scheduleText, sourceText, statusOf, steadyOffset, visitSeconds, MAX_PAGES } from "../src/lib/notams.js";
+// The NOTAM view must state times exactly and unmistakably: in the display's
+// zone with the zone's name for that date, from the seconds the FAA gave; a
+// clock time of the NOTAM's wording in the zone only where that is exact and
+// marked UTC otherwise; and say plainly what is not stated.
+const NOW = Date.UTC(2026, 10, 8, 15, 0) / 1000; // 08 NOV 2026 1500Z = 0700 PST
 const H = 3600;
+const D = 24 * H;
+const LA = "America/Los_Angeles";
 const n = (over) => ({ id: "1", number: "11/012", accountability: "SEA", location: "S50", type: "RWY", type_label: "Runway",
   issued: NOW - 26 * H, updated: NOW - 5 * H, start: NOW - 2 * H, end: NOW + 30 * H, permanent: false, end_estimated: false,
   schedule: "", text: "RWY 16/34 CLSD", raw: "!SEA 11/012 S50 RWY 16/34 CLSD 2611081300-2611092100",
   plain: { text: "Runway 16/34 closed", source: "rules" }, ...over });
 
-check("a time is day, month, year and four-digit UTC time with Z", fmtZ(NOW) === "08 NOV 2026 1500Z");
-check("the day and time are UTC, not the browser's zone", fmtZ(Date.UTC(2026, 0, 1, 0, 5) / 1000) === "01 JAN 2026 0005Z" && fmtZ(Date.UTC(2026, 11, 31, 23, 59) / 1000) === "31 DEC 2026 2359Z");
-check("no time gives no text rather than a made-up one", fmtZ(null) === null && fmtZ(undefined) === null && fmtZ(NaN) === null);
+check("a time is day, month, year, four-digit time and the zone's name", fmtTime(NOW, LA) === "08 NOV 2026 0700 PST", fmtTime(NOW, LA));
+check("the zone's name is the one of that date", fmtTime(Date.UTC(2026, 6, 4, 15, 0) / 1000, LA) === "04 JUL 2026 0800 PDT");
+check("a time early in the UTC day falls on the zone's day before", fmtTime(Date.UTC(2026, 10, 9, 3, 30) / 1000, LA) === "08 NOV 2026 1930 PST");
+check("midnight is 0000, never 2400", fmtTime(Date.UTC(2026, 10, 9, 8, 0) / 1000, LA) === "09 NOV 2026 0000 PST");
+check("the configured zone is used, not the browser's", fmtTime(Date.UTC(2026, 0, 1, 0, 5) / 1000, "UTC") === "01 JAN 2026 0005 UTC" && fmtTime(NOW, "Asia/Kolkata").startsWith("08 NOV 2026 2030 "));
+check("no time gives no text rather than a made-up one", fmtTime(null, LA) === null && fmtTime(undefined, LA) === null && fmtTime(NaN, LA) === null);
+check("a zone's offset is in minutes, by date", offsetMin(NOW, LA) === -480 && offsetMin(Date.UTC(2026, 6, 4) / 1000, LA) === -420 && offsetMin(NOW, "UTC") === 0 && offsetMin(NOW, "Asia/Kolkata") === 330);
 check("spans use at most two units", fmtSpan(20) === "under 1 min" && fmtSpan(45 * 60) === "45 min" && fmtSpan(3 * H + 20 * 60) === "3 h 20 min" && fmtSpan(5 * H) === "5 h" && fmtSpan(52 * H) === "2 d 4 h" && fmtSpan(72 * H) === "3 d" && fmtSpan(44 * 24 * H) === "6 wk 2 d");
 
 let s = statusOf(n({}), NOW);
@@ -24,10 +32,12 @@ check("an estimated end is marked estimated", s.detail === "ends in 4 d (estimat
 check("permanent only when the NOTAM is permanent", statusOf(n({ end: null, permanent: true }), NOW).detail === "permanent" && statusOf(n({ end: null, permanent: false }), NOW).detail === "end not stated");
 check("a start that is not stated counts as in effect", statusOf(n({ start: null }), NOW).kind === "active");
 
-let e = effective(n({}));
-check("the effective period shows both ends in Z and its length", e.from === "08 NOV 2026 1300Z" && e.until === "09 NOV 2026 2100Z" && e.span === "32 h");
-e = effective(n({ end: NOW + H, end_estimated: true }));
-check("an estimated end carries EST", e.until === "08 NOV 2026 1600Z EST");
+let e = effective(n({}), LA);
+check("the effective period shows both ends in the zone and its length", e.from === "08 NOV 2026 0500 PST" && e.until === "09 NOV 2026 1300 PST" && e.span === "32 h");
+e = effective(n({ end: NOW + H, end_estimated: true }), LA);
+check("an estimated end carries EST", e.until === "08 NOV 2026 0800 PST EST");
+e = effective(n({ start: Date.UTC(2026, 9, 31, 12) / 1000, end: NOW }), LA);
+check("a period across a daylight-saving change names each end's zone", e.from === "31 OCT 2026 0500 PDT" && e.until === "08 NOV 2026 0700 PST");
 e = effective(n({ end: null, permanent: true }));
 check("a permanent NOTAM has no end time and no length", e.until === "PERMANENT" && e.span === null);
 e = effective(n({ start: null, end: null }));
@@ -43,16 +53,79 @@ check("a NOTAM that ended since it was fetched is not shown", current([n({ id: "
 check("pages are screenfuls of columns", pageCount(1880, 1880, 20) === 1 && pageCount(3780, 1880, 20) === 2 && pageCount(4730, 1880, 20) === 3 && pageCount(0, 0, 20) === 1);
 check("the view stays up one dwell per page, up to the page limit", visitSeconds(1, 30) === 30 && visitSeconds(3, 30) === 90 && visitSeconds(50, 30) === MAX_PAGES * 30 && visitSeconds(0, 30) === 30);
 
-const html = cardHtml(n({ schedule: "MON-FRI 0330-1430" }), NOW);
+// the zone's offset through a NOTAM: what decides whether its clock times convert exactly
+const P = (start, end, over = {}) => n({ start, end, ...over });
+check("a period inside one offset has that offset", steadyOffset(P(NOW, NOW + 12 * D), LA, NOW) === -480);
+check("a period across a daylight-saving change has none", steadyOffset(P(Date.UTC(2026, 9, 25) / 1000, NOW), LA, Date.UTC(2026, 9, 26) / 1000) === null);
+check("one that leaves and comes back to an offset has none", steadyOffset(P(Date.UTC(2026, 9, 1) / 1000, Date.UTC(2027, 3, 1) / 1000), LA, Date.UTC(2026, 9, 1) / 1000) === null);
+check("only what is left of a period counts", steadyOffset(P(Date.UTC(2026, 9, 25) / 1000, NOW + 5 * D), LA, NOW) === -480);
+check("a permanent NOTAM has none where the zone changes within a year, and one where it does not",
+  steadyOffset(P(NOW, null, { permanent: true }), LA, NOW) === null && steadyOffset(P(NOW, null, { permanent: true }), "UTC", NOW) === 0);
+check("a NOTAM without a stated end has none", steadyOffset(P(NOW, null), LA, NOW) === null);
+
+// which figures of a NOTAM's wording are clock times
+let k = clockTimes("RWY 17/35 CLSD DLY 0200-1400");
+check("a daily range is two clock times, not tied to a day", [...k.times].join() === "0200,1400" && k.ranges.length === 1 && !k.dayBound);
+k = clockTimes("OBST CRANE (ASN 2025-ANM-4111-NRA) 473214N1221855W (0.7NM NW BFI) 215FT (199FT AGL) FLAGGED AND LGTD MON-SAT 1300-0100");
+check("a study number, coordinates and heights are not clock times; named days tie them", [...k.times].join() === "1300,0100" && k.dayBound);
+check("a range in a text without a schedule word is not taken for a time", clockTimes("RWY 12/30 CLSD 1400-2200").times.size === 0);
+check("a range of heights is not a time", clockTimes("AIRSPACE DLY 1200-1500FT").times.size === 0 && clockTimes("AIRSPACE DLY 1200-1500 FT").times.size === 0);
+check("a single time counts beside sunrise or sunset, with Z, or after a word of time",
+  [...clockTimes("AD AP CLSD DLY 0700-SS").times].join() === "0700" && [...clockTimes("AD AP CLSD DLY SR-2200").times].join() === "2200" &&
+  [...clockTimes("TWY B CLSD DLY AFT 1400").times].join() === "1400" && [...clockTimes("TWY B CLSD DLY 1400Z").times].join() === "1400");
+check("a word that begins like a day or month does not tie a time to a day", !clockTimes("RWY 16 MARKINGS OBSC DLY 0200-1400").dayBound && !clockTimes("SEPARATION DLY 0200-1400").dayBound);
+check("a date before a time ties it to a day", clockTimes("14-16 1400-2200", true).dayBound && clockTimes("14 1400-2200", true).dayBound);
+
+// a line of the NOTAM's wording in the zone
+const L = (plain, text, over = {}, tz = LA) => localizeLine(plain, clockTimes(text), n({ start: NOW - H, end: NOW + 12 * D, ...over }), tz, NOW).text;
+check("a daily closure is given in the zone, with its name",
+  L("Runway 17/35 is closed daily 0200-1400", "RWY 17/35 CLSD DLY 0200-1400") === "Runway 17/35 is closed daily 1800-0600 PST");
+check("named days stay right when no start moves to another day",
+  L("lit Monday to Saturday 1300-0100", "OBST CRANE FLAGGED AND LGTD MON-SAT 1300-0100") === "lit Monday to Saturday 0500-1700 PST");
+check("named days whose start would move are kept in UTC and marked",
+  L("Taxiway A is closed Monday to Friday 0200-0600", "TWY A CLSD MON-FRI 0200-0600") === "Taxiway A is closed Monday to Friday 0200-0600 UTC");
+check("a daily range is marked UTC when daylight saving changes within the NOTAM",
+  localizeLine("closed daily 0200-1400", clockTimes("RWY 17/35 CLSD DLY 0200-1400"), n({ start: Date.UTC(2026, 9, 25) / 1000, end: NOW }), LA, Date.UTC(2026, 9, 26) / 1000).text === "closed daily 0200-1400 UTC");
+check("a permanent daily schedule is marked UTC where the zone changes",
+  L("closed daily 0200-1400", "RWY 17/35 CLSD DLY 0200-1400", { end: null, permanent: true }) === "closed daily 0200-1400 UTC");
+check("a single time beside sunset is marked UTC", L("The airport is closed daily 0700 to sunset", "AD AP CLSD DLY 0700-SS") === "The airport is closed daily 0700 UTC to sunset");
+check("a range written apart in the line is marked, each figure", L("closed daily from 0200 to 1400", "RWY 17/35 CLSD DLY 0200-1400") === "closed daily from 0200 UTC to 1400 UTC");
+check("heights, study numbers and other figures are left as they are",
+  L("Airspace active daily 0200-1400 from the surface to 1200 feet, study 2025-ANM-4111", "AIRSPACE ACT DLY 0200-1400 SFC-1200FT ASN 2025-ANM-4111") ===
+  "Airspace active daily 1800-0600 PST from the surface to 1200 feet, study 2025-ANM-4111");
+check("several ranges each convert", L("daily 0200-0400 and 1500-1700", "RWY 17 CLSD DLY 0200-0400 1500-1700") === "daily 1800-2000 PST and 0700-0900 PST");
+check("a line without clock times is unchanged", L("Runway 16/34 closed", "RWY 16/34 CLSD") === "Runway 16/34 closed");
+check("wording that gives local times itself is left as written",
+  L("Tower open Monday to Friday from 1500Z to 0700Z (0700-2300 local) daily", "TWR OPR MON-FRI 1500Z-0700Z (0700-2300 LCL) DLY") === "Tower open Monday to Friday from 1500Z to 0700Z (0700-2300 local) daily" &&
+  clockTimes("TFR NOV 17-18 LOCAL DLY 1000-1200").times.size === 0);
+check("in a zone of UTC the times stay and say so", L("closed daily 0200-1400", "RWY 17/35 CLSD DLY 0200-1400", {}, "UTC") === "closed daily 0200-1400 UTC");
+
+// the schedule line
+const S = (schedule, over = {}) => scheduleText(n({ start: NOW - H, end: NOW + 12 * D, schedule, ...over }), LA, NOW);
+check("a daily schedule is given in the zone", JSON.stringify(S("DLY 0200-1400")) === JSON.stringify({ label: "SCHEDULE", text: "DLY 1800-0600 PST" }));
+check("dates stay right when no start moves", S("14-16 1400-2200").text === "14-16 0600-1400 PST" && S("1400/2200").text === "0600/1400 PST");
+check("a schedule whose start would move to another day is kept as written under a UTC label",
+  JSON.stringify(S("MON-FRI 0330-1430")) === JSON.stringify({ label: "SCHEDULE (UTC)", text: "MON-FRI 0330-1430" }));
+check("a schedule with figures that are not ranges is kept as written under a UTC label",
+  S("2611141400 TIL 2611152200").label === "SCHEDULE (UTC)" && S("DLY 0700-SS").label === "SCHEDULE (UTC)" &&
+  JSON.stringify(S("DLY 0200-1400 TIL 2611201400")) === JSON.stringify({ label: "SCHEDULE (UTC)", text: "DLY 0200-1400 TIL 2611201400" }));
+check("a schedule that gives local times itself is as written", JSON.stringify(S("DLY 0700-2300 LCL")) === JSON.stringify({ label: "SCHEDULE", text: "DLY 0700-2300 LCL" }));
+check("a schedule without figures is as written", JSON.stringify(S("MON TUE WED THU FRI SAT")) === JSON.stringify({ label: "SCHEDULE", text: "MON TUE WED THU FRI SAT" }));
+
+const html = cardHtml(n({ schedule: "DLY 0200-1400", text: "RWY 16/34 CLSD DLY 0200-1400", plain: { text: "Runway 16/34 closed daily 0200-1400", source: "rules" },
+  raw: "!SEA 11/012 S50 RWY 16/34 CLSD DLY 0200-1400 2611081300-2611092100" }), NOW, LA);
 const box = document.createElement("div");
 box.innerHTML = html;
 const text = box.textContent.replace(/\s+/g, " ");
 const times = [...box.querySelectorAll(".nt-time")].map((t) => [".k", ".v", ".s"].map((q) => t.querySelector(q).textContent).join("|"));
-check("a card shows when the NOTAM was issued, in Z, and how long ago", times[0] === "ISSUED|07 NOV 2026 1300Z|26 h ago", times[0]);
-check("a card shows the effective period, both ends in Z, and its length", times[1] === "EFFECTIVE|08 NOV 2026 1300Z \u2192 09 NOV 2026 2100Z|for 32 h", times[1]);
-check("a card shows when the NOTAM was last updated, in Z, and how long ago", times[2] === "UPDATED|08 NOV 2026 1000Z|5 h ago", times[2]);
-check("a card shows the plain text, the raw NOTAM, its number and its type", text.includes("Runway 16/34 closed") && text.includes("!SEA 11/012 S50 RWY 16/34 CLSD") && text.includes("SEA 11/012") && box.querySelector(".nt-type").textContent === "Runway");
-check("a schedule is shown as UTC", text.includes("SCHEDULE (Z) MON-FRI 0330-1430"));
+check("a card shows when the NOTAM was issued, in the zone, and how long ago", times[0] === "ISSUED|07 NOV 2026 0500 PST|26 h ago", times[0]);
+check("a card shows the effective period, both ends in the zone, and its length", times[1] === "EFFECTIVE|08 NOV 2026 0500 PST \u2192 09 NOV 2026 1300 PST|for 32 h", times[1]);
+check("a card shows when the NOTAM was last updated, in the zone, and how long ago", times[2] === "UPDATED|08 NOV 2026 0200 PST|5 h ago", times[2]);
+check("a card shows the plain text, the raw NOTAM, its number and its type", text.includes("SEA 11/012") && box.querySelector(".nt-type").textContent === "Runway");
+check("a card's plain line and schedule give the times in the zone", box.querySelector(".nt-plain").textContent === "Runway 16/34 closed daily 1800-0600 PST" && text.includes("SCHEDULE DLY 1800-0600 PST"));
+check("a card shows the NOTAM as issued, its Zulu times as written", box.querySelector(".nt-raw").textContent === "!SEA 11/012 S50 RWY 16/34 CLSD DLY 0200-1400 2611081300-2611092100");
+box.innerHTML = cardHtml(n({ schedule: "MON-FRI 0330-1430" }), NOW, LA);
+check("a schedule that cannot be given exactly in the zone is shown as UTC", box.textContent.replace(/\s+/g, " ").includes("SCHEDULE (UTC) MON-FRI 0330-1430"));
 check("an upcoming card is marked as such", cardHtml(n({ start: NOW + H }), NOW).includes('class="nt-card upcoming"'));
 const evil = cardHtml(n({ raw: '<img src=x onerror="alert(1)">', plain: { text: "<b>bold</b>" }, type_label: "<i>x</i>", accountability: "<u>" }), NOW);
 box.innerHTML = evil;
@@ -64,5 +137,16 @@ check("a card says when its plain line is a checked model rewrite", box.querySel
 check("a card warns when the time fields differ from the NOTAM text", box.querySelector(".nt-warn").textContent.includes("DIFFER FROM THE NOTAM TEXT"));
 box.innerHTML = listHtml(list, NOW);
 check("the list has a heading per type and a card per NOTAM", box.querySelectorAll(".nt-group").length === 3 && box.querySelectorAll(".nt-card").length === 4);
+// What the view says about where its NOTAMs come from: the backend's label in the
+// footer, a banner over anything that is not operational data, a caution over
+// international NOTAMs.
+const live = { source: "faa", source_label: "FAA NMS Processed with Qwen 3.8 27B LLM", test_environment: false, non_us: false };
+check("the footer names the source with the label the backend gives", sourceText(live) === "FAA NMS Processed with Qwen 3.8 27B LLM" && sourceText({ source: "sample", source_label: "sample data" }) === "sample data");
+check("without a label the footer never claims a source it was not given", sourceText({ source: "faa" }) === "NMS" && sourceText({ source: "sample" }) === "sample data");
+check("production NOTAMs carry no banner", bannerText(live) === "" && cautionText(live) === "");
+check("sample NOTAMs are marked as not real", bannerText({ source: "sample", test_environment: false }).includes("NOT REAL NOTAMS"));
+check("a test environment's NOTAMs are marked as not for operational use", bannerText({ ...live, test_environment: true }) === "NMS TEST ENVIRONMENT · MAY HOLD TEST NOTAMS · NOT FOR OPERATIONAL USE");
+check("sample data in a test-environment config is still marked as sample", bannerText({ source: "sample", test_environment: true }).startsWith("SAMPLE DATA"));
+check("international NOTAMs carry the caution the FAA recommends", cautionText({ ...live, non_us: true }) === "NMS IS NOT THE AUTHORITATIVE SOURCE FOR NON-US NOTAMS");
 done();
 </script></body></html>

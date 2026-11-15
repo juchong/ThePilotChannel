@@ -1,0 +1,55 @@
+<!doctype html><html><body><div id="box"></div><pre id="out"></pre><script type="module">
+import { check, done } from "./harness.js";
+import { GRID_COLS, layoutHtml, streamOptions, streamsHtml, testText } from "../src/lib/streams.js";
+// Camera streams on the admin page: a stored address is never shown again, a
+// test says what the camera sends, a tile keeps the stream it names, and the
+// layout is drawn the way the TV lays it out.
+const box = document.getElementById("box");
+const streams = [
+  { id: "cam1", name: "Gate", host: "192.168.1.1:7441", tiles: ["Gate"], pending: false },
+  { id: "cam2", name: "Entry door", host: "192.168.1.1:7441", tiles: [], pending: false },
+  { id: "cam3", name: '<img src=x onerror="alert(1)">', host: "cam.lan", tiles: ["A", "B"], pending: true },
+];
+box.innerHTML = streamsHtml(streams);
+const items = [...box.querySelectorAll("[data-stream]")];
+check("each stored stream has a row with its name and its host", items.length === 3 && items[0].textContent.includes("Gate") && items[0].querySelector(".mono").textContent === "192.168.1.1:7441");
+check("a stream's name is shown as text, never as markup", !box.querySelector("img") && items[2].textContent.includes("<img"));
+check("a row says how many tiles play the stream", items[0].querySelector(".pill").textContent === "On 1 tile" && items[1].querySelector(".pill").textContent === "On no tile");
+check("a stream the relay does not have yet says so", items[2].querySelector(".pill.warn").textContent === "Waiting for the relay");
+check("each row offers a test, a change and a removal by the stream's id", items.every((it, n) => it.querySelector("[data-stream-test]").dataset.streamTest === streams[n].id && it.querySelector("[data-stream-edit]") && it.querySelector("[data-stream-remove]").dataset.streamRemove === streams[n].id));
+check("the box for a new address starts hidden and empty: the stored address is not in the page", items.every((it) => it.querySelector('[id^="stream-edit-"]').hidden && it.querySelector('[id^="stream-url-"]').value === "") && !/rtsps?:\/\/[^"<\s]*\/[A-Za-z0-9]{6,}/.test(box.innerHTML.replace(/placeholder="[^"]*"/g, "")));
+check("the name can be changed in place", items[0].querySelector("#stream-name-cam1").value === "Gate");
+box.innerHTML = streamsHtml([]);
+check("no streams is said, with what to do", box.textContent.includes("No streams yet"));
+
+check("a camera sending H.265 is good", testText({ ok: true, video: "H265", error: null }).cls === "ok" && testText({ ok: true, video: "H265" }).text === "Answering with H.265 video");
+check("another codec is flagged: the Pi does not decode it in hardware", testText({ ok: true, video: "H264" }).cls === "err" && testText({ ok: true, video: "H264" }).text.includes("only H.265"));
+check("a camera that does not answer shows the relay's reason", testText({ ok: false, error: "streams: dial tcp 192.168.1.9:554: i/o timeout" }).text.includes("i/o timeout") && testText({ ok: false }).cls === "err");
+check("no test yet says nothing", testText(undefined).text === "" && testText(null).cls === "");
+
+box.innerHTML = `<select>${streamOptions(streams.slice(0, 2), "cam2")}</select>`;
+let select = box.querySelector("select");
+check("a tile's choices are the stored streams by name, with its own selected", [...select.options].map((o) => `${o.value}:${o.textContent}`).join() === "cam1:Gate,cam2:Entry door" && select.value === "cam2");
+box.innerHTML = `<select>${streamOptions(streams.slice(0, 2), "cam9")}</select>`;
+select = box.querySelector("select");
+check("a tile naming a stream that is not stored keeps its value, marked", select.value === "cam9" && select.selectedOptions[0].textContent === "cam9 (no such stream)" && select.options.length === 3);
+box.innerHTML = `<select required>${streamOptions(streams.slice(0, 2), "")}</select>`;
+select = box.querySelector("select");
+check("a new tile has no stream until one is chosen", select.value === "" && select.selectedOptions[0].textContent === "Choose a stream" && !select.checkValidity());
+box.innerHTML = `<select>${streamOptions([], "")}</select>`;
+check("with no streams stored there is nothing to choose", box.querySelector("select").options.length === 1);
+
+const tiles = [{ name: "", stream: "cam1", cols: 2 }, { name: "Door", stream: "cam2", cols: 4 }, { name: "", stream: "cam9", cols: 2 }, { name: "", stream: "", cols: 9 }, { name: "", stream: "cam1", cols: null }];
+box.innerHTML = layoutHtml(tiles, streams.slice(0, 2));
+const drawn = [...box.querySelectorAll(".tile")];
+check("the layout is the TV's grid of six columns", GRID_COLS === 6 && getComputedStyle(box.querySelector(".tilegrid")).display !== "inline" && drawn.length === 5);
+check("each tile is as wide as the columns it spans, within the grid", drawn.map((d) => d.style.gridColumn).join("|") === "span 2|span 4|span 2|span 6|span 2");
+check("a tile shows its caption, else its stream's name", drawn[0].querySelector("span").textContent === "Gate" && drawn[1].querySelector("span").textContent === "Door" && drawn[1].querySelector("small").textContent === "Entry door");
+check("a tile whose stream is not stored, or that has none, says so", drawn[2].querySelector("small").textContent === "cam9 (no such stream)" && drawn[3].querySelector("small").textContent === "no stream");
+check("the picture is described for a screen reader", box.querySelector('[role="img"]').getAttribute("aria-label").startsWith("The camera grid on the TV: tile 1, Gate, 2 of 6 columns; tile 2, Door, 4 of 6 columns"));
+box.innerHTML = layoutHtml([{ name: '<b onclick="x">t</b>', stream: "cam1", cols: 2 }], streams);
+check("a caption is shown as text, never as markup", !box.querySelector("b") && box.textContent.includes("<b"));
+box.innerHTML = layoutHtml([], streams);
+check("no tiles is said", box.textContent === "No tiles yet.");
+done();
+</script></body></html>

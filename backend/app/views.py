@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Dict, List
 
 from .radar import legend as radar_legend
-from .config import RADAR_MAX_AGE_MIN, Config
+from .config import RADAR_MAX_AGE_MIN, Config, live_notams_problem, notam_source_label
 from .geo import haversine_nm, miles_to_nm
 
 FETCH_RADIUS_FACTOR = 2.25  # see fetch_radius_nm below: covers the corners of a 16:9 map (half-diagonal ~2.16r)
@@ -92,7 +92,9 @@ def build_views(cfg: Config) -> List[Dict]:
                 ],
             }
         )
-    if cfg.notams.enabled:
+    # Live NOTAM views are shown only with the model rewrite the display names as
+    # their source (live_notams_problem); sample views always.
+    if cfg.notams.enabled and not live_notams_problem(cfg):
         for loc in cfg.notams.locations:
             if not loc.enabled:
                 continue
@@ -105,6 +107,8 @@ def build_views(cfg: Config) -> List[Dict]:
                     "location": loc.ident,
                     "name": loc.name,
                     "lookahead_h": cfg.notams.lookahead_h,
+                    "source_label": notam_source_label(cfg),
+                    "test_environment": cfg.notams.source == "faa" and cfg.notams.environment != "production",
                 }
             )
     return views

@@ -11,20 +11,37 @@ shown while it is in effect, or when it takes effect within the look-ahead.
 """
 from __future__ import annotations
 
+import asyncio
+import collections
 import json
 import os
 import re
 import time
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Any, Callable, Deque, Dict, List, Optional
 
 import httpx
 
+from .config import CONFIG_PATH, NMS_HOSTS
 from .notam_decode import DATA_DIR, HEADER_RE, TYPE_LABEL, TYPE_ORDER, classify, decode
+from .store import STORE
 
-NMS_BASE = (os.environ.get("HANGAR_NMS_BASE") or "https://api-nms.aim.faa.gov").rstrip("/")
 TOKEN_MARGIN_S = 60       # renew the bearer token this long before it expires
-REQUEST_TIMEOUT_S = 20.0
+REQUEST_TIMEOUT_S = 45.0  # the API answers 408 itself after 30 s; that answer is waited for
+# The FAA's limits for the NMS-API: one data pull every three minutes in production
+# and never more than one request a second. Every environment is paced by the
+# production limit, so a test environment shows what production will see.
+PULL_INTERVAL_S = 180.0
+REQUEST_SPACING_S = 1.0
+BACKOFF_MAX_S = 3600.0    # a 429 lengthens the wait between pulls up to this
+DELTA_OVERLAP_S = 60      # a pull of changes reaches back this far past the last one
+DELTA_REACH_S = 3600      # a set older than this is fetched whole instead of patched
+DELTA_WINDOW_S = 24 * 3600   # the API takes a lastUpdatedDate no further back than this
+WINDOW_MARGIN_S = 60      # and one this close to the window's edge is not sent
+BASELINE_S = 6 * 3600     # a location's whole set is fetched again this often
+USAGE_PATH = os.path.join(os.path.dirname(CONFIG_PATH) or ".", "nms-usage.jsonl")
+USAGE_KEEP = 6000         # rows kept: about twelve days at one pull every three minutes
+PULL_KINDS = ("baseline", "delta")
 UNKNOWN_LOCATION = (400, 404)
 ISO_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?$")
 DIGITS_RE = re.compile(r"^(\d{4}|\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$")
@@ -35,11 +52,52 @@ OFFSET_S = {"m": 60, "h": 3600, "d": 86400}
 
 
 class NotConfigured(RuntimeError):
-    """The FAA credentials are not set."""
+    """No FAA credentials are stored for the environment."""
 
 
-def credentials() -> tuple[str, str]:
-    return os.environ.get("HANGAR_NMS_CLIENT_ID", ""), os.environ.get("HANGAR_NMS_CLIENT_SECRET", "")
+class RateLimited(RuntimeError):
+    """The FAA answered 429."""
+
+
+class CredentialsRejected(RuntimeError):
+    """The FAA refused the client ID and secret."""
+
+
+class TokenRefused(RuntimeError):
+    """A data pull was answered 401; the token was renewed for the next pull."""
+
+
+def credentials(environment: str) -> tuple[str, str]:
+    """The client ID and secret stored for this environment (empty when the stored
+    pair was issued for another one)."""
+    return STORE.nms_pair(environment)
+
+
+US_ACCOUNT_MAX = 4        # a US accountability is a domestic (3) or ICAO (4) identifier
+
+
+def is_foreign(record: Dict) -> bool:
+    """Whether a NOTAM was issued outside the US: its accountability is the AFTN
+    address of a foreign NOTAM office, longer than any US account. The
+    classification does not tell: the US issues its own international series."""
+    return len(record.get("accountability") or "") > US_ACCOUNT_MAX
+
+
+DOMESTIC_CLASSES = ("DOM", "FDC")
+INTERNATIONAL_CLASS = "INTL"
+
+
+def repeats(records: List[Dict], now: Optional[float] = None) -> set:
+    """The ids of the US international-series NOTAMs among `records` that repeat
+    a domestic or FDC NOTAM among them: the same text, start and end. With
+    `now`, only NOTAMs not cancelled or ended by then count, on either side."""
+    def key(r: Dict) -> tuple:
+        return " ".join(r["text"].split()), r["start"], r["end"]
+
+    live = [r for r in records if now is None or not _over(r, now)]
+    domestic = {key(r) for r in live if r["classification"] in DOMESTIC_CLASSES}
+    return {r["id"] for r in live
+            if r["classification"] == INTERNATIONAL_CLASS and not is_foreign(r) and key(r) in domestic}
 
 
 def query_forms(ident: str) -> List[str]:
@@ -187,11 +245,14 @@ def normalize(feature: Dict) -> Optional[Dict]:
     }
 
 
-def affects(record: Dict, ident: str) -> bool:
+def affects(record: Dict, ident: str, strict: bool = False) -> bool:
     """Whether the NOTAM's affected location is `ident`. A record that states no
-    location is kept: the API selected it by location."""
+    location is kept when the API selected it by location, and never when it
+    came from a pull of every changed NOTAM (`strict`)."""
     named = {record.get("location"), record.get("icao_location")} - {"", None}
-    return not named or bool(named & set(query_forms(ident)))
+    if not named:
+        return not strict
+    return bool(named & set(query_forms(ident)))
 
 
 def select(records: List[Dict], now: float, lookahead_h: float) -> List[Dict]:
@@ -220,37 +281,283 @@ def select(records: List[Dict], now: float, lookahead_h: float) -> List[Dict]:
     return sorted(out, key=key)
 
 
+def _over(record: Dict, now: float) -> bool:
+    return record["kind"] == "C" or record.get("cancelled") is not None or (record["end"] is not None and record["end"] <= now)
+
+
+UNSETTLED = ("gone", "appeared", "changed")
+MISSED = {"gone": "missed_removal", "appeared": "missed_new", "changed": "missed_change"}
+
+
+def unsettled_ids(merged: List[Dict], fresh: List[Dict], now: float, synced: float) -> Dict[str, List[str]]:
+    """The NOTAMs in which a location's set, kept current by pulls of changes,
+    differs from the whole set fetched at `now` in a way the whole set cannot
+    explain: `gone`, held as in effect and no longer listed; `appeared`, listed
+    and not held; `changed`, listed otherwise than held. A NOTAM updated at or
+    after the last pull (`synced`) was changed after it and is not among them;
+    the API gives update times to the minute only, so an earlier one may still
+    have been changed after the last pull."""
+    listed = {r["id"]: r for r in fresh}
+    held = {r["id"]: r for r in merged}
+    out: Dict[str, List[str]] = {k: [] for k in UNSETTLED}
+    for key, old in held.items():
+        if key not in listed and not _over(old, now):
+            out["gone"].append(key)
+    for key, new in listed.items():
+        if (new.get("updated") or 0) >= synced:
+            continue
+        old = held.get(key)
+        if old is None:
+            out["appeared"].append(key)
+        elif (old.get("updated"), old.get("cancelled")) != (new.get("updated"), new.get("cancelled")):
+            out["changed"].append(key)
+    return out
+
+
+def compare_sets(merged: List[Dict], fresh: List[Dict], now: float, synced: float) -> Dict[str, int]:
+    """How a location's set, kept current by pulls of changes, differs from the
+    whole set fetched at `now`, by count. `same`; `ended`, which the API stops
+    listing; `newer`, updated at or after the last pull (`synced`); and the
+    unsettled classes of unsettled_ids(). Those are settled by the next pull of
+    changes, which reaches back to before the last pull: a NOTAM it reports was
+    changed after the last pull, one it does not report was missed (MISSED)."""
+    out = {"same": 0, "ended": 0, "newer": 0, **{k: 0 for k in UNSETTLED}}
+    have = {r["id"]: r for r in merged}
+    want = {r["id"]: r for r in fresh}
+    for key, old in have.items():
+        new = want.get(key)
+        if new is None:
+            out["ended" if _over(old, now) else "gone"] += 1
+        elif (old.get("updated"), old.get("cancelled")) == (new.get("updated"), new.get("cancelled")):
+            out["same"] += 1
+        else:
+            out["newer" if (new.get("updated") or 0) >= synced else "changed"] += 1
+    for key, new in want.items():
+        if key not in have:
+            out["newer" if (new.get("updated") or 0) >= synced else "appeared"] += 1
+    return out
+
+
+def settle(unseen: Dict[str, List[str]], pulled: set) -> Dict[str, int]:
+    """Settle unsettled NOTAMs by a pull of changes reaching back to before the
+    last pull: `newer` when it carries them, otherwise missed, by class."""
+    out = {"newer": 0, **{MISSED[k]: 0 for k in UNSETTLED}}
+    for kind, ids in unseen.items():
+        for key in ids:
+            out["newer" if key in pulled else MISSED[kind]] += 1
+    return out
+
+
+class PullGate:
+    """Paces the requests to the NMS-API: data pulls at least PULL_INTERVAL_S
+    apart, any two requests at least REQUEST_SPACING_S apart. The time of the
+    last pull before a restart is carried over, so a restart never shortens an
+    interval. A 429 lengthens the wait, doubling up to BACKOFF_MAX_S."""
+
+    def __init__(self, last_pull_wall: Optional[float] = None, clock: Callable[[], float] = time.monotonic,
+                 wall: Callable[[], float] = time.time, sleep=asyncio.sleep):
+        self.clock, self.wall, self.sleep = clock, wall, sleep
+        self._next = clock() + self._carried(last_pull_wall)   # when the next pull may start
+        # the last pull on this clock, so that the first interval after a restart is measured too
+        self._last_pull: Optional[float] = (
+            None if last_pull_wall is None else clock() - max(0.0, wall() - last_pull_wall))
+        self._last_request: Optional[float] = None
+        self._penalty = 0.0
+
+    def _carried(self, last_pull_wall: Optional[float]) -> float:
+        if last_pull_wall is None:
+            return 0.0
+        elapsed = self.wall() - last_pull_wall
+        if elapsed < 0:      # the clock was set back since: wait a whole interval
+            return PULL_INTERVAL_S
+        return max(0.0, PULL_INTERVAL_S - elapsed)
+
+    def wait_s(self) -> float:
+        """Seconds until a data pull may start."""
+        return max(0.0, self._next - self.clock())
+
+    @property
+    def limited(self) -> bool:
+        return self._penalty > 0
+
+    async def wait_turn(self) -> None:
+        while (wait := self.wait_s()) > 0:
+            await self.sleep(min(wait, 30.0))
+
+    async def space(self) -> None:
+        """Wait until a request of any kind may be sent, and count it."""
+        if self._last_request is not None:
+            while (wait := self._last_request + REQUEST_SPACING_S - self.clock()) > 0:
+                await self.sleep(wait)
+        self._last_request = self.clock()
+
+    def mark_pull(self) -> Optional[float]:
+        """Count a data pull that starts now. -> seconds since the previous one."""
+        now = self.clock()
+        if now < self._next:
+            raise RuntimeError("a data pull was started before its turn")
+        gap = None if self._last_pull is None else now - self._last_pull
+        self._last_pull = now
+        self._next = now + max(PULL_INTERVAL_S, self._penalty)
+        return gap
+
+    def rate_limited(self, retry_after: Optional[float] = None) -> float:
+        """The FAA answered 429: lengthen the wait. -> seconds until the next pull."""
+        self._penalty = min(BACKOFF_MAX_S, max(2 * PULL_INTERVAL_S, 2 * self._penalty))
+        self._next = max(self._next, self.clock() + max(self._penalty, retry_after or 0.0))
+        return self.wait_s()
+
+    def answered(self) -> None:
+        """A pull was served: the usual interval applies again, from that pull."""
+        if self._penalty and self._last_pull is not None:
+            self._next = self._last_pull + PULL_INTERVAL_S
+        self._penalty = 0.0
+
+
+class UsageLog:
+    """Every request sent to the NMS-API, one JSON line each, appended as it is
+    made: the record that the display stays inside the FAA's limits."""
+
+    def __init__(self, path: Optional[str] = None, keep: int = USAGE_KEEP):
+        self.path = path or USAGE_PATH
+        self.keep = keep
+        self.rows: Deque[Dict[str, Any]] = collections.deque(maxlen=keep)
+        self._lines = 0
+        self.failing = False
+        try:
+            with open(self.path) as fh:
+                for line in fh:
+                    self._lines += 1
+                    try:
+                        row = json.loads(line)
+                    except ValueError:
+                        continue
+                    if isinstance(row, dict) and isinstance(row.get("t"), (int, float)):
+                        self.rows.append(row)
+        except OSError:
+            pass
+
+    def last_pull(self) -> Optional[float]:
+        return next((r["t"] for r in reversed(self.rows) if r.get("kind") in PULL_KINDS), None)
+
+    def add(self, row: Dict[str, Any]) -> None:
+        self.rows.append(row)
+        try:
+            if self._lines >= 2 * self.keep:
+                tmp = self.path + ".tmp"
+                with open(tmp, "w") as fh:
+                    fh.writelines(json.dumps(r, separators=(",", ":")) + "\n" for r in self.rows)
+                os.replace(tmp, self.path)
+                self._lines = len(self.rows)
+            else:
+                with open(self.path, "a") as fh:
+                    fh.write(json.dumps(row, separators=(",", ":")) + "\n")
+                self._lines += 1
+            self.failing = False
+        except OSError:
+            self.failing = True
+
+    def summary(self, now: float, window_s: Optional[float] = 86400.0) -> Dict[str, Any]:
+        """Totals over the last `window_s` seconds, or over the whole record (None)."""
+        rows = [r for r in self.rows if window_s is None or r["t"] >= now - window_s]
+        pulls = [r for r in rows if r.get("kind") in PULL_KINDS]
+        gaps = [r["gap"] for r in pulls if isinstance(r.get("gap"), (int, float))]
+        return {
+            "window_s": window_s,
+            "first": rows[0]["t"] if rows else None,
+            "last": rows[-1]["t"] if rows else None,
+            "pulls": len(pulls),
+            "baselines": sum(1 for r in pulls if r.get("kind") == "baseline"),
+            "deltas": sum(1 for r in pulls if r.get("kind") == "delta"),
+            "tokens": sum(1 for r in rows if r.get("kind") == "token"),
+            "shortest_gap_s": round(min(gaps), 1) if gaps else None,
+            "limit_gap_s": PULL_INTERVAL_S,
+            "status_401": sum(1 for r in rows if r.get("status") == 401),
+            "status_429": sum(1 for r in rows if r.get("status") == 429),
+            "failed": sum(1 for r in rows if "status" in r and not 200 <= r["status"] < 300
+                          and r["status"] not in UNKNOWN_LOCATION),
+            "compared": sum(1 for r in rows if r.get("kind") == "compare"),
+            "mismatches": sum(sum(v for k, v in (r.get("diff") or {}).items() if k.startswith("missed_")) for r in rows),
+        }
+
+
 class NmsSource:
-    """The FAA NMS-API: client-credentials bearer token, NOTAMs by location as GeoJSON."""
+    """The FAA NMS-API: a client-credentials bearer token, a location's NOTAMs
+    and the NOTAMs changed since a time, both as GeoJSON. Every request goes
+    through the gate and into the usage log."""
 
     name = "faa"
 
-    def __init__(self, client: httpx.AsyncClient):
+    def __init__(self, client: httpx.AsyncClient, gate: Optional[PullGate] = None, usage: Optional[UsageLog] = None,
+                 environment: str = "production"):
         self.client = client
+        self.usage = usage if usage is not None else UsageLog()
+        self.gate = gate if gate is not None else PullGate(self.usage.last_pull())
+        self.environment = environment
         self._token: Optional[str] = None
         self._token_until = 0.0
+        self._sending: Optional[asyncio.Lock] = None
+
+    def use(self, environment: str) -> None:
+        if environment != self.environment:
+            self.environment = environment
+            self.reset_token()
+
+    def reset_token(self) -> None:
+        self._token, self._token_until = None, 0.0
+
+    @property
+    def base(self) -> str:
+        return NMS_HOSTS[self.environment]
 
     @property
     def configured(self) -> bool:
-        return all(credentials())
+        return all(credentials(self.environment))
 
-    async def _bearer(self, force: bool = False) -> str:
-        if self._token and not force and time.monotonic() < self._token_until:
-            return self._token
-        client_id, secret = credentials()
+    def _lock(self) -> asyncio.Lock:
+        if self._sending is None:
+            self._sending = asyncio.Lock()
+        return self._sending
+
+    def _log(self, kind: str, status: int, started: float, resp: Optional[httpx.Response] = None, **more) -> None:
+        """Record a request; `rid` is the id the API gave it (x-request-id)."""
+        row = {
+            "t": round(started, 1), "kind": kind, "env": self.environment, "status": status,
+            "bytes": len(resp.content) if resp is not None else 0,
+            "ms": int((self.gate.wall() - started) * 1000), **more,
+        }
+        rid = resp.headers.get("x-request-id") if resp is not None else None
+        if rid:
+            row["rid"] = rid[:64]
+        self.usage.add(row)
+
+    async def _new_token(self) -> str:
+        """Ask for a bearer token (not a data pull). The caller holds the lock."""
+        client_id, secret = credentials(self.environment)
         if not (client_id and secret):
-            raise NotConfigured("FAA NMS credentials are not set (HANGAR_NMS_CLIENT_ID and HANGAR_NMS_CLIENT_SECRET in .env)")
-        resp = await self.client.post(
-            f"{NMS_BASE}/v1/auth/token",
-            data={"grant_type": "client_credentials"},
-            auth=(client_id, secret),
-            timeout=REQUEST_TIMEOUT_S,
-        )
-        if resp.status_code in (401, 403):
-            raise RuntimeError(f"FAA NMS rejected the credentials (HTTP {resp.status_code})")
-        resp.raise_for_status()
-        body = resp.json()
-        token = body.get("access_token")
+            raise NotConfigured(f"no FAA credentials are stored for the {self.environment} environment")
+        await self.gate.space()
+        started = self.gate.wall()
+        try:
+            resp = await self.client.post(
+                f"{self.base}/v1/auth/token",
+                data={"grant_type": "client_credentials"},
+                auth=(client_id, secret),
+                timeout=REQUEST_TIMEOUT_S,
+            )
+        except httpx.HTTPError as exc:
+            self._log("token", 0, started, error=exc.__class__.__name__)
+            raise RuntimeError(f"FAA NMS token request failed: {exc.__class__.__name__}") from None
+        self._log("token", resp.status_code, started, resp)
+        if resp.status_code in (400, 401, 403):
+            raise CredentialsRejected(f"FAA NMS rejected the credentials (HTTP {resp.status_code})")
+        if resp.status_code >= 400:
+            raise RuntimeError(f"FAA NMS token request answered HTTP {resp.status_code}")
+        try:
+            body = resp.json()
+            token = body.get("access_token")
+        except (ValueError, AttributeError):
+            token, body = None, {}
         if not token:
             raise RuntimeError("FAA NMS token response carried no access_token")
         try:
@@ -258,43 +565,113 @@ class NmsSource:
         except (TypeError, ValueError):
             lifetime = 0.0
         self._token = token
-        self._token_until = time.monotonic() + max(0.0, lifetime - TOKEN_MARGIN_S)
+        self._token_until = self.gate.clock() + max(0.0, lifetime - TOKEN_MARGIN_S)
         return token
 
-    async def _get(self, form: str) -> httpx.Response:
-        async def once(force: bool) -> httpx.Response:
-            return await self.client.get(
-                f"{NMS_BASE}/nmsapi/v1/notams",
-                params={"location": form},
-                headers={"Authorization": f"Bearer {await self._bearer(force)}", "nmsResponseFormat": "GEOJSON"},
-                timeout=REQUEST_TIMEOUT_S,
-            )
+    async def _bearer(self) -> str:
+        if self._token and self.gate.clock() < self._token_until:
+            return self._token
+        return await self._new_token()
 
-        resp = await once(False)
-        if resp.status_code == 401:   # the token expired early or was revoked
-            resp = await once(True)
-        return resp
+    async def check_credentials(self) -> Dict[str, Any]:
+        """Whether the stored credentials get a token. Costs no data pull."""
+        async with self._lock():
+            try:
+                await self._new_token()
+            except (NotConfigured, RuntimeError) as exc:
+                return {"ok": False, "environment": self.environment, "error": str(exc)}
+        return {"ok": True, "environment": self.environment, "error": None}
 
-    async def fetch(self, ident: str) -> List[Dict]:
-        """Every NOTAM the API files under the location, as GeoJSON features, asked
-        for under each spelling and merged by NOTAM id. A spelling the API does not
-        know is skipped unless it does not know any of them."""
-        features: Dict[str, Dict] = {}
-        unknown: List[str] = []
-        forms = query_forms(ident)
-        for form in forms:
-            resp = await self._get(form)
-            if resp.status_code in UNKNOWN_LOCATION:
-                unknown.append(form)
-                continue
-            resp.raise_for_status()
-            body = resp.json() or {}
-            for n, feature in enumerate((body.get("data") or {}).get("geojson") or []):
-                notam = (((feature or {}).get("properties") or {}).get("coreNOTAMData") or {}).get("notam") or {}
-                features.setdefault(str(notam.get("id") or f"{form}:{n}"), feature)
-        if len(unknown) == len(forms):
-            raise RuntimeError(f"FAA NMS does not know location {' or '.join(forms)}")
-        return list(features.values())
+    async def _pull(self, kind: str, params: Dict[str, str], since: Optional[float] = None, **what) -> httpx.Response:
+        """One data pull, at its turn. A 401 renews the token for the next pull
+        and a 429 lengthens the wait; neither is retried here. `since` is the
+        time a pull of changes reaches back to: outside the window the API
+        takes when the pull's turn has come, nothing is sent."""
+        await self.gate.wait_turn()     # outside the lock: a credentials check need not wait for a turn
+        async with self._lock():
+            await self.gate.wait_turn()
+            token = await self._bearer()
+            await self.gate.space()
+            if since is not None:
+                now = self.gate.wall()
+                if not now - DELTA_WINDOW_S + WINDOW_MARGIN_S <= since <= now:
+                    raise ValueError("changes can only be asked for the last 24 hours")
+            gap = self.gate.mark_pull()
+            started = self.gate.wall()
+            try:
+                resp = await self.client.get(
+                    f"{self.base}/nmsapi/v1/notams",
+                    params=params,
+                    headers={"Authorization": f"Bearer {token}", "nmsResponseFormat": "GEOJSON"},
+                    timeout=REQUEST_TIMEOUT_S,
+                )
+            except httpx.HTTPError as exc:
+                self._log(kind, 0, started, gap=None if gap is None else round(gap, 1), error=exc.__class__.__name__, **what)
+                raise RuntimeError(f"FAA NMS request failed: {exc.__class__.__name__}") from None
+            self._log(kind, resp.status_code, started, resp, gap=None if gap is None else round(gap, 1), **what)
+            if resp.status_code == 429:
+                try:
+                    retry_after = float(resp.headers.get("retry-after") or 0)
+                except ValueError:
+                    retry_after = 0.0
+                wait = self.gate.rate_limited(retry_after)
+                raise RateLimited(f"the FAA is limiting requests (HTTP 429); next pull in {round(wait)} s")
+            if resp.status_code == 401:
+                self.reset_token()
+                try:
+                    await self._new_token()
+                except CredentialsRejected:
+                    raise
+                except (NotConfigured, RuntimeError):
+                    pass
+                raise TokenRefused("FAA NMS refused the access token (HTTP 401); it was renewed for the next pull")
+            if resp.status_code < 400:
+                self.gate.answered()
+            return resp
+
+    @staticmethod
+    def _features(resp: httpx.Response) -> List[Dict]:
+        """The NOTAMs of an answer. Only an answer that states success, lists no
+        error and carries its data as GeoJSON is a set of NOTAMs; anything else
+        is an error, never "no NOTAMs"."""
+        try:
+            body = resp.json()
+            status, errors, data = body.get("status"), body.get("errors"), body.get("data")
+        except (ValueError, AttributeError):
+            raise RuntimeError("FAA NMS answer is not the expected JSON") from None
+        if errors or str(status or "").strip().lower() != "success":
+            first = errors[0] if isinstance(errors, list) and errors and isinstance(errors[0], dict) else {}
+            detail = " ".join(str(first.get(k) or "").strip() for k in ("code", "message")).strip()
+            raise RuntimeError(f"FAA NMS reported a failure{': ' + detail[:160] if detail else ''}")
+        if not isinstance(data, dict):
+            raise RuntimeError("FAA NMS answer is not the expected JSON")
+        features = data.get("geojson")
+        if features is None and data.get("url"):
+            # A link to a file stands for a set too large to be sent inline.
+            raise RuntimeError("FAA NMS answered with a file link instead of NOTAMs")
+        if features is None and data.get("aixm") is not None:
+            raise RuntimeError("FAA NMS answered in AIXM instead of GeoJSON")
+        if not isinstance(features, list) and features is not None:
+            raise RuntimeError("FAA NMS answer is not the expected JSON")
+        return [f for f in features or [] if isinstance(f, dict)]
+
+    async def baseline(self, form: str, ident: str) -> Optional[List[Dict]]:
+        """Every NOTAM the API files under one spelling of a location, as GeoJSON
+        features; None when the API does not know the spelling."""
+        resp = await self._pull("baseline", {"location": form}, what=ident, form=form)
+        if resp.status_code in UNKNOWN_LOCATION:
+            return None
+        if resp.status_code >= 400:
+            raise RuntimeError(f"FAA NMS answered HTTP {resp.status_code} for {form}")
+        return self._features(resp)
+
+    async def changes(self, since: float) -> List[Dict]:
+        """Every NOTAM changed since `since` (epoch seconds), any location."""
+        stamp = datetime.fromtimestamp(since, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        resp = await self._pull("delta", {"lastUpdatedDate": stamp}, since=since, what=stamp)
+        if resp.status_code >= 400:
+            raise RuntimeError(f"FAA NMS answered HTTP {resp.status_code} for changes since {stamp}")
+        return self._features(resp)
 
 
 class SampleSource:
@@ -352,7 +729,7 @@ class SampleSource:
                 "type": "Feature",
                 "properties": {"coreNOTAMData": {
                     "notam": notam,
-                    "notamTranslation": [{"type": "LOCAL_FORMAT", "domestic_message": message}],
+                    "notamTranslation": [{"type": "LOCAL_FORMAT", "simpleText": message}],
                 }},
                 "geometry": None,
             })

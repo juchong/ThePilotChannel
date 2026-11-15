@@ -18,7 +18,10 @@
 #   --no-upgrade          skip "apt-get full-upgrade"
 #   --no-start            do not build and start the Docker stack
 #   --reboot              reboot when finished
-#   --admin-password PW   write HANGAR_ADMIN_PASSWORD into .env (also read from the environment)
+#   --admin-password PW   create the admin account with this password (at least 8 characters; also
+#                         read from HANGAR_ADMIN_PASSWORD). Without it, the first visitor to
+#                         /admin creates the account.
+#   --admin-user NAME     the account's username (default: admin)
 #   --repo-dir DIR        where the repository is or should be cloned (default: ~/ThePilotChannel,
 #                         or the clone this script is run from)
 #
@@ -29,7 +32,7 @@
 #   cuts (deploy/harden-wifi.sh); Docker CE in rootless mode as this user (rootful daemon
 #   disabled); the GPU/KMS overlay; seatd and the video/render/input groups; automatic
 #   login on tty1 that launches the kiosk; Wi-Fi power saving off; a persistent system
-#   log; the optional admin password; and the app stack itself.
+#   log; the app stack itself; and the admin account.
 set -euo pipefail
 
 REPO_URL="https://github.com/juchong/ThePilotChannel.git"
@@ -43,6 +46,7 @@ DO_UPGRADE=1
 DO_START=1
 DO_REBOOT=0
 ADMIN_PASSWORD="${HANGAR_ADMIN_PASSWORD:-}"
+ADMIN_USER="admin"
 REPO_DIR=""
 MISSING=0
 
@@ -56,6 +60,7 @@ while [ $# -gt 0 ]; do
     --no-start) DO_START=0 ;;
     --reboot) DO_REBOOT=1 ;;
     --admin-password) ADMIN_PASSWORD="${2:-}"; shift ;;
+    --admin-user) ADMIN_USER="${2:-}"; shift ;;
     --repo-dir) REPO_DIR="${2:-}"; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
@@ -406,26 +411,7 @@ if [ -f "$JOURNAL_CONF" ] && [ "$(cat "$JOURNAL_CONF")" = "$WANT_JOURNAL" ] && [
   fi
 fi
 
-# ---- 11. admin password ---------------------------------------------------------------
-log "Admin password (.env)"
-ENV_FILE="$REPO_DIR/.env"
-if [ -n "$ADMIN_PASSWORD" ]; then
-  if grep -qF "HANGAR_ADMIN_PASSWORD=$ADMIN_PASSWORD" "$ENV_FILE" 2>/dev/null; then ok "password set in $ENV_FILE"; else
-    miss "password set in $ENV_FILE"
-    if applying; then
-      if [ "$MODE" = dry-run ]; then info "+ write $ENV_FILE"; else
-        { grep -v '^HANGAR_ADMIN_PASSWORD=' "$ENV_FILE" 2>/dev/null || true; printf 'HANGAR_ADMIN_PASSWORD=%s\n' "$ADMIN_PASSWORD"; } > "$ENV_FILE.tmp"
-        mv "$ENV_FILE.tmp" "$ENV_FILE" && chmod 600 "$ENV_FILE"
-      fi
-    fi
-  fi
-elif grep -q '^HANGAR_ADMIN_PASSWORD=.' "$ENV_FILE" 2>/dev/null; then
-  ok "password already set in $ENV_FILE"
-else
-  info "no password (pass --admin-password to protect the admin page; anyone on the LAN can change settings without it)"
-fi
-
-# ---- 12. the app stack ------------------------------------------------------------------
+# ---- 11. the app stack ------------------------------------------------------------------
 log "App stack (docker compose)"
 if curl -fs --max-time 3 http://localhost:8000/healthz >/dev/null 2>&1; then
   ok "backend answering on port 8000"
@@ -440,6 +426,31 @@ elif [ "$DO_START" = 1 ]; then
   fi
 else
   info "not started (--no-start)"
+fi
+
+# ---- 12. the admin account ----------------------------------------------------------------
+# The account lives in data/secrets.json and is made by the app's own tool, which
+# takes the password on its standard input: it is never written to a file here.
+log "Admin account"
+access() { (cd "$REPO_DIR" && docker compose exec -T app python -m app.access "$@"); }
+if ! curl -fs --max-time 3 http://localhost:8000/healthz >/dev/null 2>&1; then
+  if [ "$MODE" = check ]; then miss "admin account (the app is not running, so it cannot be checked)"; else
+    info "skipped: the app is not running"
+  fi
+elif ACCOUNT="$(access status 2>/dev/null)"; then
+  ok "$ACCOUNT (to replace its password: docker compose exec app python -m app.access set-password)"
+elif [ -n "$ADMIN_PASSWORD" ]; then
+  miss "admin account $ADMIN_USER"
+  if applying; then
+    if [ "$MODE" = dry-run ]; then info "+ docker compose exec -T app python -m app.access set-password --username $ADMIN_USER"; else
+      printf '%s\n' "$ADMIN_PASSWORD" | access set-password --username "$ADMIN_USER" \
+        || info "the account was not created; create it at /admin instead"
+    fi
+  fi
+elif [ "$MODE" = check ]; then
+  miss "admin account (create it at /admin, or run this script with --admin-password)"
+else
+  info "no admin account yet: the first visitor to /admin creates it (or pass --admin-password)"
 fi
 
 # ---- summary ------------------------------------------------------------------------------

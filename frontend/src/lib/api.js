@@ -3,14 +3,15 @@
 const DEFAULT_TIMEOUT_MS = 8000;
 
 export class ApiError extends Error {
-  constructor(url, status, detail) {
+  constructor(url, status, detail, retryAfter = null) {
     super(`${url} -> ${status}`);
     this.status = status;
     this.detail = detail; // parsed JSON "detail" from the backend, if any
+    this.retryAfter = retryAfter; // seconds, from a Retry-After header
   }
 }
 
-async function j(url, opts = {}, timeoutMs = DEFAULT_TIMEOUT_MS) {
+async function j(url, opts = {}, timeoutMs = DEFAULT_TIMEOUT_MS, read = (r) => r.json()) {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), timeoutMs);
   try {
@@ -22,9 +23,9 @@ async function j(url, opts = {}, timeoutMs = DEFAULT_TIMEOUT_MS) {
       try {
         detail = (await r.json()).detail;
       } catch (_) {}
-      throw new ApiError(url, r.status, detail);
+      throw new ApiError(url, r.status, detail, Number(r.headers.get("retry-after")) || null);
     }
-    return await r.json();
+    return await read(r);
   } finally {
     clearTimeout(timer);
   }
@@ -70,6 +71,29 @@ export const api = {
   // the display's own report of the view it has switched to
   reportShowing: (body) => j("/api/display/showing", json("POST", body), 4000),
   testSource: (payload) => j("/api/test-source", json("POST", payload), 30000),
+  // signing in and the account
+  getSession: () => j("/api/auth/session"),
+  login: (username, password) => j("/api/auth/login", json("POST", { username, password }), 15000),
+  setup: (username, password) => j("/api/auth/setup", json("POST", { username, password }), 15000),
+  logout: () => j("/api/auth/logout", { method: "POST" }),
+  logoutAll: () => j("/api/auth/logout-all", { method: "POST" }),
+  updateAccount: (body) => j("/api/auth/account", json("PUT", body), 15000),
+  // API keys
+  getKeys: () => j("/api/keys"),
+  createKey: (name, scope) => j("/api/keys", json("POST", { name, scope })),
+  revokeKey: (id) => j(`/api/keys/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  // stored credentials: state only, never a value
+  getSecrets: () => j("/api/secrets"),
+  putNmsKeys: (body) => j("/api/secrets/nms", json("PUT", body)),
+  putSecret: (name, value) => j(`/api/secrets/${encodeURIComponent(name)}`, json("PUT", { value })),
+  deleteSecret: (name) => j(`/api/secrets/${encodeURIComponent(name)}`, { method: "DELETE" }),
+  checkNmsKeys: () => j("/api/secrets/nms/check", { method: "POST" }, 45000),
+  // camera stream addresses
+  getStreams: () => j("/api/cameras/streams"),
+  addStream: (body) => j("/api/cameras/streams", json("POST", body)),
+  changeStream: (id, body) => j(`/api/cameras/streams/${encodeURIComponent(id)}`, json("PUT", body)),
+  removeStream: (id) => j(`/api/cameras/streams/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  testStream: (body) => j("/api/cameras/streams/test", json("POST", body), 40000),
 };
 
 // SSE for connected / config_changed / weather_updated / notams_updated / display events. EventSource

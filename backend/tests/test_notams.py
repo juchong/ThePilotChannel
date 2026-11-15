@@ -9,12 +9,13 @@ import json
 import logging
 import os
 import re
+import tempfile
 import time
 from datetime import datetime, timezone
 
 import httpx
 import pytest
-from support import AUTH, base_cfg, put, wait_until
+from support import AUTH, REWRITE, FakeClock, base_cfg, put, set_nms_keys, stub_faa, wait_until
 
 from app import main as main_mod
 from app import manager as mg
@@ -75,25 +76,10 @@ def notams_cfg(idents=("KS50",), **over):
         "source": "faa",
         "lookahead_h": 24,
         "locations": [{"ident": i, "name": "", "enabled": True} for i in idents],
+        "translate": dict(REWRITE),   # live NOTAM views need the rewrite the display names as their source
         **over,
     }
     return body
-
-
-def stub_faa(monkeypatch, by_ident):
-    """Stand in for the FAA: `by_ident` maps a location to features, or to an
-    exception to raise."""
-    calls = []
-
-    async def fetch(ident):
-        calls.append(ident)
-        result = by_ident.get(ident, [])
-        if isinstance(result, Exception):
-            raise result
-        return result
-
-    monkeypatch.setattr(main_mod.manager.nms, "fetch", fetch)
-    return calls
 
 
 def shown(client, ident="KS50"):
@@ -123,87 +109,524 @@ def test_a_location_is_matched_under_its_domestic_and_icao_spelling():
 
 
 # ---- the FAA client ----------------------------------------------------------------------------
+# The FAA's documents for the NMS-API (its FAQ, curl examples and onboarding note)
+# give the hosts, the token answer and its lifetime, the two refusals, and the
+# limits: one data pull every three minutes, never more than a request a second,
+# HTTP 429 beyond. tests/data/nms_samples.json holds the answers as the FAA prints them.
 
-def faa_client(handler):
-    return notams.NmsSource(httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+FAA_HOSTS = {   # "servers and base host names" in the FAA's curl examples
+    "production": "api-nms.aim.faa.gov",
+    "staging": "api-staging.cgifederal-aim.com",
+    "fit": "api-fit.cgifederal-aim.com",
+}
+FAA_PULL_INTERVAL_S = 180      # "A maximum of one delta pull every 3 minutes"
+FAA_REQUEST_SPACING_S = 1      # "1 request per second"
+FAA_TOKEN_LIFETIME_S = 1799    # "expires_in": "1799", in staging and in production
+
+# The FAA's OpenAPI specification for the NMS-API (nms-api.yaml) gives what a request
+# to GET /v1/notams may carry, how long the API works on one, and how an answer reads.
+FAA_PARAMETERS = {"accountability", "allowRedirect", "classification", "effectiveEndDate", "effectiveStartDate", "feature",
+                  "freeText", "nmsId", "lastUpdatedDate", "latitude", "location", "longitude", "notamNumber", "radius"}
+FAA_LOCATION_RE = re.compile(r"^[a-zA-Z0-9]{3,4}$")                   # schema Location
+FAA_TIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")    # schema NmsTime: "yyyy-MM-ddTHH:mm:ssZ"
+FAA_CHANGES_WINDOW_S = 24 * 3600   # lastUpdatedDate: "limited to a 24 hour window prior to current time"
+FAA_PROCESSING_LIMIT_S = 30        # 408: "if request takes longer than 30 seconds to process"
+FAA_BAD_REQUEST = {"timestamp": "2025-04-08T12:00:00Z", "status": "400", "message": "Bad Request"}
+FAA_REQUEST_ID = "a1b2c3d4-e5f6-7890-1234-567890abcdef"                # the x-request-id header's example
+FAA_INTERNAL_ERROR = {"code": "1", "message": "Encountered unexpected query parameter format"}
 
 
-def test_the_api_is_asked_by_location_with_a_bearer_token_and_never_by_accountability(monkeypatch):
-    monkeypatch.setenv("HANGAR_NMS_CLIENT_ID", "the-id")
-    monkeypatch.setenv("HANGAR_NMS_CLIENT_SECRET", "the-secret")
-    seen = []
+def faa_request_faults(request: httpx.Request, now=None) -> list:
+    """What a data request carries that the specification does not allow; `now`
+    is the time the API receives it."""
+    q = request.url.params
+    faults = []
+    if request.method != "GET" or request.url.path != "/nmsapi/v1/notams":
+        faults.append(f"{request.method} {request.url.path}")
+    if request.headers.get("nmsresponseformat") not in ("AIXM", "GEOJSON"):
+        faults.append("nmsResponseFormat")
+    if not request.headers.get("authorization", "").startswith("Bearer "):
+        faults.append("no bearer token")
+    if not list(q.keys()):
+        faults.append("no query parameter")
+    faults += [f"parameter {k}" for k in q.keys() if k not in FAA_PARAMETERS]
+    if "location" in q and not FAA_LOCATION_RE.match(q["location"]):
+        faults.append("location")
+    if "lastUpdatedDate" in q:
+        stamp = q["lastUpdatedDate"]
+        if not FAA_TIME_RE.match(stamp):
+            faults.append("lastUpdatedDate format")
+        elif now is not None and not now - FAA_CHANGES_WINDOW_S <= notams.parse_time(stamp) <= now:
+            faults.append("lastUpdatedDate outside the last 24 hours")
+    return faults
+
+
+def faa_answers():
+    with open(os.path.join(os.path.dirname(__file__), "data", "nms_samples.json")) as fh:
+        return json.load(fh)
+
+
+def faa_client(handler, environment="production", clock=None, last_pull=None):
+    """The FAA client on a simulated clock, answered by `handler`. -> (client, clock);
+    the handler can read the clock to see when each request was sent."""
+    clock = clock or FakeClock()
+    usage = notams.UsageLog(os.path.join(tempfile.mkdtemp(prefix="tpc-usage-"), "nms-usage.jsonl"))
+    gate = notams.PullGate(last_pull, clock=clock, wall=clock, sleep=clock.sleep)
+    transport = httpx.MockTransport(handler)
+    return notams.NmsSource(httpx.AsyncClient(transport=transport), gate=gate, usage=usage, environment=environment), clock
+
+
+def faa_stand_in(seen, clock_of=lambda: None, answer=None, token_answer=None):
+    """A request handler that issues tokens the way the FAA's token answer reads
+    and passes data requests to `answer` (default: no NOTAMs). A data request the
+    specification does not allow is answered 400 and kept in `handler.violations`.
+    Each request is appended to `seen` as (time, kind, request)."""
+    issued = []
+    body = token_answer or faa_answers()["token_answer"]
 
     def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
+        now = clock_of()
         if request.url.path == "/v1/auth/token":
-            return httpx.Response(200, json={"access_token": "tok", "expires_in": "1799"})
-        location = request.url.params["location"]
-        if location == "KS50":
-            return httpx.Response(400, json={"status": "400", "message": "Bad Request"})
-        return httpx.Response(200, json={"status": "Success", "data": {"geojson": [feature("1"), feature("2")]}})
+            issued.append(now)
+            seen.append((now, "token", request))
+            return httpx.Response(200, json={**body, "access_token": f"tok{len(issued)}"})
+        seen.append((now, "data", request))
+        faults = faa_request_faults(request, now)
+        if faults:
+            handler.violations.append(faults)
+            return httpx.Response(400, json=FAA_BAD_REQUEST)
+        return answer(request) if answer else httpx.Response(200, json={"status": "Success", "data": {"geojson": []}})
 
-    features = asyncio.run(faa_client(handler).fetch("KS50"))
+    handler.issued = issued
+    handler.violations = []
+    return handler
+
+
+def test_a_location_is_asked_by_location_with_a_bearer_token_and_never_by_accountability(monkeypatch):
+    set_nms_keys(monkeypatch)
+    seen = []
+    source, clock = faa_client(faa_stand_in(seen, answer=lambda request: httpx.Response(
+        200, json={"status": "Success", "data": {"geojson": [feature("1"), feature("2")]}})))
+    features = asyncio.run(source.baseline("S50", "KS50"))
     assert len(features) == 2
-    token, *queries = seen
+    (_t, _k, token), (_t2, _k2, query) = seen
+    assert token.method == "POST" and token.url.path == "/v1/auth/token"        # the token URL has no /nmsapi
     assert token.headers["authorization"].startswith("Basic ") and b"grant_type=client_credentials" in token.content
-    assert [q.url.params["location"] for q in queries] == ["KS50", "S50"]
-    for q in queries:
-        assert q.url.path == "/nmsapi/v1/notams" and "accountability" not in q.url.params
-        assert q.headers["authorization"] == "Bearer tok" and q.headers["nmsresponseformat"] == "GEOJSON"
+    assert token.headers["content-type"] == "application/x-www-form-urlencoded"
+    assert query.url.path == "/nmsapi/v1/notams" and dict(query.url.params) == {"location": "S50"}
+    assert query.headers["authorization"] == "Bearer tok1" and query.headers["nmsresponseformat"] == "GEOJSON"
 
 
-def test_a_location_the_api_knows_under_no_spelling_is_an_error(monkeypatch):
-    monkeypatch.setenv("HANGAR_NMS_CLIENT_ID", "the-id")
-    monkeypatch.setenv("HANGAR_NMS_CLIENT_SECRET", "the-secret")
-
-    def handler(request):
-        if request.url.path == "/v1/auth/token":
-            return httpx.Response(200, json={"access_token": "tok", "expires_in": "1799"})
-        return httpx.Response(400, json={"status": "400"})
-
-    with pytest.raises(RuntimeError, match="does not know location KZZZ"):
-        asyncio.run(faa_client(handler).fetch("KZZZ"))
+@pytest.mark.parametrize("environment", sorted(FAA_HOSTS))
+def test_each_environment_is_reached_at_the_host_the_faa_names_for_it(monkeypatch, environment):
+    set_nms_keys(monkeypatch, environment=environment)
+    seen = []
+    source, _clock = faa_client(faa_stand_in(seen), environment=environment)
+    asyncio.run(source.baseline("KDFW", "KDFW"))
+    assert {r.url.host for _t, _k, r in seen} == {FAA_HOSTS[environment]}
+    assert all(r.url.scheme == "https" for _t, _k, r in seen)
 
 
-def test_the_token_is_reused_and_renewed_once_when_the_api_answers_401(monkeypatch):
-    monkeypatch.setenv("HANGAR_NMS_CLIENT_ID", "the-id")
-    monkeypatch.setenv("HANGAR_NMS_CLIENT_SECRET", "the-secret")
-    tokens, rejected = [], []
-
-    def handler(request):
-        if request.url.path == "/v1/auth/token":
-            tokens.append(1)
-            return httpx.Response(200, json={"access_token": f"tok{len(tokens)}", "expires_in": "1799"})
-        if request.headers["authorization"] == "Bearer tok1" and len(rejected) < 1 and len(tokens) == 1 and request.url.params["location"] == "ZSE":
-            rejected.append(1)
-            return httpx.Response(401, json={"message": "Unauthorized"})
-        return httpx.Response(200, json={"data": {"geojson": []}})
-
-    async def run():
-        source = faa_client(handler)
-        await source.fetch("PANC")      # one token, reused below
-        await source.fetch("PAFA")
-        assert len(tokens) == 1
-        await source.fetch("ZSE")       # 401 once: renewed and retried
-        assert len(tokens) == 2
-
-    asyncio.run(run())
+@pytest.mark.parametrize("stored", sorted(FAA_HOSTS))
+def test_keys_issued_for_one_environment_are_never_sent_to_another(monkeypatch, stored):
+    set_nms_keys(monkeypatch, environment=stored)
+    for environment in FAA_HOSTS:
+        seen = []
+        source, _clock = faa_client(faa_stand_in(seen), environment=environment)
+        if environment == stored:
+            asyncio.run(source.baseline("KDFW", "KDFW"))
+            assert seen and source.configured
+        else:
+            with pytest.raises(notams.NotConfigured, match=environment):
+                asyncio.run(source.baseline("KDFW", "KDFW"))
+            assert seen == [] and not source.configured
 
 
-def test_missing_credentials_are_reported_without_a_request():
+def test_missing_keys_are_reported_without_a_request():
     def handler(request):
         raise AssertionError("no request may be sent without credentials")
 
-    with pytest.raises(notams.NotConfigured, match="HANGAR_NMS_CLIENT_ID"):
-        asyncio.run(faa_client(handler).fetch("KSEA"))
+    source, _clock = faa_client(handler)
+    with pytest.raises(notams.NotConfigured, match="no FAA credentials"):
+        asyncio.run(source.baseline("KSEA", "KSEA"))
+    assert asyncio.run(source.check_credentials())["ok"] is False
 
 
-def test_rejected_credentials_are_named_without_echoing_them(monkeypatch):
-    monkeypatch.setenv("HANGAR_NMS_CLIENT_ID", "the-id")
-    monkeypatch.setenv("HANGAR_NMS_CLIENT_SECRET", "the-secret")
-    with pytest.raises(RuntimeError) as err:
-        asyncio.run(faa_client(lambda request: httpx.Response(401, json={})).fetch("KSEA"))
-    assert "rejected the credentials" in str(err.value) and "the-secret" not in str(err.value)
+def test_refused_keys_are_named_without_echoing_them(monkeypatch):
+    set_nms_keys(monkeypatch)
+    refusal = faa_answers()["invalid_client"]   # the FAA's answer to invalid keys
+    source, _clock = faa_client(lambda request: httpx.Response(401, json=refusal))
+    with pytest.raises(notams.CredentialsRejected) as err:
+        asyncio.run(source.baseline("KSEA", "KSEA"))
+    assert "rejected the credentials" in str(err.value)
+    assert "the-secret" not in str(err.value) and "the-id" not in str(err.value)
+    checked = asyncio.run(source.check_credentials())
+    assert checked["ok"] is False and "the-secret" not in json.dumps(checked)
+
+
+def test_checking_the_keys_asks_for_a_token_and_makes_no_data_pull(monkeypatch):
+    set_nms_keys(monkeypatch)
+    seen = []
+    source, _clock = faa_client(faa_stand_in(seen))
+    assert asyncio.run(source.check_credentials()) == {"ok": True, "environment": "production", "error": None}
+    assert [kind for _t, kind, _r in seen] == ["token"]
+    assert source.usage.summary(time.time() + 10 ** 9, window_s=None)["pulls"] == 0
+
+
+def test_a_spelling_the_api_does_not_know_is_none_and_another_refusal_is_an_error(monkeypatch):
+    set_nms_keys(monkeypatch)
+    for status in (400, 404):
+        source, _clock = faa_client(faa_stand_in([], answer=lambda request, s=status: httpx.Response(s, json={"status": str(s)})))
+        assert asyncio.run(source.baseline("KZZZ", "KZZZ")) is None
+    source, _clock = faa_client(faa_stand_in([], answer=lambda request: httpx.Response(503, text="unavailable")))
+    with pytest.raises(RuntimeError, match="HTTP 503"):
+        asyncio.run(source.baseline("KSEA", "KSEA"))
+
+
+def test_changes_are_asked_since_a_time_written_the_way_the_faa_writes_it(monkeypatch):
+    set_nms_keys(monkeypatch)
+    seen = []
+    since = datetime(2025, 7, 1, 10, 0, 0, tzinfo=timezone.utc).timestamp()
+    clock = FakeClock(start=since + 240)
+    handler = faa_stand_in(seen, clock_of=clock)
+    source, _clock = faa_client(handler, clock=clock)
+    assert asyncio.run(source.changes(since)) == [] and handler.violations == []
+    query = seen[-1][2]
+    # the FAA's curl example: /nmsapi/v1/notams?lastUpdatedDate=2025-07-01T10:00:00Z
+    assert query.url.path == "/nmsapi/v1/notams" and dict(query.url.params) == {"lastUpdatedDate": "2025-07-01T10:00:00Z"}
+    assert query.headers["nmsresponseformat"] == "GEOJSON"
+
+
+def test_an_answer_that_is_not_notams_is_never_read_as_no_notams(monkeypatch):
+    set_nms_keys(monkeypatch)
+    answers = faa_answers()
+    # the FAA's initial-load answer is a link to a file: a set sent that way is not empty
+    source, clock = faa_client(faa_stand_in([], answer=lambda request: httpx.Response(200, json=answers["initial_load"])))
+    with pytest.raises(RuntimeError, match="file link"):
+        asyncio.run(source.changes(clock() - 60))
+    source, _clock = faa_client(faa_stand_in([], answer=lambda request: httpx.Response(200, text="<html>maintenance</html>")))
+    with pytest.raises(RuntimeError, match="not the expected JSON"):
+        asyncio.run(source.baseline("KSEA", "KSEA"))
+    # an answer with an empty list is no NOTAMs
+    source, _clock = faa_client(faa_stand_in([]))
+    assert asyncio.run(source.baseline("KSEA", "KSEA")) == []
+
+
+@pytest.mark.parametrize("body, error", [
+    ({"status": "Failure", "errors": [FAA_INTERNAL_ERROR]}, "reported a failure: 1 Encountered unexpected query parameter format"),
+    ({"status": "Failure"}, "reported a failure"),
+    ({"status": "Failure", "data": {"geojson": []}}, "reported a failure"),
+    ({"status": "Success", "errors": [FAA_INTERNAL_ERROR], "data": {"geojson": ["one"]}}, "reported a failure: 1 "),
+    ({"data": {"geojson": ["one"]}}, "reported a failure"),                         # states no status at all
+    ({"status": "Success"}, "not the expected JSON"),                               # states success and carries no data
+    ({"status": "Success", "data": {"aixm": ["<AIXMBasicMessage />"]}}, "AIXM instead of GeoJSON"),
+    ({"status": "Success", "data": {"geojson": {"type": "FeatureCollection", "features": []}}}, "not the expected JSON"),
+    (["one"], "not the expected JSON"),
+])
+def test_an_answer_that_states_a_failure_or_is_not_geojson_is_an_error_never_no_notams(monkeypatch, body, error):
+    set_nms_keys(monkeypatch)
+    if isinstance(body, dict) and (body.get("data") or {}).get("geojson") == ["one"]:
+        body = {**body, "data": {"geojson": [feature("1")]}}
+    for ask in (lambda s, c: s.baseline("KSEA", "KSEA"), lambda s, c: s.changes(c() - 60)):
+        handler = faa_stand_in([], answer=lambda request: httpx.Response(200, json=body))
+        source, clock = faa_client(handler)
+        with pytest.raises(RuntimeError, match=re.escape(error)):
+            asyncio.run(ask(source, clock))
+        assert handler.violations == []
+        assert source.gate.limited is False                  # an answered pull, not a rate limit
+
+
+@pytest.mark.parametrize("body, count", [
+    ({"status": "Success", "data": {"geojson": ["one", "two"]}}, 2),
+    ({"status": "success", "errors": [], "data": {"geojson": ["one"]}}, 1),
+    ({"status": "Success", "data": {"geojson": []}}, 0),
+    ({"status": "Success", "data": {}}, 0),
+])
+def test_an_answer_that_states_success_is_read_as_the_notams_it_carries(monkeypatch, body, count):
+    set_nms_keys(monkeypatch)
+    features = [feature(str(n)) for n, _ in enumerate((body["data"].get("geojson") or []))]
+    body = {**body, "data": {"geojson": features} if "geojson" in body["data"] else {}}
+    source, _clock = faa_client(faa_stand_in([], answer=lambda request: httpx.Response(200, json=body)))
+    assert asyncio.run(source.baseline("KSEA", "KSEA")) == features and len(features) == count
+
+
+def test_the_api_is_given_longer_than_it_takes_to_answer_408_and_that_answer_is_an_error(monkeypatch):
+    set_nms_keys(monkeypatch)
+    seen = []
+    timeout = {"timestamp": "2025-04-08T12:00:00Z", "status": "408", "message": "Request Timeout"}
+    source, clock = faa_client(faa_stand_in(seen, answer=lambda request: httpx.Response(408, json=timeout)))
+
+    async def run():
+        with pytest.raises(RuntimeError, match="HTTP 408"):
+            await source.baseline("KSEA", "KSEA")
+        with pytest.raises(RuntimeError, match="HTTP 408"):
+            await source.changes(clock() - 60)
+
+    asyncio.run(run())
+    assert [kind for _t, kind, _r in seen] == ["token", "data", "data"]
+    for _t, _kind, request in seen:
+        assert all(v > FAA_PROCESSING_LIMIT_S for v in request.extensions["timeout"].values())
+    assert notams.REQUEST_TIMEOUT_S > FAA_PROCESSING_LIMIT_S
+    assert source.gate.limited is False and source.gate.wait_s() <= FAA_PULL_INTERVAL_S   # a slow answer is no rate limit
+
+
+@pytest.mark.parametrize("back, sent", [
+    (0, True), (60, True), (23 * H, True), (FAA_CHANGES_WINDOW_S - 120, True),
+    (FAA_CHANGES_WINDOW_S - 30, False),                    # would cross the edge on its way
+    (FAA_CHANGES_WINDOW_S + 1, False), (7 * 24 * H, False),
+    (-30, False),                                          # after the present
+])
+def test_changes_are_asked_only_inside_the_window_the_api_takes(monkeypatch, back, sent):
+    set_nms_keys(monkeypatch)
+    seen = []
+    clock = FakeClock(start=1_800_000_000.0)
+    handler = faa_stand_in(seen, clock_of=clock)
+    source, _ = faa_client(handler, clock=clock)
+    if sent:
+        assert asyncio.run(source.changes(clock() - back)) == []
+        assert [kind for _t, kind, _r in seen] == ["token", "data"]
+    else:
+        with pytest.raises(ValueError, match="last 24 hours"):
+            asyncio.run(source.changes(clock() - back))
+        assert [kind for _t, kind, _r in seen] == ["token"]                     # nothing was asked of the data API
+        assert source.usage.summary(clock(), window_s=None)["pulls"] == 0 and source.gate.wait_s() == 0   # nor a turn taken
+    assert handler.violations == []
+
+
+def test_the_window_is_judged_when_the_pulls_turn_comes_not_when_it_was_asked_for(monkeypatch):
+    set_nms_keys(monkeypatch)
+    seen = []
+    clock = FakeClock(start=1_800_000_000.0)
+    handler = faa_stand_in(seen, clock_of=clock)
+    source, _ = faa_client(handler, clock=clock)
+
+    async def run():
+        await source.baseline("KSEA", "KSEA")                       # takes the turn: the next one is three minutes away
+        since = clock() - (FAA_CHANGES_WINDOW_S - 150)              # inside the window now, outside it by then
+        with pytest.raises(ValueError, match="last 24 hours"):
+            await source.changes(since)
+
+    asyncio.run(run())
+    assert [kind for _t, kind, _r in seen] == ["token", "data"] and handler.violations == []
+
+
+def test_the_request_id_the_api_gives_is_kept_in_the_usage_record(monkeypatch):
+    set_nms_keys(monkeypatch)
+    answers = iter([
+        httpx.Response(200, headers={"x-request-id": FAA_REQUEST_ID}, json={"status": "Success", "data": {"geojson": []}}),
+        httpx.Response(500, headers={"x-request-id": FAA_REQUEST_ID.replace("a1", "ff")},
+                       json={"timestamp": "2025-04-08T12:00:00Z", "status": "500", "message": "Internal Server Error"}),
+        httpx.Response(200, json={"status": "Success", "data": {"geojson": []}}),
+    ])
+    source, clock = faa_client(faa_stand_in([], answer=lambda request: next(answers)))
+
+    async def run():
+        await source.baseline("KSEA", "KSEA")
+        with pytest.raises(RuntimeError, match="HTTP 500"):
+            await source.changes(clock() - 60)
+        await source.changes(clock() - 60)
+
+    asyncio.run(run())
+    token, served, refused, bare = source.usage.rows
+    assert served["rid"] == FAA_REQUEST_ID and refused["rid"] == FAA_REQUEST_ID.replace("a1", "ff")
+    assert "rid" not in token and "rid" not in bare                 # nothing is made up where the API gave none
+    with open(source.usage.path) as fh:
+        assert [json.loads(line).get("rid") for line in fh] == [None, served["rid"], refused["rid"], None]
+
+
+@pytest.mark.parametrize("change, fault", [
+    (lambda r: r, None),
+    (lambda r: httpx.Request("GET", r.url.copy_remove_param("location"), headers=r.headers), "no query parameter"),
+    (lambda r: httpx.Request("GET", r.url.copy_set_param("location", "KSEAX"), headers=r.headers), "location"),
+    (lambda r: httpx.Request("GET", r.url.copy_set_param("location", "K S"), headers=r.headers), "location"),
+    (lambda r: httpx.Request("GET", r.url.copy_set_param("icaoLocation", "KSEA"), headers=r.headers), "parameter icaoLocation"),
+    (lambda r: httpx.Request("GET", r.url, headers={"authorization": r.headers["authorization"]}), "nmsResponseFormat"),
+    (lambda r: httpx.Request("GET", r.url, headers={"nmsResponseFormat": "GEOJSON"}), "no bearer token"),
+    (lambda r: httpx.Request("POST", r.url, headers=r.headers), "POST /nmsapi/v1/notams"),
+    (lambda r: httpx.Request("GET", r.url.copy_set_param("lastUpdatedDate", "2027-01-15T08:00:00.000Z"), headers=r.headers),
+     "lastUpdatedDate format"),
+    (lambda r: httpx.Request("GET", r.url.copy_set_param("lastUpdatedDate", "2027-01-14T07:59:59Z"), headers=r.headers),
+     "lastUpdatedDate outside the last 24 hours"),
+    (lambda r: httpx.Request("GET", r.url.copy_set_param("lastUpdatedDate", "2027-01-15T08:00:01Z"), headers=r.headers),
+     "lastUpdatedDate outside the last 24 hours"),
+    (lambda r: httpx.Request("GET", r.url.copy_set_param("lastUpdatedDate", "2027-01-14T08:00:00Z"), headers=r.headers), None),
+])
+def test_the_stand_in_refuses_what_the_specification_does_not_allow(change, fault):
+    now = datetime(2027, 1, 15, 8, 0, 0, tzinfo=timezone.utc).timestamp()
+    good = httpx.Request("GET", "https://api-nms.aim.faa.gov/nmsapi/v1/notams", params={"location": "KSEA"},
+                         headers={"authorization": "Bearer tok1", "nmsResponseFormat": "GEOJSON"})
+    assert faa_request_faults(change(good), now) == ([fault] if fault else [])
+
+
+def test_data_pulls_are_never_closer_than_the_faa_allows_and_requests_never_closer_than_a_second(monkeypatch):
+    set_nms_keys(monkeypatch)
+    seen = []
+    clock = FakeClock()
+    source, _ = faa_client(faa_stand_in(seen, clock_of=clock), clock=clock)
+
+    async def run():
+        for n in range(40):     # two hours of pulls, asked for as fast as the caller can
+            await (source.changes(clock()) if n % 3 else source.baseline("KSEA", "KSEA"))
+
+    asyncio.run(run())
+    pulls = [t for t, kind, _r in seen if kind == "data"]
+    assert len(pulls) == 40
+    assert min(b - a for a, b in zip(pulls, pulls[1:])) >= FAA_PULL_INTERVAL_S
+    assert max(b - a for a, b in zip(pulls, pulls[1:])) <= FAA_PULL_INTERVAL_S + 2 * FAA_REQUEST_SPACING_S   # and no slower than needed
+    times = [t for t, _k, _r in seen]
+    assert min(b - a for a, b in zip(times, times[1:])) >= FAA_REQUEST_SPACING_S
+    rows = [r for r in source.usage.rows if r["kind"] in ("baseline", "delta")]
+    assert [r["gap"] for r in rows][0] is None and min(r["gap"] for r in rows[1:]) >= FAA_PULL_INTERVAL_S
+
+
+def test_the_faa_token_answer_is_read_as_printed_and_renewed_before_it_expires(monkeypatch):
+    set_nms_keys(monkeypatch)
+    seen = []
+    clock = FakeClock()
+    handler = faa_stand_in(seen, clock_of=clock)
+    source, _ = faa_client(handler, clock=clock)
+    assert faa_answers()["token_answer"]["expires_in"] == str(FAA_TOKEN_LIFETIME_S)   # a string, as the FAA sends it
+
+    async def run():
+        for _ in range(80):     # four hours
+            await source.changes(clock())
+
+    asyncio.run(run())
+    issued = handler.issued
+    for t, kind, request in seen:
+        if kind == "data":
+            n = int(request.headers["authorization"].removeprefix("Bearer tok"))
+            assert t - issued[n - 1] < FAA_TOKEN_LIFETIME_S        # never sent with an expired token
+    # and no token is thrown away early: each serves until the last pull it is still good for
+    assert len(issued) > 5 and min(b - a for a, b in zip(issued, issued[1:])) > FAA_TOKEN_LIFETIME_S - 60 - FAA_PULL_INTERVAL_S
+    assert source.usage.summary(clock() + 1, window_s=None)["status_401"] == 0
+
+
+def test_a_refused_token_is_renewed_once_and_the_pull_waits_for_its_next_turn(monkeypatch):
+    set_nms_keys(monkeypatch)
+    seen = []
+    clock = FakeClock()
+    expired = faa_answers()["token_expired"]    # the FAA's answer to an expired token
+    refuse = {"left": 1}
+
+    def answer(request):
+        if refuse["left"] and request.headers["authorization"] == "Bearer tok1":
+            refuse["left"] -= 1
+            return httpx.Response(401, json=expired)
+        return httpx.Response(200, json={"status": "Success", "data": {"geojson": [feature("1")]}})
+
+    source, _ = faa_client(faa_stand_in(seen, clock_of=clock, answer=answer), clock=clock)
+
+    async def run():
+        with pytest.raises(notams.TokenRefused):
+            await source.baseline("KSEA", "KSEA")
+        return await source.baseline("KSEA", "KSEA")
+
+    assert len(asyncio.run(run())) == 1
+    assert [(kind, r.headers.get("authorization", "")[:11]) for _t, kind, r in seen] == [
+        ("token", "Basic dGhlL"), ("data", "Bearer tok1"), ("token", "Basic dGhlL"), ("data", "Bearer tok2")]
+    data = [t for t, kind, _r in seen if kind == "data"]
+    assert data[1] - data[0] >= FAA_PULL_INTERVAL_S      # the refused pull is not repeated at once
+    assert [r["status"] for r in source.usage.rows] == [200, 401, 200, 200]
+
+
+def test_a_429_lengthens_the_wait_and_a_served_pull_restores_the_interval(monkeypatch):
+    set_nms_keys(monkeypatch)
+    seen = []
+    clock = FakeClock()
+    plan = [(429, "900"), (429, None), (429, None), (200, None), (200, None)]
+
+    def answer(request):
+        status, retry_after = plan.pop(0)
+        headers = {"Retry-After": retry_after} if retry_after else {}
+        return httpx.Response(status, headers=headers, json={"status": "Success", "data": {"geojson": []}})
+
+    source, _ = faa_client(faa_stand_in(seen, clock_of=clock, answer=answer), clock=clock)
+
+    async def run():
+        out = []
+        for _ in range(5):
+            try:
+                await source.changes(clock())
+                out.append("served")
+            except notams.RateLimited:
+                out.append("limited")
+            out.append(source.gate.limited)
+        return out
+
+    assert asyncio.run(run()) == ["limited", True, "limited", True, "limited", True, "served", False, "served", False]
+    data = [t for t, kind, _r in seen if kind == "data"]
+    gaps = [b - a for a, b in zip(data, data[1:])]
+    assert gaps[0] >= 900                              # never sooner than the FAA's Retry-After, here longer than the doubled wait
+    assert 4 * FAA_PULL_INTERVAL_S <= gaps[1] < 900    # without one, the wait doubles
+    assert gaps[2] >= 8 * FAA_PULL_INTERVAL_S          # and doubles again
+    assert FAA_PULL_INTERVAL_S <= gaps[3] <= FAA_PULL_INTERVAL_S + 2   # a served pull brings the usual interval back
+    assert source.usage.summary(clock() + 1, window_s=None)["status_429"] == 3
+
+
+def test_the_wait_after_429_is_bounded():
+    clock = FakeClock()
+    gate = notams.PullGate(clock=clock, wall=clock, sleep=clock.sleep)
+    waits = [gate.rate_limited() for _ in range(12)]
+    assert waits == sorted(waits) and waits[-1] == notams.BACKOFF_MAX_S and waits[0] == 2 * FAA_PULL_INTERVAL_S
+    # a Retry-After longer than the doubled wait is kept; a shorter one never shortens it
+    fresh = notams.PullGate(clock=clock, wall=clock, sleep=clock.sleep)
+    assert fresh.rate_limited(900) == 900 and fresh.rate_limited(5) == 900
+    other = notams.PullGate(clock=clock, wall=clock, sleep=clock.sleep)
+    assert other.rate_limited(5) == 2 * FAA_PULL_INTERVAL_S
+
+
+@pytest.mark.parametrize("elapsed, wait", [(0, 180), (50, 130), (179, 1), (180, 0), (5000, 0), (-30, 180)])
+def test_a_restart_never_shortens_the_interval_since_the_last_pull(elapsed, wait):
+    clock = FakeClock(start=50_000.0)
+    gate = notams.PullGate(last_pull_wall=clock() - elapsed, clock=clock, wall=clock, sleep=clock.sleep)
+    assert gate.wait_s() == wait     # a clock set back since the last pull (-30) waits a whole interval
+    if wait:
+        with pytest.raises(RuntimeError):
+            gate.mark_pull()
+    asyncio.run(gate.wait_turn())
+    # the interval the first pull after the restart reports: from the last pull, or the whole wait if the clock went back
+    assert gate.mark_pull() == pytest.approx(max(elapsed, 0) + wait if elapsed >= 0 else wait)
+
+
+def test_the_time_of_the_last_pull_survives_a_restart_in_the_usage_record(monkeypatch, tmp_path):
+    set_nms_keys(monkeypatch)
+    path = str(tmp_path / "nms-usage.jsonl")
+    clock = FakeClock(start=70_000.0)
+    usage = notams.UsageLog(path)
+    gate = notams.PullGate(usage.last_pull(), clock=clock, wall=clock, sleep=clock.sleep)
+    source = notams.NmsSource(httpx.AsyncClient(transport=httpx.MockTransport(faa_stand_in([]))), gate=gate, usage=usage)
+    asyncio.run(source.baseline("KSEA", "KSEA"))
+    pulled_at = clock()
+    asyncio.run(source.check_credentials())         # a token request after the pull is not a pull
+    clock.now += 40
+    again = notams.UsageLog(path)                   # the app starts again
+    assert again.last_pull() == pytest.approx(pulled_at, abs=1.5)
+    gate = notams.PullGate(again.last_pull(), clock=clock, wall=clock, sleep=clock.sleep)
+    assert gate.wait_s() == pytest.approx(140, abs=2.5)
+    lines = [json.loads(line) for line in open(path)]
+    assert [row["kind"] for row in lines] == ["token", "baseline", "token"]
+    assert lines[1] == {**lines[1], "env": "production", "status": 200, "what": "KSEA", "form": "KSEA", "gap": None}
+    # the first pull after the restart is recorded with its interval since the last one before it
+    source = notams.NmsSource(httpx.AsyncClient(transport=httpx.MockTransport(faa_stand_in([]))), gate=gate, usage=again)
+    asyncio.run(source.changes(clock() - 60))
+    after = json.loads(open(path).read().splitlines()[-1])
+    assert after["kind"] == "delta" and after["gap"] == pytest.approx(after["t"] - lines[1]["t"], abs=0.2) and after["gap"] >= 180
+    assert again.summary(clock(), window_s=None)["shortest_gap_s"] == after["gap"]
+    assert "the-secret" not in open(path).read() and "tok1" not in open(path).read()
+
+
+def test_the_usage_record_is_kept_bounded(tmp_path):
+    path = str(tmp_path / "nms-usage.jsonl")
+    usage = notams.UsageLog(path, keep=50)
+    for n in range(260):
+        usage.add({"t": float(n), "kind": "delta", "env": "staging", "status": 200, "bytes": 2, "gap": 180.0})
+    assert len(usage.rows) == 50 and usage.rows[-1]["t"] == 259.0
+    assert sum(1 for _ in open(path)) <= 100
+    again = notams.UsageLog(path, keep=50)
+    assert [r["t"] for r in again.rows][-1] == 259.0 and len(again.rows) == 50
+    summary = again.summary(259.0, window_s=None)
+    assert summary["pulls"] == 50 and summary["shortest_gap_s"] == 180.0 and summary["status_429"] == 0
 
 
 # ---- times and the window ------------------------------------------------------------------------
@@ -235,7 +658,12 @@ def test_the_faa_specification_example_parses_field_for_field():
     assert r["issued"] == r["updated"] == utc(2025, 3, 17, 17, 8)
     assert (r["start"], r["end"]) == (utc(2025, 3, 17, 17, 2), utc(2025, 9, 18, 21, 11))
     assert r["end_estimated"] is True and r["permanent"] is False and r["times_differ"] is False
-    assert r["schedule"] == "DLY 1200-1230"
+    assert r["schedule"] == "DAILY 0500-1900" and r["raw"] == "!CLT 01/123 SAMPLE NOTAM"
+    assert r["cancelled"] == utc(2025, 9, 18, 21, 11)
+    # the example as the specification's revision before gave it: other names for the messages, the schedule in two forms
+    older = notams.normalize(nms_samples()["spec_example_1_0_17"][0])
+    assert older["schedule"] == "DLY 1200-1230"
+    assert {k: v for k, v in older.items() if k != "schedule"} == {k: v for k, v in r.items() if k != "schedule"}
 
 
 def test_the_faa_sample_notams_parse_in_the_formats_the_api_really_uses():
@@ -1371,7 +1799,8 @@ def test_each_enabled_location_gets_a_view_after_the_other_views(client, monkeyp
     mine = [v for v in views if v["type"] == "notams"]
     assert [v["id"] for v in mine] == ["notams:KS50", "notams:ZSE"] and views[-2:] == mine
     assert mine[0] == {"id": "notams:KS50", "type": "notams", "label": "KS50 - NOTAMs", "dwell_s": 45,
-                       "location": "KS50", "name": "", "lookahead_h": 12}
+                       "location": "KS50", "name": "", "lookahead_h": 12,
+                       "source_label": "FAA NMS Processed with Stub 1B LLM", "test_environment": False}
     assert client.get("/api/notams", params={"location": "KSEA"}).status_code == 404
     assert client.get("/api/notams", params={"location": "KZZZ"}).status_code == 404
     body["notams"]["enabled"] = False
@@ -1386,7 +1815,8 @@ def test_each_enabled_location_gets_a_view_after_the_other_views(client, monkeyp
         (lambda n: n["locations"].append({"ident": "TOOLONG"}), ["notams", "locations", "1", "ident"]),
         (lambda n: n["locations"].append({"ident": "K S"}), ["notams", "locations", "1", "ident"]),
         (lambda n: n.update(lookahead_h=-1), ["notams", "lookahead_h"]),
-        (lambda n: n.update(refresh_s=30), ["notams", "refresh_s"]),
+        (lambda n: n.update(refresh_s=4000), ["notams", "refresh_s"]),
+        (lambda n: n.update(environment="sandbox"), ["notams", "environment"]),
         (lambda n: n.update(source="scraper"), ["notams", "source"]),
     ],
 )
@@ -1398,25 +1828,40 @@ def test_bad_notam_settings_are_rejected(client, mutate, loc):
     assert loc in [e["loc"][: len(loc)] for e in r.json()["detail"]], r.json()
 
 
-def test_checking_a_location_needs_the_admin_password_and_saves_nothing(client):
+def test_checking_sample_data_needs_credentials_and_saves_nothing(client):
     assert put(client, base_cfg()).status_code == 200
     assert client.post("/api/notams/check", json={"ident": "KS50", "source": "sample"}).status_code == 401
     r = client.post("/api/notams/check", json={"ident": "ks50", "source": "sample"}, auth=AUTH).json()
     assert r["ok"] is True and r["asked_as"] == ["KS50", "S50"] and r["total"] >= 12 and 0 < r["shown"] < r["total"]
-    r = client.post("/api/notams/check", json={"ident": "KS50", "source": "faa"}, auth=AUTH).json()
-    assert r["ok"] is False and "HANGAR_NMS_CLIENT_ID" in r["error"]
     assert client.get("/api/notams", params={"location": "KS50"}).status_code == 404
 
 
+def test_checking_a_faa_location_queues_it_for_the_next_turn_and_never_asks_at_once(client, monkeypatch):
+    stub = stub_faa(monkeypatch, {"KS50": [feature("1")]})
+    assert put(client, base_cfg()).status_code == 200
+    r = client.post("/api/notams/check", json={"ident": "KS50", "source": "faa"}, auth=AUTH).json()
+    assert r["ok"] is False and "save this location" in r["error"] and stub.calls == []   # not monitored: nothing is asked
+    assert put(client, notams_cfg()).status_code == 200
+    assert wait_until(lambda: shown(client)["count"] == 1, 3)
+    before = stub.calls.count("KS50")
+    stub.by_ident["KS50"] = [feature("1"), feature("2")]
+    r = client.post("/api/notams/check", json={"ident": "KS50", "source": "faa"}, auth=AUTH).json()
+    assert r["ok"] is True and r["queued"] is True and r["wait_s"] == 0
+    assert wait_until(lambda: stub.calls.count("KS50") > before and shown(client)["count"] == 2, 3)
+    detail = client.get("/api/status").json()["notams"]["detail"]
+    assert [d["ident"] for d in detail] == ["KS50"] and detail[0]["count"] == 2 and detail[0]["requested"] is False
+
+
 def test_status_reports_notam_state_and_never_the_credentials(client, monkeypatch):
-    monkeypatch.setenv("HANGAR_NMS_CLIENT_ID", "the-id")
-    monkeypatch.setenv("HANGAR_NMS_CLIENT_SECRET", "the-secret")
-    stub_faa(monkeypatch, {"KS50": RuntimeError("FAA NMS rejected the credentials (HTTP 401)")})
+    set_nms_keys(monkeypatch)
+    stub_faa(monkeypatch, {"KS50": RuntimeError("FAA NMS answered HTTP 503 for KS50")})
     assert put(client, notams_cfg()).status_code == 200
     assert wait_until(lambda: client.get("/api/status").json()["notams"]["error"], 3)
     status = client.get("/api/status")
     block = status.json()["notams"]
-    assert block["enabled"] is True and block["source"] == "faa" and block["credentials"] is True and block["locations"] == 1
+    assert block["enabled"] is True and block["source"] == "faa" and block["locations"] == 1
+    assert block["environment"] == "production" and block["test_environment"] is False and block["blocked"] is None
+    assert block["source_label"] == "FAA NMS Processed with Stub 1B LLM"
     assert "the-secret" not in status.text and "the-id" not in status.text
     assert "the-secret" not in client.get("/api/config").text
 
@@ -1424,10 +1869,10 @@ def test_status_reports_notam_state_and_never_the_credentials(client, monkeypatc
 # ---- speed and reliability -------------------------------------------------------------------------
 
 def test_the_notam_view_never_waits_on_the_faa(client, monkeypatch):
-    async def hung(ident):
+    async def hung():
         await asyncio.sleep(30)
 
-    monkeypatch.setattr(main_mod.manager.nms, "fetch", hung)
+    stub_faa(monkeypatch, {"KPWT": hung})
     assert put(client, notams_cfg(("KPWT",))).status_code == 200   # a location no other test has fetched
     t0 = time.time()
     r = shown(client, "KPWT")
@@ -1445,7 +1890,7 @@ def state_changes(caplog):
 
 def test_the_last_notams_survive_an_outage_which_is_logged_once(client, monkeypatch, caplog):
     answers = {"KS50": [feature("1")]}
-    calls = stub_faa(monkeypatch, answers)
+    calls = stub_faa(monkeypatch, answers).calls
     caplog.set_level(logging.INFO, logger="hangar")
     assert put(client, notams_cfg()).status_code == 200
     assert wait_until(lambda: shown(client)["count"] == 1, 3)
@@ -1465,7 +1910,7 @@ def test_the_last_notams_survive_an_outage_which_is_logged_once(client, monkeypa
 
 
 def test_one_failing_location_does_not_hide_the_others(client, monkeypatch):
-    stub_faa(monkeypatch, {"KS50": [feature("1")], "KBFI": RuntimeError("FAA NMS does not know location KBFI or BFI")})
+    stub_faa(monkeypatch, {"KS50": [feature("1")], "KBFI": None})   # the API knows KBFI under no spelling
     assert put(client, notams_cfg(("KBFI", "KS50"))).status_code == 200
     assert wait_until(lambda: shown(client)["count"] == 1, 3)
     bad = shown(client, "KBFI")
@@ -1497,3 +1942,5 @@ def test_the_notam_cache_is_restored_as_faa_data(tmp_path, monkeypatch):
     assert list(fresh._notam_cache) == ["KS50"] and fresh._notam_ts == NOW
     entry = fresh._notam_cache["KS50"]
     assert entry["source"] == "faa" and entry["error"] is None and entry["records"][0]["type"] == "RWY"
+    # a cache written before environments existed is production data, complete through its fetch time
+    assert entry["environment"] == "production" and entry["synced"] == NOW
