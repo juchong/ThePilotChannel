@@ -1,8 +1,9 @@
 """METARs for airports aviationweather.gov does not serve: the raw-report decoder, the
 flight category under missing elements (of a gateway report and of an
-aviationweather.gov record), the NWS gateway source, and the fallback in the weather
-refresh. Reports are real ones; the decoded values in data/metar_reports.json are
-aviationweather.gov's own (backend/tools/check_metar_decode.py --fixture)."""
+aviationweather.gov record), the ceiling the display shows from either source, the
+NWS gateway source, and the fallback in the weather refresh. Reports are real ones;
+the decoded values in data/metar_reports.json are aviationweather.gov's own
+(backend/tools/check_metar_decode.py --fixture)."""
 import asyncio
 import itertools
 import json
@@ -13,6 +14,7 @@ import time
 import pytest
 from support import base_cfg, put, wait_until
 
+from app import conditions
 from app import main as main_mod
 from app import nws_gateway as gw
 from app.metar_decode import UNLIMITED_FT, UNLIMITED_SM, decode, observed_at
@@ -267,6 +269,58 @@ def test_ceiling_is_shown_only_when_the_report_settles_it():
     for body, ceiling in (("FEW025 BKN///", None), ("BKN012 //////TCU", None), ("FEW020 SCT180", None), ("BKN030 OVC050", 3000)):
         rec, obs = gw.parse_station_file(f"2026/11/13 22:00\nRJBE 132200Z 06007KT 9999 {body} 15/12 Q1020\n", "RJBE")
         assert gw.to_metar(rec, obs, "", 0.0, 0.0, 4500)["ceiling_ft"] == ceiling, body
+
+
+# ---- the ceiling the display shows ----------------------------------------------------------
+
+LAYERS = {
+    "KMWN": [{"cover": "SCT", "base": 1000}, {"cover": "BKN", "base": 3000}, {"cover": "OVC", "base": 5000}],
+    "KBFI": [{"cover": "SCT", "base": 900}, {"cover": "BKN", "base": 1500}, {"cover": "OVC", "base": 2500}],
+}
+
+
+@pytest.mark.parametrize("raw,clouds,ceiling", [
+    ("BGBW 122150Z AUTO 13001KT 0350NDV FG VV002/// 01/01 Q1011", None, 200),          # the record leaves the group out
+    ("LFBA 132230Z AUTO 13004KT 0550 FG VV/// 04/04 Q1013", [], None),                  # obscured, height unknown
+    ("KMWN 131153Z 01019KT 100SM BKN/// SCT010 BKN030 OVC050 M07/M16", LAYERS["KMWN"], None),   # a lower ceiling, no height
+    ("KBFI 132253Z 16007KT 10SM SCT009 BKN015 OVC025 08/06 A3012", LAYERS["KBFI"], 1500),
+    ("KBFI 132253Z 16007KT 10SM CLR 08/06 A3012", [], None),
+])
+def test_an_aviationweather_record_takes_its_ceiling_from_the_report(raw, clouds, ceiling):
+    record = {"icaoId": raw[:4], "rawOb": raw}
+    if clouds is not None:
+        record["clouds"] = clouds
+    assert normalize_metar(record, 4500)["ceiling_ft"] == ceiling
+
+
+def test_a_record_without_its_report_takes_the_ceiling_from_its_clouds():
+    layers = [{"cover": "SCT", "base": 300}, {"cover": "OVC", "base": 800}]
+    assert normalize_metar({"icaoId": "KSEA", "clouds": layers}, 4500)["ceiling_ft"] == 800
+    assert normalize_metar({"icaoId": "KSEA", "clouds": []}, 4500)["ceiling_ft"] is None
+    assert normalize_metar({"icaoId": "KSEA"}, 4500)["ceiling_ft"] is None
+
+
+def test_every_real_report_shows_one_ceiling_from_either_source_and_in_the_readout():
+    shown = set()
+    for case in CASES:
+        awc = normalize_metar(dict(case["record"], rawOb=case["raw"]), 4500)
+        ours = gw.to_metar(decode(case["raw"]), 0.0, "", 0.0, 0.0, 4500)
+        assert awc["ceiling_ft"] == ours["ceiling_ft"] == conditions.readout(awc, "", 0, 4500)["ceiling_ft"], case["raw"]
+        shown.add(awc["ceiling_ft"] is None)
+    assert shown == {True, False}
+
+
+def test_the_display_ceiling_is_aviationweathers_wherever_its_record_holds_every_cloud_group():
+    checked = 0
+    for case in CASES:
+        body = case["raw"].split(" RMK")[0].split()
+        if "clouds" not in case["compare"] or any("/" in t for t in body if t[:3] in ("FEW", "SCT", "BKN", "OVC", "///") or t[:2] == "VV"):
+            continue
+        layers = case["record"].get("clouds") or []
+        expected = min((c["base"] for c in layers if c["cover"] in ("BKN", "OVC", "OVX")), default=None)
+        assert normalize_metar(dict(case["record"], rawOb=case["raw"]), 4500)["ceiling_ft"] == expected, case["raw"]
+        checked += 1
+    assert checked >= 100
 
 
 # ---- the gateway source -------------------------------------------------------------------

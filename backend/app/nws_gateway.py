@@ -18,7 +18,7 @@ from typing import Dict, List, Optional, Tuple
 
 import httpx
 
-from .metar_decode import UNLIMITED_FT, decode, observed_at
+from .metar_decode import decode, observed_at
 from .weather import CATEGORY_COLORS, RETRY_DELAY_S, TRANSIENT, category_in_range, normalize_metar
 
 STATION_URL = "https://tgftp.nws.noaa.gov/data/observations/metar/stations/{icao}.TXT"
@@ -50,10 +50,8 @@ def parse_station_file(text: str, icao: str) -> Optional[Tuple[Dict, float]]:
 def to_metar(rec: Dict, obs_time: float, name: str, lat: float, lon: float, stale_after_s: int) -> Dict:
     """The display's METAR record for a decoded gateway report of a configured airport."""
     m = normalize_metar(dict(rec, obsTime=obs_time, name=name, lat=lat, lon=lon), stale_after_s)
-    low, high = rec["ceiling_range"]
     category = category_in_range(rec["ceiling_range"], rec["visibility_range"])
     m.update(
-        ceiling_ft=low if low == high and low < UNLIMITED_FT else None,
         category=category,
         category_color=CATEGORY_COLORS.get(category),
         source=SOURCE,

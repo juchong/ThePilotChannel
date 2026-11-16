@@ -334,14 +334,19 @@ data/   (ignored) written by the app: config.yaml and its backups, secrets.json,
   condition (no `clouds`; an empty list is a clear sky) or the visibility is missing, and
   then gets its category by the same rule over `weather.reported_ranges`: one value for
   an element the record carries, the whole scale for one it lacks.
-- `GET /api/conditions` (`conditions.py`) reads the weather cache only, never an
-  upstream, and gives every enabled airport every field, `null` where the report gives no
-  value. The ceiling comes from the report text through `metar_decode` (a settled
-  `ceiling_range` is a height or none, else unknown): aviationweather.gov's `clouds` drop
-  a group whose amount or height is slashed (`VV///`, `VV002///`, `BKN///`). Relative
-  humidity is the Magnus formula with Alduchov and Eskridge's coefficients, which
-  reproduces what api.weather.gov publishes (`tests/data/nws_observations.json`); the
-  altimeter is hPa times the NWS's 0.02953, as the display shows it.
+- A record's ceiling, from either source, is read from the report text
+  (`weather.text_ceiling` over the decoder's `ceiling_range`): a settled range is a
+  height or no ceiling, an open one gives none. aviationweather.gov's `clouds` drop a
+  group whose amount or height is slashed (`VV///` reads as a clear sky, `VV002///` loses
+  its 200 ft, `BKN///` leaves the next layer as the ceiling). Only a record without
+  readable text takes its ceiling from `clouds`.
+- `GET /api/conditions` (`conditions.py`) reads the weather cache only, never an upstream,
+  and gives every enabled airport every field, `null` where the report gives no value. Its
+  ceiling is the record's, read the same way, and `ceiling_known` says whether the range
+  was settled. Relative humidity is the Magnus formula with Alduchov and Eskridge's
+  coefficients, which reproduces what api.weather.gov publishes
+  (`tests/data/nws_observations.json`); the altimeter is hPa times the NWS's 0.02953, as
+  the display shows it.
 - Satellite frame URLs come from parsing the NOAA STAR CDN directory listing
   (`satellite.py`), cached for 240 s per parameter set. Query parameters are validated
   before they reach a URL.

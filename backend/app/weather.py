@@ -3,7 +3,7 @@
 Fetches batched METARs, trusts the API's fltCat when present, and produces a
 decoded summary plus the data the wind barb needs. A record without fltCat lacks
 the sky condition or the visibility: its category per FAA AIM 7-1-7 is given
-only when what it carries settles it.
+only when what it carries settles it. The ceiling is read from the report's text.
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from typing import Dict, List, Optional, Tuple
 
 import httpx
 
-from .metar_decode import UNLIMITED_FT, UNLIMITED_SM
+from .metar_decode import UNLIMITED_FT, UNLIMITED_SM, decode
 
 API_URL = "https://aviationweather.gov/api/data/metar"
 
@@ -93,9 +93,27 @@ def reported_ranges(raw: Dict) -> Tuple[Tuple[int, int], Tuple[float, float]]:
     return ceiling, ((vis, vis) if vis is not None else (0.0, UNLIMITED_SM))
 
 
+def settled_ceiling(ceiling_range: Tuple[int, int]) -> Tuple[Optional[int], bool]:
+    """The ceiling in feet from the range it can lie in (None for no ceiling and for one
+    the range leaves open), and whether the range settles it."""
+    low, high = ceiling_range
+    return (low if low == high and low < UNLIMITED_FT else None), low == high
+
+
+def text_ceiling(text: Optional[str]) -> Optional[Tuple[Optional[int], bool]]:
+    """The ceiling read from a report's text, as `settled_ceiling` gives it; None when
+    the text is not a METAR. aviationweather.gov's `clouds` leave out a group whose
+    amount or height is slashed (VV002///, VV///, BKN///), so the text decides."""
+    decoded = decode(text) if text else None
+    return settled_ceiling(decoded["ceiling_range"]) if decoded else None
+
+
 def normalize_metar(raw: Dict, stale_after_s: int) -> Dict:
     clouds = raw.get("clouds") or []
-    ceiling = _ceiling_ft(clouds)
+    if "ceiling_range" in raw:   # a report decoded already (the NWS gateway)
+        ceiling, _ = settled_ceiling(raw["ceiling_range"])
+    else:
+        ceiling, _ = text_ceiling(raw.get("rawOb")) or settled_ceiling(reported_ranges(raw)[0])
     vis = _visibility_sm(raw.get("visib"))
 
     category = raw.get("fltCat") or category_in_range(*reported_ranges(raw))

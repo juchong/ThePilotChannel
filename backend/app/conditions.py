@@ -7,7 +7,7 @@ from __future__ import annotations
 import math
 from typing import Dict, Optional, Tuple
 
-from .metar_decode import UNLIMITED_FT, decode
+from .weather import text_ceiling
 
 UNKNOWN = "UNKNOWN"   # the category of a report that does not settle one, as the display labels it
 INHG_PER_HPA = 0.02953   # the National Weather Service's pressure conversion, as the display shows it
@@ -26,14 +26,10 @@ def relative_humidity(temp_c: Optional[float], dewpoint_c: Optional[float]) -> O
 
 def ceiling(metar: Dict) -> Tuple[Optional[int], bool]:
     """The ceiling in feet (None when there is none) and whether the report settles
-    it, from the report's text: aviationweather.gov's `clouds` leave out a group whose
-    amount or height is slashed (VV002///, VV///, BKN///). Without the text only a
+    it, read from the report's text as the display reads it; without the text only a
     stated height counts as known."""
-    decoded = decode(metar["raw"]) if metar.get("raw") else None
-    if decoded is None:
-        return metar.get("ceiling_ft"), metar.get("ceiling_ft") is not None
-    low, high = decoded["ceiling_range"]
-    return (low if low == high and low < UNLIMITED_FT else None), low == high
+    found = text_ceiling(metar.get("raw"))
+    return found if found else (metar.get("ceiling_ft"), metar.get("ceiling_ft") is not None)
 
 
 def _whole(value: Optional[float]) -> Optional[int]:
