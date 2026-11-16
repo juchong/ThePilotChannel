@@ -222,16 +222,6 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 .stale-badge { background: var(--warn); color: #0b0f14; padding: 2px 8px; border-radius: 5px;
   font-size: 11px; font-weight: 700; }
 
-/* Regional airport list */
-.ap-list { display: flex; flex-direction: column; gap: 6px; height: 100%; overflow: hidden; }
-.ap-list h3 { margin: 0 0 4px; font-size: 13px; color: var(--muted); letter-spacing: 1px; }
-.ap-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px;
-  background: var(--panel-2); border-radius: 6px; }
-.ap-row svg { width: 38px; height: 38px; flex: none; }
-.ap-row .icao { font-weight: 700; font-size: 16px; min-width: 56px; }
-.ap-row .cat { font-size: 12px; font-weight: 700; padding: 1px 7px; border-radius: 4px; color: #0b0f14; }
-.ap-row .wind { font-size: 12px; color: var(--muted); }
-
 /* Footer */
 #footer { display: flex; align-items: center; gap: 22px; padding: 0 18px;
   background: var(--panel); border-top: 1px solid #000; font-size: 13px; color: var(--muted); }

@@ -700,17 +700,10 @@ function renderAirportBarbs() {
 }
 
 // ---- side panel header (weather) --------------------------------------
+// A local view's airport report; every other view leaves the header empty.
 function renderSideHeader() {
-  const c = el("side-header");
-  if (!state.view) {
-    c.innerHTML = "";
-    return;
-  }
-  if (state.view.type === "local") {
-    c.innerHTML = renderLocal(state.view.airports[0]);
-  } else {
-    c.innerHTML = renderRegional(state.view.airports);
-  }
+  const v = state.view;
+  el("side-header").innerHTML = v && v.type === "local" ? renderLocal(v.airports[0]) : "";
 }
 
 function renderLocal(icao) {
@@ -743,26 +736,6 @@ function renderLocal(icao) {
       </div>
       <div class="raw">${esc(m.raw || "")}</div>
     </div>`;
-}
-
-function renderRegional(icaos) {
-  const rows = (icaos || [])
-    .map((icao) => {
-      const m = state.weather[icao.toUpperCase()];
-      if (!m) return `<div class="ap-row"><span class="icao">${esc(icao)}</span><span class="wind">no wx</span></div>`;
-      const barb = windBarbSVG({
-        speedKt: m.wind.speed_kt,
-        dirDeg: m.wind.dir,
-        variable: m.wind.variable,
-        calm: m.wind.calm,
-        color: m.category_color,
-        size: 38,
-      });
-      const cat = m.category ? categoryChip(m, "cat") : "";
-      return `<div class="ap-row">${barb}<span class="icao">${esc(m.icao)}</span>${cat}<span class="wind">${esc(windText(m.wind))}</span></div>`;
-    })
-    .join("");
-  return `<div class="ap-list"><h3>AIRPORTS IN REGION</h3>${rows || "<div class='wind'>none</div>"}</div>`;
 }
 
 // ---- chrome -----------------------------------------------------------
