@@ -964,7 +964,10 @@ class DataManager:
                     # too long ago for a pull of changes to tell
                     diff["unverified"] = sum(diff.pop(k) for k in UNSETTLED)
                 self._note_compare(ident, diff)
-            entry.update(done, records=records, unknown=False, unknown_forms=job["unknown"], diff=diff, unseen=unseen)
+            asked = set(job["unknown"]) | set(job["answered"])
+            # a spelling skipped this time because the API did not know it stays skipped
+            unknown_forms = [f for f in entry["unknown_forms"] if f not in asked] + job["unknown"]
+            entry.update(done, records=records, unknown=False, unknown_forms=unknown_forms, diff=diff, unseen=unseen)
         self._notam_state(None)
         self._notams_changed()
 

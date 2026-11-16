@@ -360,7 +360,9 @@ data/   (ignored) written by the app: config.yaml and its backups, secrets.json,
   turn until the API answers one: the API answers the domestic and the ICAO form of a
   location it knows with the same set, and a form it does not know with 400 ("Location is
   not valid"); a U.S. field without an ICAO code (S50) is spelled KS50 by a METAR-oriented
-  config. A spelling answered 400 or 404 is skipped next time unless the API knows none.
+  config. A spelling answered 400 or 404 is remembered (`unknown_forms`) and skipped at
+  every later whole fetch; a refresh on request asks every spelling again, and so does the
+  next fetch of a location the API knows under none.
 - Times are the API's, as epoch seconds, and the display renders every one in
   `display.timezone` with the zone's name for that date (`fmtTime()`: `08 NOV 2026 0700
   PST`). Nothing computes or rewrites an issue, update, start or end time. Clock times in a

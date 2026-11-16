@@ -330,12 +330,30 @@ def test_a_new_location_is_fetched_whole_before_changes_are_pulled_and_both_spel
     assert m._notam_cache["KS50"]["unknown_forms"] == ["KS50"] and m._notam_cache["KSEA"]["unknown_forms"] == []
     # from then on: one pull of changes per turn, for both locations together
     assert {r["kind"] for r in rows[4:]} == {"delta"} and len(rows) >= 8
-    # and a location's whole set fetched again is asked under the spelling the API knows only
+    # and a location's whole set fetched again, each time, is asked under the spelling the API knows only
     m._notam_cache["KS50"]["requested"] = m._notam_cache["KSEA"]["requested"] = False
-    m._notam_cache["KS50"]["ts"] -= notams.BASELINE_S
-    asyncio.run(run_feed(m, clock, faa, clock() + 0.2 * H))
-    again = [r.get("form") for r in list(m.nms.usage.rows)[len(rows):] if r["kind"] == "baseline"]
-    assert again == ["S50"]
+    for _ in range(3):
+        start = len(m.nms.usage.rows)
+        m._notam_cache["KS50"]["ts"] -= notams.BASELINE_S
+        asyncio.run(run_feed(m, clock, faa, clock() + 0.2 * H))
+        again = [r.get("form") for r in list(m.nms.usage.rows)[start:] if r["kind"] == "baseline"]
+        assert again == ["S50"] and m._notam_cache["KS50"]["unknown_forms"] == ["KS50"]
+    # a refresh asked for asks every spelling again, and one the API has come to know is no longer skipped
+    for known_as_ks50 in (False, True):
+        if known_as_ks50:
+            faa.facilities["S50"] = "KS50"
+            for n in faa.notams.values():
+                if n["location"] == "S50":
+                    n["icaoLocation"] = "KS50"
+        start = len(m.nms.usage.rows)
+        m._notam_cache["KS50"]["requested"] = True
+        asyncio.run(run_feed(m, clock, faa, clock() + 0.3 * H))
+        asked = [(r.get("form"), r["status"]) for r in list(m.nms.usage.rows)[start:] if r["kind"] == "baseline"]
+        if known_as_ks50:
+            assert asked == [("KS50", 200)] and m._notam_cache["KS50"]["unknown_forms"] == []
+        else:
+            assert asked == [("KS50", 400), ("S50", 200)] and m._notam_cache["KS50"]["unknown_forms"] == ["KS50"]
+        assert shown_ids(m, "KS50", clock()) == {a}
 
 
 def test_a_location_the_api_knows_under_no_spelling_is_reported_and_not_asked_every_turn(monkeypatch):
