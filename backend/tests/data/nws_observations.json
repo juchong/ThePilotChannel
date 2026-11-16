@@ -1,0 +1,278 @@
+{
+ "source": "api.weather.gov /stations/{station}/observations: temperature, dewpoint and relativeHumidity as the National Weather Service publishes them",
+ "observations": [
+  {
+   "station": "KMIA",
+   "time": "2026-11-16T06:10:00+00:00",
+   "temperature_c": 22,
+   "dewpoint_c": 13,
+   "relative_humidity": 56.659698507038
+  },
+  {
+   "station": "KMIA",
+   "time": "2026-11-16T05:53:00+00:00",
+   "temperature_c": 21.7,
+   "dewpoint_c": 13.3,
+   "relative_humidity": 58.847971651165
+  },
+  {
+   "station": "KMIA",
+   "time": "2026-11-16T05:25:00+00:00",
+   "temperature_c": 21,
+   "dewpoint_c": 13,
+   "relative_humidity": 60.236208780511
+  },
+  {
+   "station": "KPHX",
+   "time": "2026-11-16T06:10:00+00:00",
+   "temperature_c": 18,
+   "dewpoint_c": 10,
+   "relative_humidity": 59.52339300817
+  },
+  {
+   "station": "KPHX",
+   "time": "2026-11-16T06:05:00+00:00",
+   "temperature_c": 18,
+   "dewpoint_c": 9,
+   "relative_humidity": 55.656762504377
+  },
+  {
+   "station": "KPHX",
+   "time": "2026-11-16T05:25:00+00:00",
+   "temperature_c": 18,
+   "dewpoint_c": 11,
+   "relative_humidity": 63.624996508331
+  },
+  {
+   "station": "KDEN",
+   "time": "2026-11-16T06:40:00+00:00",
+   "temperature_c": 4,
+   "dewpoint_c": 1,
+   "relative_humidity": 80.802917043684
+  },
+  {
+   "station": "KDEN",
+   "time": "2026-11-16T06:00:00+00:00",
+   "temperature_c": 3,
+   "dewpoint_c": 1,
+   "relative_humidity": 86.702946851968
+  },
+  {
+   "station": "KDEN",
+   "time": "2026-11-16T05:25:00+00:00",
+   "temperature_c": 4,
+   "dewpoint_c": 0,
+   "relative_humidity": 75.172938060957
+  },
+  {
+   "station": "KORD",
+   "time": "2026-11-16T06:35:00+00:00",
+   "temperature_c": 2,
+   "dewpoint_c": -1,
+   "relative_humidity": 80.519354085991
+  },
+  {
+   "station": "KORD",
+   "time": "2026-11-16T05:51:00+00:00",
+   "temperature_c": 2.2,
+   "dewpoint_c": -0.6,
+   "relative_humidity": 81.731601290632
+  },
+  {
+   "station": "KORD",
+   "time": "2026-11-16T05:30:00+00:00",
+   "temperature_c": 3,
+   "dewpoint_c": -1,
+   "relative_humidity": 74.996958768522
+  },
+  {
+   "station": "PANC",
+   "time": "2026-11-16T06:05:00+00:00",
+   "temperature_c": -3,
+   "dewpoint_c": -4,
+   "relative_humidity": 92.806460468027
+  },
+  {
+   "station": "KLAS",
+   "time": "2026-11-16T06:10:00+00:00",
+   "temperature_c": 16,
+   "dewpoint_c": 4,
+   "relative_humidity": 44.78682951445
+  },
+  {
+   "station": "KMSY",
+   "time": "2026-11-16T06:10:00+00:00",
+   "temperature_c": 11,
+   "dewpoint_c": 6,
+   "relative_humidity": 71.281266407174
+  },
+  {
+   "station": "KMSY",
+   "time": "2026-11-16T06:00:00+00:00",
+   "temperature_c": 12,
+   "dewpoint_c": 6,
+   "relative_humidity": 66.720955975373
+  },
+  {
+   "station": "KMSY",
+   "time": "2026-11-16T05:53:00+00:00",
+   "temperature_c": 11.7,
+   "dewpoint_c": 5.6,
+   "relative_humidity": 66.196513833378
+  },
+  {
+   "station": "KMSY",
+   "time": "2026-11-16T05:25:00+00:00",
+   "temperature_c": 12,
+   "dewpoint_c": 7,
+   "relative_humidity": 71.472271072727
+  },
+  {
+   "station": "KMSY",
+   "time": "2026-11-16T05:20:00+00:00",
+   "temperature_c": 11,
+   "dewpoint_c": 7,
+   "relative_humidity": 76.357329126718
+  },
+  {
+   "station": "KBOS",
+   "time": "2026-11-16T06:10:00+00:00",
+   "temperature_c": 5,
+   "dewpoint_c": 0,
+   "relative_humidity": 70.097333034191
+  },
+  {
+   "station": "KBOS",
+   "time": "2026-11-16T06:00:00+00:00",
+   "temperature_c": 5,
+   "dewpoint_c": -1,
+   "relative_humidity": 65.174364282646
+  },
+  {
+   "station": "KBOS",
+   "time": "2026-11-16T05:54:00+00:00",
+   "temperature_c": 5,
+   "dewpoint_c": -0.6,
+   "relative_humidity": 67.105479906029
+  },
+  {
+   "station": "KSLC",
+   "time": "2026-11-16T06:40:00+00:00",
+   "temperature_c": 5,
+   "dewpoint_c": 3,
+   "relative_humidity": 86.902676258922
+  },
+  {
+   "station": "KSLC",
+   "time": "2026-11-16T06:10:00+00:00",
+   "temperature_c": 6,
+   "dewpoint_c": 3,
+   "relative_humidity": 81.080597043607
+  },
+  {
+   "station": "PHNL",
+   "time": "2026-11-15T22:53:00+00:00",
+   "temperature_c": 28.9,
+   "dewpoint_c": 19.4,
+   "relative_humidity": 56.541223193659
+  },
+  {
+   "station": "KDFW",
+   "time": "2026-11-16T06:10:00+00:00",
+   "temperature_c": 8,
+   "dewpoint_c": 5,
+   "relative_humidity": 81.352547127259
+  },
+  {
+   "station": "KDFW",
+   "time": "2026-11-16T06:00:00+00:00",
+   "temperature_c": 8,
+   "dewpoint_c": 4,
+   "relative_humidity": 75.859700794654
+  },
+  {
+   "station": "KDFW",
+   "time": "2026-11-16T05:53:00+00:00",
+   "temperature_c": 8.3,
+   "dewpoint_c": 5,
+   "relative_humidity": 79.712411892316
+  },
+  {
+   "station": "KABQ",
+   "time": "2026-11-16T04:52:00+00:00",
+   "temperature_c": 8.9,
+   "dewpoint_c": 3.3,
+   "relative_humidity": 67.942265381454
+  },
+  {
+   "station": "KABQ",
+   "time": "2026-11-16T02:52:00+00:00",
+   "temperature_c": 10.6,
+   "dewpoint_c": 3.9,
+   "relative_humidity": 63.240936158413
+  },
+  {
+   "station": "KABQ",
+   "time": "2026-11-16T01:52:00+00:00",
+   "temperature_c": 9.4,
+   "dewpoint_c": 4.4,
+   "relative_humidity": 70.971964459347
+  },
+  {
+   "station": "KABQ",
+   "time": "2026-11-16T00:52:00+00:00",
+   "temperature_c": 12.2,
+   "dewpoint_c": 3.3,
+   "relative_humidity": 54.534546384907
+  },
+  {
+   "station": "KABQ",
+   "time": "2026-11-15T23:52:00+00:00",
+   "temperature_c": 13.9,
+   "dewpoint_c": 1.7,
+   "relative_humidity": 43.558927133659
+  },
+  {
+   "station": "KABQ",
+   "time": "2026-11-15T22:52:00+00:00",
+   "temperature_c": 13.9,
+   "dewpoint_c": 2.8,
+   "relative_humidity": 47.107355067631
+  },
+  {
+   "station": "KTPA",
+   "time": "2026-11-16T06:10:00+00:00",
+   "temperature_c": 14,
+   "dewpoint_c": 11,
+   "relative_humidity": 82.135480367498
+  },
+  {
+   "station": "KTPA",
+   "time": "2026-11-16T05:53:00+00:00",
+   "temperature_c": 15,
+   "dewpoint_c": 11.1,
+   "relative_humidity": 77.511150721711
+  },
+  {
+   "station": "KTPA",
+   "time": "2026-11-16T05:45:00+00:00",
+   "temperature_c": 15,
+   "dewpoint_c": 11,
+   "relative_humidity": 76.998577407491
+  },
+  {
+   "station": "KMSP",
+   "time": "2026-11-16T06:10:00+00:00",
+   "temperature_c": 2,
+   "dewpoint_c": -3,
+   "relative_humidity": 69.480096758187
+  },
+  {
+   "station": "KMSP",
+   "time": "2026-11-16T05:53:00+00:00",
+   "temperature_c": 2.2,
+   "dewpoint_c": -2.8,
+   "relative_humidity": 69.521786837686
+  }
+ ]
+}

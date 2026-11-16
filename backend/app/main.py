@@ -200,6 +200,12 @@ async def get_weather(ids: str = Query("", max_length=400)):
     return {"metars": manager.get_weather(icaos or None)}
 
 
+@app.get("/api/conditions", dependencies=[Depends(control)])
+async def get_conditions():
+    """The weather at every monitored airport, for automations."""
+    return manager.get_conditions()
+
+
 @app.get("/api/weather/area")
 async def get_weather_area(
     lat: float = Query(..., ge=-90, le=90),

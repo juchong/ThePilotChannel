@@ -12,7 +12,7 @@ import pytest
 from support import AUTH, CONTROL, Bearer, base_cfg, sign_in
 from test_access import CONTROL_CLASS, OPEN, SESSION, ROUTES, app_routes, declared_class
 
-from app import apidoc
+from app import apidoc, conditions, nws_gateway
 from app import main as main_mod
 from app.access import LOCKED_DETAIL
 from app.config import Config
@@ -89,6 +89,24 @@ def test_it_documents_every_display_control_route_and_only_the_reads_a_client_ne
 def test_the_route_that_serves_it_is_for_a_signed_in_browser():
     assert ROUTES[("GET", "/api/docs/display")][0] == SESSION
     assert declared_class("GET", "/api/docs/display") == SESSION
+
+
+def test_the_weather_example_and_table_have_exactly_the_fields_of_the_answer_and_its_values(configured):
+    real = configured.get("/api/conditions", auth=CONTROL).json()
+    example = json_example("GET", "/api/conditions")
+    assert list(example) == list(real) == ["monitored", "airports"] and example["monitored"] == list(example["airports"])
+    fields = [list(a) for a in list(real["airports"].values()) + list(example["airports"].values())]
+    assert real["airports"] and all(f == fields[0] for f in fields)
+    assert table_fields(section("GET", "/api/conditions")) == {"monitored", "airports"} | set(fields[0])
+    # the example is what the display gives for its report, and for an airport without one
+    bfi = example["airports"]["KBFI"]
+    rec, obs = nws_gateway.parse_station_file(f"2026/11/16 05:53\n{bfi['raw']}\n", "KBFI")
+    assert obs == bfi["observed"]
+    record = nws_gateway.to_metar(rec, obs, "", 0.0, 0.0, 4500)
+    assert conditions.readout(record, bfi["name"], obs + bfi["age_s"], 4500) == bfi
+    assert conditions.readout(None, "Auburn", 0, 4500) == example["airports"]["KS50"]
+    r = configured.get("/api/conditions")
+    assert r.status_code == 401 and r.json()["detail"] == "sign in, or send an API key"
 
 
 def test_the_display_state_example_and_table_have_exactly_the_fields_of_the_answer(configured):

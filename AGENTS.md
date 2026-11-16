@@ -106,6 +106,7 @@ backend/app/
                    aviationweather.gov does not serve
   metar_decode.py  raw METAR text -> aviationweather.gov's decoded fields, plus the range
                    the ceiling and the visibility can lie in
+  conditions.py    GET /api/conditions: each monitored airport's weather for automations
   satellite.py     NOAA STAR CDN directory listing -> recent GOES frame URLs
   tiles.py         basemap tile cache/proxy and per-view warm-up (tile math mirrors
                    the display's fitBounds framing)
@@ -132,10 +133,11 @@ backend/tools/
 backend/tests/    support.py (env, API keys, stand-ins, wait_until), conftest.py (client
                   fixture, store restored after each test), test_api.py, test_access.py,
                   test_apidoc.py, test_secrets.py, test_behaviour.py, test_cameras.py,
-                  test_metar_gateway.py, test_notams.py, test_notam_feed.py,
-                  test_notam_translate.py, notam_cases.py (wrong answers built from FAA
-                  records), data/ (FAA example NOTAMs, FAA sample API data and printed
-                  answers, the lists the generator read, the scrypt vectors of RFC 7914)
+                  test_metar_gateway.py, test_conditions.py, test_notams.py,
+                  test_notam_feed.py, test_notam_translate.py, notam_cases.py (wrong
+                  answers built from FAA records), data/ (FAA example NOTAMs, FAA sample
+                  API data and printed answers, the lists the generator read, the scrypt
+                  vectors of RFC 7914, NWS observations with their relative humidity)
 frontend/tests/   headless module tests (*.test.html), harness.js, run.sh
 frontend/src/
   index.html, main.js, styles.css    the display and its cycle
@@ -332,6 +334,14 @@ data/   (ignored) written by the app: config.yaml and its backups, secrets.json,
   condition (no `clouds`; an empty list is a clear sky) or the visibility is missing, and
   then gets its category by the same rule over `weather.reported_ranges`: one value for
   an element the record carries, the whole scale for one it lacks.
+- `GET /api/conditions` (`conditions.py`) reads the weather cache only, never an
+  upstream, and gives every enabled airport every field, `null` where the report gives no
+  value. The ceiling comes from the report text through `metar_decode` (a settled
+  `ceiling_range` is a height or none, else unknown): aviationweather.gov's `clouds` drop
+  a group whose amount or height is slashed (`VV///`, `VV002///`, `BKN///`). Relative
+  humidity is the Magnus formula with Alduchov and Eskridge's coefficients, which
+  reproduces what api.weather.gov publishes (`tests/data/nws_observations.json`); the
+  altimeter is hPa times the NWS's 0.02953, as the display shows it.
 - Satellite frame URLs come from parsing the NOAA STAR CDN directory listing
   (`satellite.py`), cached for 240 s per parameter set. Query parameters are validated
   before they reach a URL.
@@ -633,12 +643,13 @@ data/   (ignored) written by the app: config.yaml and its backups, secrets.json,
 - Every route is in exactly one access class, declared by its dependency (`require()` in
   `access.py`): open (what the display reads, the report of the view it shows, sign-in and
   first-visit setup: the kiosk has no credentials); control (`POST /api/display/*` but
-  `showing`: a session, or any API key); settings (the config, the source, NOTAM and model
-  tests, the usage record: a session, or a key of scope `settings`); session (the account,
-  API keys, stored credentials, stream addresses: a signed-in browser only, never a key).
-  No credentials or an unknown key is 401, a key outside its scope 403, an unreadable
-  secrets store 503. HTTP Basic is not accepted. A new route is added to the table in
-  `tests/test_access.py`, which fails for a route it does not list.
+  `showing`, and `GET /api/conditions`: a session, or any API key); settings (the config,
+  the source, NOTAM and model tests, the usage record: a session, or a key of scope
+  `settings`); session (the account, API keys, stored credentials, stream addresses: a
+  signed-in browser only, never a key). No credentials or an unknown key is 401, a key
+  outside its scope 403, an unreadable secrets store 503. HTTP Basic is not accepted. A
+  new route is added to the table in `tests/test_access.py`, which fails for a route it
+  does not list.
 - The account's password is a scrypt hash (`hash_password()`); a session or API key token
   is random, sent or shown once, and stored as its SHA-256. The session cookie is HttpOnly
   and SameSite=Strict, and a request that carries it and writes must come from this site's
@@ -981,6 +992,10 @@ full in `backend/app/data/display_api.md`.
   (at most 20 by 30 degrees), `GET /api/weather/area?lat=&lon=&radius_nm=`; the last two
   return `{stations, age_s, stale, error}`. A METAR read from the NWS gateway has
   `source: "nws"`; one from aviationweather.gov has no `source`.
+- `GET /api/conditions` `{monitored, airports: {<id>: {name, reported, category,
+  observed, age_s, stale, ceiling_ft, ceiling_known, visibility_sm, wind_dir_deg,
+  wind_variable, wind_speed_kt, wind_gust_kt, temperature_c, dewpoint_c, humidity_pct,
+  altimeter_inhg, raw}}}` for the enabled airports in config order (control).
 - `GET /api/satellite?sat=&sector=&band=&size=&frames=` recent frame URLs.
 - `GET /api/notams?location=<ident>` for a monitored location: `{location, name, source,
   notams, count, now, lookahead_h, fetched, age_s, stale, pending, error}`; each NOTAM has

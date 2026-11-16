@@ -461,9 +461,9 @@ where to change it. A password or key is stored on the Pi in `data/secrets.json`
 only by the display; passwords and API keys as hashes, so they cannot be read back even
 from that file.
 
-**Display API.** The reference for programs that control the TV over the network, filled
-in with this display's address and views (see
-[Control the screen from an automation](#control-the-screen-from-an-automation)).
+**Display API.** The reference for programs that control the TV or read its weather over
+the network, filled in with this display's address and views (see
+[Use the display from an automation](#use-the-display-from-an-automation)).
 
 ### Editing the file directly
 
@@ -562,11 +562,11 @@ notams:
     timeout_s: 60            # seconds allowed per answer
 ```
 
-## Control the screen from an automation
+## Use the display from an automation
 
 Home Assistant or any other system on the network can step the display through its views,
-jump to a view, and black out the picture. The admin page's Overview has buttons for the
-same things.
+jump to a view, black out the picture, and read the weather at your airports. The admin
+page's Overview has buttons for the display controls.
 
 An automation identifies itself with an API key. Create one on the admin page under
 **Access**, API keys: name it after what will use it and choose what it may do (control the
@@ -733,6 +733,77 @@ actions:
       reason: doorbell
 ```
 
+### Read the weather at your airports
+
+`GET /api/conditions` gives the latest report the display holds for each airport it
+watches: the flight category, ceiling, visibility, wind direction, speed and gusts,
+temperature, dew point, relative humidity and altimeter setting, with the report itself.
+It needs an API key; either kind works.
+
+```bash
+curl -H 'Authorization: Bearer tpc_your-key' http://<pi-ip>:8000/api/conditions
+```
+
+`monitored` lists the airports in the order of your settings, and `airports` gives each
+one's values by identifier. A value the report does not give is `null`, and `category` is
+`UNKNOWN` when the report does not settle one. `ceiling_ft` is `null` both when there is no
+ceiling and when its height is not known; `ceiling_known` tells the two apart. The display
+refreshes its reports as often as the Display page says (every 5 minutes by default), so
+polling more often gains nothing.
+
+Home Assistant, in `configuration.yaml`, with the key from `secrets.yaml` as above: a
+sensor per value you want, here for KBFI (repeat the sensors for each airport). The
+category sensor carries the other values as attributes.
+
+```yaml
+rest:
+  - resource: "http://<pi-ip>:8000/api/conditions"
+    scan_interval: 300
+    headers:
+      authorization: !secret hangar_display_key
+    sensor:
+      - name: KBFI flight category
+        value_template: "{{ value_json.airports.KBFI.category }}"
+        json_attributes_path: "$.airports.KBFI"
+        json_attributes:
+          - ceiling_ft
+          - ceiling_known
+          - visibility_sm
+          - wind_dir_deg
+          - wind_gust_kt
+          - observed
+          - stale
+          - raw
+      - name: KBFI temperature
+        value_template: "{{ value_json.airports.KBFI.temperature_c }}"
+        availability: "{{ value_json.airports.KBFI.temperature_c is not none }}"
+        unit_of_measurement: "°C"
+        device_class: temperature
+      - name: KBFI humidity
+        value_template: "{{ value_json.airports.KBFI.humidity_pct }}"
+        availability: "{{ value_json.airports.KBFI.humidity_pct is not none }}"
+        unit_of_measurement: "%"
+        device_class: humidity
+      - name: KBFI wind speed
+        value_template: "{{ value_json.airports.KBFI.wind_speed_kt }}"
+        availability: "{{ value_json.airports.KBFI.wind_speed_kt is not none }}"
+        unit_of_measurement: "kn"
+        device_class: wind_speed
+```
+
+An automation that reacts when the field goes IFR or worse:
+
+```yaml
+triggers:
+  - trigger: state
+    entity_id: sensor.kbfi_flight_category
+    to: ["IFR", "LIFR"]
+actions:
+  - action: persistent_notification.create
+    data:
+      message: "KBFI is {{ trigger.to_state.state }}"
+```
+
 ## Day to day
 
 - **Change settings:** use the admin page. The TV reloads itself when you save.
@@ -758,7 +829,7 @@ actions:
   into `data/secrets.json` and does not read `.env` again. The Access page lists the lines
   that are still there: delete them, or the file, and run `docker compose up -d`. Home
   Assistant and scripts that sent the admin password need an API key instead (see
-  "Control the screen from an automation").
+  "Use the display from an automation").
 - **Coming from a version whose repository held `data/config.yaml`:** `git pull` refuses to
   replace your settings file. Set it aside for the update and put it back afterwards:
 

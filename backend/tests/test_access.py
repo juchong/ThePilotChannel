@@ -34,6 +34,7 @@ ROUTES = {
     ("GET", "/api/views"): (OPEN, None),
     ("GET", "/api/traffic"): (OPEN, None),
     ("GET", "/api/weather"): (OPEN, None),
+    ("GET", "/api/conditions"): (CONTROL_CLASS, {}),
     ("GET", "/api/weather/area"): (OPEN, None),
     ("GET", "/api/weather/bbox"): (OPEN, None),
     ("GET", "/api/satellite"): (OPEN, None),

@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional, Set
 
 import httpx
 
-from . import cameras
+from . import cameras, conditions
 from .access import CONFIG_API_KEY, import_legacy
 from .config import (
     CONFIG_PATH,
@@ -596,6 +596,11 @@ class DataManager:
             age = int(time.time() - obs)
             m = dict(m, age_s=age, stale=age > self.cfg.weather.stale_after_s)
         return m
+
+    def get_conditions(self) -> Dict:
+        """The weather at every enabled airport, read from the cache (GET /api/conditions)."""
+        return conditions.conditions(self.cfg.airports, self._weather_cache, time.time(),
+                                     self.cfg.weather.stale_after_s)
 
     def get_weather(self, icaos: Optional[List[str]] = None) -> Dict[str, Dict]:
         if not icaos:

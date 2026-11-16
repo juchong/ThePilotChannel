@@ -3,7 +3,8 @@
 The Pilot Channel is a TV display for an aircraft hangar. It cycles through views: local
 traffic maps, regional weather, a satellite loop, live cameras and NOTAMs. A program on the
 same network can read which view is on screen, move the display to the next or previous
-view or straight to a chosen one, and black out the picture.
+view or straight to a chosen one, black out the picture, and read the weather at the
+airports the display watches.
 
 This document is the whole contract for those calls. The display serves other routes for
 the TV itself and for its admin page; they are not part of this API.
@@ -20,11 +21,11 @@ the TV itself and for its admin page; they are not part of this API.
 
 ## Authentication
 
-- `GET` calls need no key.
-- Every `POST` call needs an API key, sent as the header `Authorization: Bearer <key>`.
-  A key starts with `tpc_`. The display's owner creates it on the admin page (Access,
-  API keys), where it is shown once. This document never contains a key: keep it as a
-  secret (in Home Assistant, in `secrets.yaml`), never in code or in logs.
+- `GET /api/conditions` and every `POST` call need an API key, sent as the header
+  `Authorization: Bearer <key>`; the other `GET` calls need no key.
+- A key starts with `tpc_`. The display's owner creates it on the admin page (Access, API
+  keys), where it is shown once. This document never contains a key: keep it as a secret
+  (in Home Assistant, in `secrets.yaml`), never in code or in logs.
 - A key that may control the display is enough for every call here. A key that may also
   change settings works too.
 - The admin password is not accepted, neither as HTTP Basic nor as a bearer value.
@@ -35,7 +36,7 @@ A refused call answers with a status code and a JSON body whose `detail` says wh
 
 | Status | When | `detail` |
 |---|---|---|
-| 401 | A `POST` without an `Authorization` header | `"sign in, or send an API key"` |
+| 401 | A call that needs a key, sent without an `Authorization` header | `"sign in, or send an API key"` |
 | 401 | A key that is not recognized: mistyped, revoked, or not sent as `Bearer` | `"API key not recognized"` |
 | 404 | `POST /api/display/view` names a view the display does not have | `"unknown view"` |
 | 422 | The body is not JSON, or a field breaks its rule | a list of `{"loc", "msg", "type"}` objects; `loc` names the field, for example `["body", "seconds"]` |
@@ -169,6 +170,87 @@ display keeps running behind the black picture, so it comes back at once.
 Key needed, no body. Ends a blackout. The answer (200) is the display state with
 `active: false`; it is the same when nothing was blacked out.
 
+## Reading the weather
+
+### GET /api/conditions
+
+Key needed. The weather at every airport the display watches, from the latest METAR it
+holds for each: flight category, ceiling, visibility, wind, temperature, dew point,
+relative humidity and altimeter setting.
+
+```json
+{
+  "monitored": ["KBFI", "KS50"],
+  "airports": {
+    "KBFI": {
+      "name": "Boeing Field",
+      "reported": true,
+      "category": "MVFR",
+      "observed": 1794808380,
+      "age_s": 312,
+      "stale": false,
+      "ceiling_ft": 2500,
+      "ceiling_known": true,
+      "visibility_sm": 10.0,
+      "wind_dir_deg": 160,
+      "wind_variable": false,
+      "wind_speed_kt": 7,
+      "wind_gust_kt": 18,
+      "temperature_c": 8.3,
+      "dewpoint_c": 6.1,
+      "humidity_pct": 86,
+      "altimeter_inhg": 30.12,
+      "raw": "KBFI 160553Z 16007G18KT 10SM FEW012 BKN025 08/06 A3012 RMK AO2 T00830061"
+    },
+    "KS50": {
+      "name": "Auburn",
+      "reported": false,
+      "category": "UNKNOWN",
+      "observed": null,
+      "age_s": null,
+      "stale": null,
+      "ceiling_ft": null,
+      "ceiling_known": false,
+      "visibility_sm": null,
+      "wind_dir_deg": null,
+      "wind_variable": false,
+      "wind_speed_kt": null,
+      "wind_gust_kt": null,
+      "temperature_c": null,
+      "dewpoint_c": null,
+      "humidity_pct": null,
+      "altimeter_inhg": null,
+      "raw": null
+    }
+  }
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `monitored` | the identifiers of the airports the display watches, in the order of its settings |
+| `airports` | each of those airports' weather, by identifier, with the fields below |
+| `name` | the airport's name in the display's settings, else the station's own |
+| `reported` | `false` when the display holds no report for the airport: `category` is then `UNKNOWN`, `ceiling_known` and `wind_variable` are `false`, and every other value is `null` |
+| `category` | `VFR`, `MVFR`, `IFR` or `LIFR`; `UNKNOWN` when the report does not settle one |
+| `observed`, `age_s` | when the report was observed, and how many seconds ago |
+| `stale` | `true` when the report is older than the display's limit (75 minutes unless the owner changed it) |
+| `ceiling_ft` | the lowest broken or overcast layer, or the vertical visibility, in feet above the airport; `null` when there is no ceiling or its height is not known |
+| `ceiling_known` | `true` when the report settles the ceiling (`ceiling_ft` then gives it, or is `null` for no ceiling); `false` when the report gives no sky condition or a ceiling without its height |
+| `visibility_sm` | prevailing visibility in statute miles; a U.S. report gives 10 for 10 or more |
+| `wind_dir_deg` | the direction the wind blows from, in degrees true; `null` when it is calm or variable |
+| `wind_variable` | `true` when the report gives the direction as variable |
+| `wind_speed_kt`, `wind_gust_kt` | wind speed and gusts in knots: 0 is calm, and `wind_gust_kt` is `null` without gusts |
+| `temperature_c`, `dewpoint_c` | degrees Celsius, in tenths when the report gives them |
+| `humidity_pct` | relative humidity in whole percent, worked out from the temperature and the dew point as the National Weather Service does for its observations |
+| `altimeter_inhg` | the altimeter setting in inches of mercury |
+| `raw` | the report as issued |
+
+Every field is always there; a value the report does not give is `null`. The answer comes
+from the reports the display already holds, which it refreshes every 5 minutes unless the
+owner changed that, so asking more often than once a minute gains nothing. An airport the
+owner turns off or removes leaves the answer.
+
 ## Following changes
 
 ### GET /api/stream
@@ -225,6 +307,9 @@ curl -s -X POST -H "Authorization: Bearer $KEY" -H "Content-Type: application/js
   -d '{"seconds": 30, "reason": "doorbell"}' "$BASE/api/display/blackout"
 curl -s -X POST -H "Authorization: Bearer $KEY" "$BASE/api/display/blackout"
 curl -s -X POST -H "Authorization: Bearer $KEY" "$BASE/api/display/restore"
+
+# the weather at the airports the display watches
+curl -s -H "Authorization: Bearer $KEY" "$BASE/api/conditions"
 
 # follow changes as they happen
 curl -sN "$BASE/api/stream"
