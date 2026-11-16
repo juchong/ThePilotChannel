@@ -887,9 +887,10 @@ a change that alters what one of them shows is reported instead.
 
 `docs/display-*.jpg` are captured from the live kiosk with grim (`-t jpeg -q 88 -s 0.5`,
 which gives 1920x1080 from the 3840x2160 mode; the local and satellite frames are
-1920x1012, from a 4096x2160 mode at scale 0.46875) once each view is fully rendered: the KSEA
-local view a few seconds in, the regional view with the radar loop and barbs loaded, and the
-satellite view once its loop is animating, and the camera view with every tile live.
+1920x1012, from a 4096x2160 mode at scale 0.46875) once each view is fully rendered: the
+KSEA local view a few seconds in, the regional view with the radar loop and barbs loaded,
+the satellite view once its loop is animating, and the camera view with every tile live.
+The README shows them in a two-column table, each with a one-line caption.
 Switch the display to the view with `POST /api/display/view` before a capture, and check
 that the frame shows real data (aircraft listed, stations listed, frames loaded) before
 keeping it. `docs/display-notams.jpg` is the NOTAM view with `notams.source: sample`,

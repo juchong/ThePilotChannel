@@ -181,7 +181,7 @@ def test_satellite_param_validation(client):
 
 
 # The SSE endpoint is an endless stream, which Starlette's TestClient cannot
-# close cleanly, so it is exercised with curl instead (see README "Verify").
+# close cleanly, so it is exercised with curl instead (see AGENTS.md "Build, test, verify").
 # The event payload itself is unit-tested here.
 def test_sse_event_payload():
     from app.main import _sse

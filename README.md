@@ -1,179 +1,158 @@
 # The Pilot Channel
 
-A wall-mounted information display for an airplane hangar. A Raspberry Pi 5 or 4 drives an
-HDMI TV that cycles through live ADS-B air traffic around your airports, METAR weather with
-flight-category wind barbs, an animated NEXRAD precipitation radar loop, a NOAA GOES
-satellite loop, live video from your security cameras, the NOTAMs for the airports you
-choose, and local and UTC clocks. Everything is configured from a phone or laptop on the
-hangar Wi-Fi.
+A wall-mounted information display for an airplane hangar. A Raspberry Pi drives an HDMI
+TV that cycles through live air traffic around your airports, METAR weather, an animated
+precipitation radar loop, a weather satellite loop, your security cameras, and the NOTAMs
+for the airports you choose, with local and UTC clocks. You set it up from a phone or
+laptop on the hangar network.
 
-Local airport view (live traffic, METAR, and wind barb):
+| | |
+|---|---|
+| ![Local airport view](docs/display-local.jpg) | ![Regional weather view](docs/display-radar.jpg) |
+| **Local view:** live traffic, the airport's METAR and wind | **Regional view:** wind barbs over the radar loop |
+| ![Satellite loop view](docs/display-satellite.jpg) | ![Camera view](docs/display-cameras.jpg) |
+| **Satellite loop:** animated NOAA GOES imagery | **Cameras:** live video from UniFi Protect cameras |
+| ![NOTAM view](docs/display-notams.jpg) | ![Admin page](docs/admin.png) |
+| **NOTAMs:** one view per location (here the built-in samples) | **Admin page:** the settings, here its Access page |
 
-![Local airport view](docs/display-local.jpg)
+## Contents
 
-Regional weather view (wind barbs for every reporting airport in view, over the radar loop):
-
-![Regional weather view](docs/display-radar.jpg)
-
-Satellite loop view (animated NOAA GOES imagery):
-
-![Satellite loop view](docs/display-satellite.jpg)
-
-Camera view (live video from UniFi Protect cameras):
-
-![Camera view](docs/display-cameras.jpg)
-
-NOTAM view (one per location; shown here with the built-in sample NOTAMs):
-
-![NOTAM view](docs/display-notams.jpg)
-
-Admin page (remote configuration; here its Access page, with the account and the API keys
-for automations):
-
-![Admin page](docs/admin.png)
+- [What it shows](#what-it-shows) and [what you need](#what-you-need)
+- [Install on the Raspberry Pi](#install-on-the-raspberry-pi)
+- [Set up the display](#set-up-the-display), page by page
+- [NOTAMs](#notams): FAA access, the settings, and how a NOTAM reads
+- [Use the display from an automation](#use-the-display-from-an-automation): Home Assistant
+  and other systems
+- [Day to day](#day-to-day), [upgrading](#upgrading-from-an-older-version) and
+  [troubleshooting](#troubleshooting)
+- [The settings file](#the-settings-file)
 
 ## What it shows
 
-The display cycles through views automatically. A bar across the top drains to show the
+The display cycles through its views on its own. A bar across the top drains to show the
 time left on the current view.
 
-- **Local view, one per airport.** Centered on the airport with a radius you choose (5
-  miles is typical). Live aircraft are drawn with tar1090's aircraft icons, chosen the same
-  way tar1090 does (by aircraft type, then type class and weight, then the broadcast
-  category), colored by altitude and rotated to their track, each labeled with its callsign
-  or registration.
-  Aircraft on the ground are included. The side panel shows the airport's METAR, decoded
-  and raw, with a large wind barb, and a list of every aircraft in view with general
-  aviation first.
-- **Regional view.** Weather only: a wind barb for every airport reporting a METAR inside
-  the map, colored by flight category (VFR green, MVFR blue, IFR red, LIFR magenta, gray
-  when unknown), over an animated NEXRAD base-reflectivity radar loop. The side panel lists
-  the stations, worst conditions first.
-- **Satellite loop (optional).** A full-screen NOAA GOES animation for your part of the
-  country, for example GOES-West, Pacific Northwest sector, GeoColor.
-- **Cameras (optional).** Live video from your security cameras on a grid you arrange: each
-  tile plays one stream at the camera's own shape, so a panoramic camera gets a wide tile
-  and a portrait camera a tall one. Built for UniFi Protect cameras, whose H.265 streams the
-  Pi 5 decodes in hardware; the streams are read by go2rtc, so other RTSP cameras it
-  supports can be used the same way.
-- **NOTAMs (optional).** One view per location you choose: the NOTAMs that affect it,
-  those in effect now and those taking effect within a number of hours you set, grouped by
-  type (aerodrome, runway, taxiway, apron, airspace, navigation aids, communications,
-  services, instrument procedures, and obstructions last). Each NOTAM shows a
-  plain-language line with the FAA's contractions spelled out, the NOTAM as issued, when
-  it was issued, when it takes effect and ends, how long it runs, and when it was last
-  updated. Every time is in the display's time zone (Display page), with the zone's name
-  for that date (PST, PDT); the NOTAM as issued keeps its own UTC times. A time in the
-  NOTAM's wording (a daily closure, a schedule) is given in the zone where that is exact,
-  and marked UTC otherwise: when daylight saving changes within the NOTAM, or when a named
-  day or date would move. Wording that gives local times itself is left as written. A
-  location with more NOTAMs than fit on the screen is shown a page at a time. A language
-  model you host yourself can rewrite the plain-language line as a sentence; its answer is
-  shown only when a program has checked it against the NOTAM.
+- **Local view**, one per airport: a map centered on the airport with the aircraft around
+  it, drawn with tar1090's aircraft icons, colored by altitude, turned to their track and
+  labeled with their callsign or registration. Aircraft on the ground are included. The
+  side panel shows the airport's METAR, decoded and raw, with a large wind barb, and every
+  aircraft in view, general aviation first.
+- **Regional view:** weather only. A wind barb for every airport reporting inside the map,
+  colored by flight category (VFR green, MVFR blue, IFR red, LIFR magenta, gray when
+  unknown), over an animated NEXRAD radar loop. The side panel lists the stations, worst
+  conditions first.
+- **Satellite loop** (optional): a full-screen NOAA GOES animation of your part of the
+  country.
+- **Cameras** (optional): live video on a grid you arrange. A panoramic camera gets a wide
+  tile and a portrait camera a tall one. Built for UniFi Protect cameras on a Pi 5; other
+  RTSP cameras that go2rtc can read work the same way.
+- **NOTAMs** (optional): one view per location, with the NOTAMs in effect and those taking
+  effect soon, each in plain language above the NOTAM as issued. See [NOTAMs](#notams).
 
-No API keys are needed, except for the NOTAM views, which use credentials the FAA issues on
-request, and the key of your own model server if you turn the rewrite on. Weather comes
-from the US National Weather Service Aviation Weather Center (and, for an airport of yours
-that it does not list, from the Weather Service's own report files), radar from the Iowa
-Environmental Mesonet, satellite imagery from NOAA STAR, and map tiles from OpenStreetMap.
-Traffic comes from your own ADS-B receiver if you have one, or from a free public
-aggregator (adsb.fi, adsb.lol, or airplanes.live).
+Weather comes from the National Weather Service's Aviation Weather Center (and, for an
+airport it does not list, from the Weather Service's own report files), radar from the Iowa
+Environmental Mesonet, satellite images from NOAA STAR, and map tiles from OpenStreetMap.
+Traffic comes from your own ADS-B receiver if you have one, or from a free public feed
+(adsb.fi, adsb.lol or airplanes.live). None of these needs an account. Only the NOTAM views
+need keys: the FAA's, which it issues on request, and your own model server's if it asks
+for one.
 
 ## What you need
 
-- A Raspberry Pi 5 or Pi 4 with 4 GB of memory (it was built on the Pi 4 and runs on the
-  Pi 5), a microSD card of 8 GB or more, a power supply, and an HDMI cable to the TV (use
-  the HDMI0 port).
-- Raspberry Pi OS Lite, 64-bit (the current Debian 13 based release).
-- Network access, wired or Wi-Fi. The Pi needs the internet for map tiles, weather, radar,
-  and satellite imagery, and for traffic unless you run your own receiver.
-- Optional: a tar1090, readsb, or dump1090 receiver on your network for local traffic with
-  no rate limits.
-- Optional, for the camera view: a Raspberry Pi 5 (the view uses its hardware H.265
-  decoder) and cameras with RTSP streams, for example UniFi Protect cameras with RTSP
-  turned on.
-- Optional, for the NOTAM views: a client ID and secret for the FAA NOTAM Management
-  Service API, which the FAA issues on request (see NOTAMs under "Set up your hangar").
-- A phone or laptop on the same network to configure it.
+- A Raspberry Pi 5 or Pi 4 with 4 GB of memory, a microSD card of 8 GB or more, a power
+  supply, and an HDMI cable to the TV (use the HDMI0 port). The camera view needs a Pi 5,
+  for its hardware video decoder.
+- Raspberry Pi OS Lite, 64-bit (the current release, based on Debian 13).
+- A network connection, wired or Wi-Fi, with access to the internet.
+- A phone or laptop on the same network for the setup.
+- Optional: your own ADS-B receiver (tar1090, readsb or dump1090) for local traffic without
+  rate limits.
+- Optional: cameras with RTSP streams, for example UniFi Protect cameras with RTSP turned
+  on.
+- Optional: keys for the FAA NOTAM API and a language model server you run, for the NOTAM
+  views (see [NOTAMs](#notams)).
 
 ## Install on the Raspberry Pi
 
-One script turns a freshly flashed Pi into the kiosk. It is safe to run again at any time,
-and `--check` reports what is and is not set up without changing anything.
+One script turns a freshly flashed Pi into the kiosk. You can run it again at any time, and
+`--check` reports what is and is not set up without changing anything.
 
 1. **Flash the OS.** Use Raspberry Pi Imager to write Raspberry Pi OS Lite (64-bit). In the
-   Imager settings (gear icon) set a hostname, enable SSH, create your user, and enter your
+   Imager settings (gear icon), set a hostname, enable SSH, create your user, and enter your
    Wi-Fi details if you are not using Ethernet.
 
 2. **Boot the Pi and connect over SSH** (or plug in a keyboard) as the user you created.
 
-3. **Run the bootstrap.** Give it a password of at least 8 characters for the admin account,
-   so that the account exists before anyone else on your network can open the admin page
-   (`--admin-user NAME` names the account; it is `admin` otherwise):
+3. **Run the bootstrap.** Give it a password of at least 8 characters for the admin
+   account, so that the account exists before anyone else on your network can open the
+   admin page. The account is called `admin` unless you add `--admin-user NAME`.
 
    ```bash
    curl -fsSL https://raw.githubusercontent.com/juchong/ThePilotChannel/main/deploy/bootstrap.sh \
      | bash -s -- --admin-password 'choose-a-password' --reboot
    ```
 
-   It takes ten to twenty minutes, most of it the system update and the first
-   build of the app. With `--reboot` the Pi restarts by itself when done; otherwise run
-   `sudo reboot`. The TV shows a "The Pilot Channel" holding screen while the app starts,
-   then the display.
+   It takes ten to twenty minutes, most of it the system update and the first build of the
+   app. With `--reboot` the Pi restarts by itself when done; otherwise run `sudo reboot`.
+   The TV shows a "The Pilot Channel" holding screen while the app starts, then the
+   display.
 
-4. **Check that it worked.** From your phone or laptop open `http://<pi-ip>:8000/admin`
+4. **Check that it worked.** From your phone or laptop, open `http://<pi-ip>:8000/admin`
    (the bootstrap prints the address) and sign in. If you ran the bootstrap without
    `--admin-password`, the page asks you to create the account instead: do it right away,
-   since the first person to open that page gets to. On the Pi,
+   since the first person to open the page gets to. On the Pi,
    `~/ThePilotChannel/deploy/bootstrap.sh --check` should report every step as `[ok]`.
 
-What the bootstrap does, in order, each step only if it is not already done:
+<details>
+<summary><b>What the bootstrap changes on the Pi</b></summary>
 
-- Updates the system (`apt-get full-upgrade`; skip with `--no-upgrade`).
+Each step runs only if it is not already done:
+
+- Updates the system (`apt-get full-upgrade`; skip it with `--no-upgrade`).
 - Installs the kiosk browser and its compositor (`chromium`, `cage`, `wlrctl`, `seatd`),
   `grim` and ImageMagick for screenshots, `git`, `curl`, and the two packages rootless
   Docker needs (`uidmap`, `dbus-user-session`). The browser is Raspberry Pi's own build of
-  Chromium from the Raspberry Pi OS archive; on a Pi 4 it updates with the OS.
+  Chromium; on a Pi 4 it updates with the OS.
 - On a Pi 5, replaces that Chromium with the same version patched for the Pi's hardware
   H.265 decoder (the [chromium-rpi-hevc](https://github.com/sslivins/chromium-rpi-hevc)
-  build, downloaded from its release and checked against the published checksums) and holds
-  the packages so OS updates keep it. The camera view needs it; nothing else does.
+  build, checked against its published checksums) and holds the packages so OS updates
+  keep it. Only the camera view needs it.
 - Clones this repository to `~/ThePilotChannel` (or uses the clone it is run from).
-- Installs a small wrapper from the clone so `grim` can write `jpeg`, `webp`, `avif`, and
-  `gif` screenshots (the stock Debian build only writes `png`);
-  `sudo rm /usr/local/bin/grim` reverts to the stock grim.
+- Installs a small wrapper so `grim` can also write `jpeg`, `webp`, `avif` and `gif`
+  screenshots (Debian's build writes only `png`); `sudo rm /usr/local/bin/grim` goes back
+  to the stock one.
 - Protects the Wi-Fi settings from power cuts (`deploy/harden-wifi.sh`). Raspberry Pi OS
-  keeps the Wi-Fi details from Imager in files it rewrites at every boot, and a power cut
-  during boot can leave them empty. The bootstrap moves them into a regular NetworkManager
-  profile with a read-only backup copy and stops cloud-init from restoring the old files.
-- Installs Docker CE with Docker's own installer, then switches it to rootless mode for
-  your user: the daemon runs as you, not root, starts at boot without a login (waiting for
-  the network's DNS first), and the root-level daemon is disabled so it does not waste
-  memory.
-- Enables the GPU overlay (`dtoverlay=vc4-kms-v3d`, `max_framebuffers=2`) the kiosk needs.
-- Enables `seatd` and puts your user in the `video`, `render`, and `input` groups so the
-  kiosk can drive the HDMI output directly.
-- Configures automatic login on the TV console (tty1) and adds a hook to your login shell
-  that starts the kiosk there and nowhere else (not over SSH).
+  rewrites the Wi-Fi details from Imager at every boot, and a power cut during boot can
+  leave them empty. The bootstrap moves them into a regular NetworkManager profile with a
+  read-only backup and stops cloud-init from restoring the old files.
+- Installs Docker with Docker's own installer and switches it to rootless mode: the daemon
+  runs as your user, starts at boot without a login (after the network's DNS is up), and
+  the root daemon is disabled.
+- Enables the GPU overlay the kiosk needs (`dtoverlay=vc4-kms-v3d`, `max_framebuffers=2`),
+  enables `seatd`, and puts your user in the `video`, `render` and `input` groups so the
+  kiosk can drive the HDMI output.
+- Logs in automatically on the TV console (tty1) and starts the kiosk there, and only there
+  (not over SSH).
 - Turns Wi-Fi power saving off, which otherwise drops connections on an unattended Pi.
-- Keeps the system log across reboots, capped at 64 MB, so a crash or a dropped network
-  link leaves evidence (`journalctl -b -1` shows the previous boot).
-- Builds the app image and starts it, waiting until it answers.
+- Keeps the system log across reboots, capped at 64 MB (`journalctl -b -1` shows the
+  previous boot).
+- Builds the app and starts it, waiting until it answers.
 - Creates the admin account if you gave a password and there is none yet. The password goes
-  straight to the app, which keeps only a hash of it; it is not written to any file.
+  straight to the app, which keeps only a hash of it.
 
 Options: `--check`, `--dry-run`, `--no-upgrade`, `--no-start`, `--reboot`,
-`--admin-password PW`, `--admin-user NAME`, `--repo-dir DIR`. Run it with `--help` for the
-same list.
+`--admin-password PW`, `--admin-user NAME`, `--repo-dir DIR`; `--help` lists them.
 
-The kiosk runs natively (cage plus Chromium) rather than in Docker because it needs the
-GPU and HDMI output. It keeps Chromium's profile, cache, and its log on a RAM disk
+The kiosk browser runs on the Pi itself (cage and Chromium), not in Docker, because it
+needs the GPU and the HDMI output. It keeps its profile, cache and log on a RAM disk
 (`/dev/shm/hangar-kiosk`) to spare the SD card.
 
-## Try it without a Pi
+</details>
 
-You can run the app on any 64-bit Linux machine with Docker and look at it in a browser.
-This is handy for setting up airports before the Pi is ready.
+### Try it without a Pi
+
+The app runs on any 64-bit Linux machine with Docker, and you can look at it in a browser.
+This is handy for setting up your airports before the Pi is ready.
 
 ```bash
 curl -fsSL https://get.docker.com | sudo sh
@@ -186,112 +165,181 @@ docker compose up -d --build
 Then open `http://<host-ip>:8000` for the display and `http://<host-ip>:8000/admin` for the
 settings. The first visit to the admin page creates its account.
 
-## Set up your hangar
+## Set up the display
 
-Open `http://<pi-ip>:8000/admin` and sign in. The menu on the left (a Menu button on a
-phone) lists the pages. **Overview** shows what is on the TV, lets you step through the
-views or black out the picture, and says for every feed whether it is healthy. The pages
-under Views and System hold the settings: change what you like on any of them, then press
-**Save and reload display** in the bar that appears at the bottom. Every field is checked,
-a mistake is marked on its field and its page is marked in the menu, and the TV reloads
-with the new settings. **Discard** drops the changes instead. Camera addresses, keys and
-the account are not part of that: they take effect the moment you store them and never
-reload the TV. A new display has no airports yet and shows only the satellite loop until you
-add them.
+Open `http://<pi-ip>:8000/admin` and sign in. The menu on the left (behind a Menu button on
+a phone) lists the pages.
 
-**Airports.** One row per airport you want a local view for: the identifier its weather
-reports carry (the ICAO identifier, for example `KSEA`; for a US field without one, `K`
-followed by the FAA identifier, such as `KS50`), a name, the latitude and longitude of the
-field, and the radius in miles. Use the arrows to set the order they appear in. Airports
-without a weather station show "no weather" on their local view but still show traffic.
+- **Overview** shows what is on the TV, lets you step through the views or black out the
+  picture, and says whether each data feed is healthy.
+- The pages under **Views** and **System** hold the settings. Change what you like, then
+  press **Save and reload display** in the bar that appears at the bottom; the TV reloads
+  with the new settings. A mistake is marked on its field, and its page in the menu.
+  **Discard** drops your changes.
+- Camera addresses, keys and the account are different: they take effect as soon as you
+  store them, and never reload the TV.
 
-An airport the Aviation Weather Center does not list, such as one whose AWOS was installed
-recently, is read from the Weather Service's report files instead and appears on the
-regional view as well. The Overview page names the airports read this way.
+A new display has no airports yet and shows only the satellite loop until you add some.
 
-A station's flight category is shown only when its report settles it. If the sky
-condition or the visibility is missing, the category is unknown unless what is reported
-decides it alone (a visibility below one mile is LIFR whatever the ceiling). The same
-holds for an airport read from the Weather Service's files when a cloud layer is reported
-without its height. A station of unknown category is drawn in gray and labeled UNKNOWN:
-its wind barb when the report carries a wind, a gray circle when it does not.
+### Airports
 
-**Regions and radar.** A wider view for the weather overview: a center point and a radius.
-Wind barbs appear for every airport reporting weather inside the map, not just the ones you
-listed. One region is usually enough; with more, they are interleaved between the local
-views.
+One row per airport you want a local view for:
 
-The radar loop is drawn on the regional view. Ten frames five minutes apart give a
-45-minute loop; the loop can reach back at most 55 minutes. The opacity slider sets how
-strongly the radar shows over the map. "Hide returns below" leaves out weak returns, which
-below about 10 dBZ are mostly not precipitation; set it to 0 to draw everything the radar
-sees. Frames step every half second. "Cross-fade frames" dissolves them into each other
-instead; it is off by default because the fade is expensive on a Pi 4.
+- **Identifier:** the one its weather reports carry. That is the ICAO identifier (`KSEA`),
+  or for a US field without one, `K` followed by the FAA identifier (`KS50`).
+- **Name**, the **latitude and longitude** of the field, and the **radius** in miles of its
+  map (5 is typical).
 
-**Satellite.** Choose the satellite (G16 is GOES-East, G18 is GOES-West), the sector, and
-the band. Find your sector code on the NOAA STAR GOES image viewer: open your region's page
-and use the short code from its address, for example `pnw` (Pacific Northwest), `psw`
-(Pacific Southwest), `nr` (Northern Rockies), `sr` (Southern Rockies), `sp` (Southern
-Plains), `umv` (Upper Mississippi Valley), `cgl` (Central Great Lakes), `ne` (Northeast),
-`se` (Southeast). `GEOCOLOR` is the natural-color band most people want. `1200x1200`
-frames suit a 1080p TV.
+The arrows set the order of the views. An airport without a weather station shows "no
+weather" on its local view, and still shows traffic. An airport the Aviation Weather Center
+does not list, such as one whose AWOS is new, is read from the Weather Service's report
+files instead; the Overview page names the airports read this way.
 
-**Cameras.** Live video from your security cameras, set up on the Cameras page.
+A station's flight category is shown only when its report settles it. When the sky
+condition or the visibility is missing, the category is unknown, unless what is reported
+decides it alone (a visibility below one mile is LIFR whatever the ceiling); for an airport
+read from the Weather Service's files, a cloud layer reported without its height counts as
+missing too. A station of unknown category is drawn in gray and labeled UNKNOWN: its wind
+barb, or a gray circle when the report has no wind. The ceiling is read from the report
+itself, so a cloud layer reported without its height leaves the ceiling unknown.
 
-*Streams* are the cameras. For each one, give it a name and paste its RTSP or RTSPS link,
-then **Add stream**. For UniFi Protect, the link is on the camera's settings page in the
-Protect app, under Advanced, in the RTSP section: turn on the quality you want and copy its
-link. Use the medium quality: a tile is at most 1280 pixels wide on a 4K TV, and several
-cameras' full-resolution streams are more than the Pi's decoder is rated for. Protect
-appends `?enableSrtp` to the link; the display removes it, because the relay does not
-decrypt SRTP and the link is already carried inside TLS without it. **Test** has the relay
-open the camera and says what video it sends (the Pi 5 decodes H.265 in hardware). A link
-carries an access token, so it is kept in the display's secrets store and never shown
-again: the page lists a stream by its name and the host of its address. To change a
-camera's address, use **Rename or replace address** on its row; its tiles pick up the new
-one within seconds. A stream is live as soon as it is stored: nothing needs restarting.
+### Regions and radar
 
-*Layout on the TV* arranges the tiles: for each, the stream it plays, an optional caption,
-and how many of the six grid columns it spans. Every row is as tall as a 16:9 two-column
-tile, so two columns suit a normal camera and four a panoramic one; a portrait camera is
+A region is a wider weather view: a center point and a radius. Wind barbs appear for every
+airport reporting weather inside the map, not just yours. One region is usually enough;
+with more, they take turns between the local views.
+
+The radar loop plays on the regional view. Ten frames five minutes apart make a 45-minute
+loop; the loop reaches back at most 55 minutes. The opacity slider sets how strongly the
+radar shows over the map. **Hide returns below** leaves out weak returns, which below
+about 10 dBZ are mostly not precipitation; 0 draws everything. Frames step every half
+second, and **Cross-fade frames** dissolves them into each other instead (off by default:
+the fade is expensive on a Pi 4).
+
+### Satellite
+
+Choose the satellite (G16 is GOES-East, G18 is GOES-West), the sector and the band. The
+sector code is in the address of your region's page on the NOAA STAR GOES image viewer, for
+example `pnw` (Pacific Northwest), `psw` (Pacific Southwest), `nr` (Northern Rockies), `sr`
+(Southern Rockies), `sp` (Southern Plains), `umv` (Upper Mississippi Valley), `cgl` (Central
+Great Lakes), `ne` (Northeast) or `se` (Southeast). `GEOCOLOR` is the natural-color band
+most people want, and `1200x1200` frames suit a 1080p TV.
+
+### Cameras
+
+**Streams** are your cameras. For each one, give it a name, paste its RTSP or RTSPS link,
+and press **Add stream**.
+
+- For UniFi Protect, the link is on the camera's settings page in the Protect app, under
+  Advanced, in the RTSP section: turn on a quality and copy its link. Use the medium
+  quality: a tile is at most 1280 pixels wide on a 4K TV, and several full-resolution
+  streams are more than the Pi's decoder is rated for. The `?enableSrtp` that Protect
+  appends is removed, because the relay does not decrypt SRTP and the link is already
+  carried inside TLS without it.
+- **Test** has the relay open the camera and says what video it sends.
+- A link carries an access token, so it is kept in the display's secrets store and never
+  shown again: the page lists a stream by its name and the host of its address. To change
+  an address, use **Rename or replace address** on its row; its tiles switch within
+  seconds. Nothing needs restarting.
+
+**Layout on the TV** arranges the tiles: the stream each one plays, an optional caption,
+and how many of the six grid columns it spans. Every row is as tall as a 16:9 tile of two
+columns, so two columns suit a normal camera and four a panoramic one; a portrait camera is
 centered in its tile. Tiles fill the rows in order, and the page draws the grid as the TV
-will show it. The Overview page says whether the relay is up and names tiles that have no
+will show it. The Overview page says whether the relay is up and names any tile without a
 stream.
 
-**NOTAMs.** A view for each location you list, showing the NOTAMs that affect it. NOTAMs
-are selected by the location they affect, not by the office that issued them: a closure at
-a small field is often issued under a larger airport's accountability and still appears
-under the small field.
+### Traffic source
 
-The data comes from the FAA NOTAM Management Service (NMS) API, the FAA's distribution
-service for NOTAMs. Access is free but not self-serve:
+Where aircraft positions come from:
+
+- **A public feed:** adsb.fi, adsb.lol or airplanes.live, free of charge. Coverage depends
+  on volunteers' receivers near your airport; positions arrive about once a second. An
+  airplanes.live API key, if you have one, is stored on the same page.
+- **The local receiver:** your own tar1090, readsb or dump1090. Enter the address of its
+  `aircraft.json`, for example `http://192.168.1.20:8080/data/aircraft.json`. Use the
+  receiver's network address even if it runs on the Pi itself: the app runs in a container,
+  where `localhost` means the container.
+- **The local receiver, else a public feed:** the receiver, and the feed while the receiver
+  cannot be reached.
+
+**Test connection** checks the source before you save, and reports how many aircraft each
+source sees near your first airport.
+
+### Rotation
+
+How long each local and regional view stays on screen, how many local views one cycle
+shows, and whether a regional view goes between local views. The page lists the rotation as
+it is saved. The other views set their own time on their pages.
+
+### Display
+
+Your time zone (an IANA name such as `America/Denver`) for the clock, how often the weather
+reports refresh, and when a report counts as stale. The map uses OpenStreetMap tiles; the
+Pi keeps a copy of every tile your views need in `data/tiles` (refreshed every two weeks)
+and fetches them for new airports and regions in the background after you save, so views
+switch without the map redrawing. If you have your own tile server, or a vector style URL
+from a map provider, enter it here.
+
+### Access
+
+Your account (username, a new password, signing out every browser), the API keys for
+automations (see [Use the display from an automation](#use-the-display-from-an-automation)),
+and a list of what the display keeps secret and where to change it. Passwords, keys and
+camera links are stored on the Pi in `data/secrets.json`, readable only by the display;
+passwords and API keys only as hashes, so even that file does not reveal them.
+
+## NOTAMs
+
+A NOTAM view shows the NOTAMs that affect one location: those in effect now and those
+taking effect within the hours you choose, grouped by type (aerodrome, runway, taxiway,
+apron, airspace, navigation aids, communications, services, instrument procedures, and
+obstructions last). NOTAMs are chosen by the location they affect, not by the office that
+issued them: a closure at a small field is often issued under a larger airport's
+accountability and still appears under the small field.
+
+Each NOTAM card shows:
+
+- a plain-language line (see [How a NOTAM reads](#how-a-notam-reads));
+- the NOTAM as issued, which is the one that counts;
+- when it was issued, when it takes effect and ends, how long it runs, and when it was last
+  updated.
+
+Times are in the display's time zone (Display page), with the zone's name for that date
+(PST, PDT); the NOTAM as issued keeps its UTC times. A time in a NOTAM's wording, such as a
+daily closure, is converted where that is exact and marked UTC where it is not (when
+daylight saving time changes within the NOTAM, or a named day or date would move); wording
+that already gives local times is left as written. A location with more NOTAMs than fit on
+the screen is shown a page at a time.
+
+### Getting access from the FAA
+
+The NOTAMs come from the FAA NOTAM Management Service (NMS) API. Access is free but not
+self-serve:
 
 1. Email NOTAMS@faa.gov (the address behind "API Access" on
-   [nms.aim.faa.gov](https://nms.aim.faa.gov/)), ask for access to the NMS-API and say what
+   [nms.aim.faa.gov](https://nms.aim.faa.gov/)), ask for access to the NMS-API, and say what
    you will use it for.
 2. The FAA first issues keys for its **test environment** (staging): a client ID, which it
-   calls KEY, and a client secret, SECRET. On the NOTAMs page choose the environment
-   **Staging**, enter both and press **Store keys**; **Check keys** asks the FAA for a
-   token with them and costs no data pull. While a test environment is selected, every
-   NOTAM view carries a banner that says so: its NOTAMs may be test data and are not for
-   operational use.
-3. Let the display run against staging. The page's *Requests to the FAA* card counts every
-   request the display sent in the last 24 hours, the shortest interval between two data
-   pulls, and any the FAA refused; **Download the record** saves the whole record, each
-   request with the id the FAA gave it. When you are satisfied, ask the NOTAM Service
-   Center (7-AWA-NAIMES@faa.gov, 866-466-1336) for production keys, and send that record
-   along if they want to see how your display uses the service.
+   calls KEY, and a client secret, SECRET. On the NOTAMs page, choose the environment
+   **Staging**, enter both and press **Store keys**. **Check keys** asks the FAA for a token
+   with them and costs no data pull. While a test environment is selected, every NOTAM view
+   carries a banner: its NOTAMs may be test data and are not for operational use.
+3. Let the display run against staging. The page's *Requests to the FAA* card counts the
+   requests of the last 24 hours, the shortest interval between two data pulls, and any the
+   FAA refused; **Download the record** saves every request with the id the FAA gave it.
+   When you are satisfied, ask the NOTAM Service Center (7-AWA-NAIMES@faa.gov,
+   866-466-1336) for production keys, and send the record along if they want to see how
+   your display uses the service.
 4. With production keys, choose the environment **Production**, store the keys, and save.
-   Keys are stored for the environment they were entered under and are only ever sent to
-   it.
+   Keys belong to the environment they were stored under and are only ever sent to it.
 
-The FAA allows one data pull every three minutes. The display never asks more often than
-that, in either environment: it fetches each location's NOTAMs once, then asks every three
-minutes for everything that changed, and fetches each location whole again every six
-hours. A newly added location, and **Refresh now**, therefore wait for the next turn; the
-page says how long that is.
+The FAA allows one data pull every three minutes, and the display never asks more often, in
+either environment. It fetches each location's NOTAMs once, then asks every three minutes
+for everything that changed, and fetches each location whole again every six hours. A new
+location and **Refresh now** wait for the next turn; the page says how long that is.
 
-On the NOTAMs page:
+### The NOTAMs page
 
 - **Locations.** Type one or more identifiers into the box and press Enter, or click one of
   your airports offered under the list. A location is the identifier of the affected
@@ -300,180 +348,521 @@ On the NOTAMs page:
   the nearest VOR or the center, so add those if you want them. Each row says how many
   NOTAMs are held for the location and through what time they are complete. The optional
   name appears in the view's heading.
-- **Include NOTAMs starting within.** NOTAMs in effect are always shown; this adds the ones
+- **Include NOTAMs starting within.** NOTAMs in effect are always shown; this adds those
   that take effect within this many hours. 0 shows only those in effect.
 - **Each page stays up.** How long each page of a location stays up. A location whose
   NOTAMs fill three pages stays up three times as long.
-- **Look for changes every.** How often the display asks the FAA for changes, 180 seconds
-  at the least. The display keeps the NOTAMs it holds, also across restarts, and says in
-  the view's heading when they were retrieved.
-- **NOTAMs come from.** The FAA, live; or sample data: invented NOTAMs under a banner that
-  says so, for seeing the view before your keys arrive. They are never mixed with live
-  NOTAMs.
+- **Look for changes every.** How often the display asks the FAA for changes: 180 seconds at
+  the least. The display keeps the NOTAMs it holds, also across restarts, and the view's
+  heading says when they were retrieved.
+- **NOTAMs come from.** The FAA, live; or sample data, invented NOTAMs under a banner that
+  says so, for seeing the view before your keys arrive. The two are never mixed.
 
-Live NOTAM views are shown only together with the model rewrite described below. The
-footer of every NOTAM view names its source as "FAA NMS Processed with *your model* LLM",
-so that nobody reading the TV takes the plain-language lines for the FAA's own words; the
-page shows the exact text. The NMS is not the authoritative source for NOTAMs issued by
-other countries, and a view that holds such NOTAMs says so.
+Live NOTAM views are shown only with the model rewrite turned on (see
+[Rewriting NOTAMs with your own model](#rewriting-notams-with-your-own-model)). The footer
+of every NOTAM view names its source as "FAA NMS Processed with *your model* LLM", so
+nobody takes the plain-language lines for the FAA's own words; the page shows the exact
+text.
 
-At larger airports the FAA issues most NOTAMs twice: once in the domestic format and once,
-in ICAO form, in its international series for users abroad. A view shows such a NOTAM
-once: an international-series NOTAM is left out when a domestic NOTAM on the same view has
-exactly the same text, start and end. Any that differs in the slightest is shown.
+### How a NOTAM reads
 
-The plain-language line spells out the contractions the FAA names for NOTAMs (FAA Order
-7930.2): those of the NOTAM tables in the Aeronautical Information Manual (chapter 5) and
-in the Order itself, those FAA Order JO 7340.2 (Contractions) marks for ICAO usage, and
-those of ICAO's own list (Doc 8400: AMSL, BRG, MAG, AIP and the like, which NOTAMs from
-other countries use throughout). Feet, nautical miles, metres, kilograms and megahertz are
-written out after a number. A leading X is read as "cross" where the FAA gives the word
-(XNG is crossing, XWIND is crosswind); X on its own is left as written.
+The plain-language line spells out the contractions the FAA defines for NOTAMs (the NOTAM
+tables of the Aeronautical Information Manual, FAA Order 7930.2 and FAA Order JO 7340.2)
+and ICAO's (Doc 8400, which NOTAMs from other countries use). Units are written out after a
+number (feet, nautical miles, metres, kilograms, megahertz). A NOTAM is all capitals, so
+ordinary words are put in lower case: "DO NOT USE FALSE INDICATIONS POSSIBLE" reads "do not
+use false indications possible".
 
-A NOTAM is all capitals, so plain words are put in lower case: the words of the FAA's own
-documents, and any word of four letters or more that an English dictionary lists as an
-ordinary word ("DO NOT USE FALSE INDICATIONS POSSIBLE" reads "do not use false indications
-possible"). A token made of pieces joined by marks is read piece by piece when every piece
-is known (`RMK/FALSE` is "remark/false", `1.PSN` is "1.position", `RWY01R` is "runway
-01R"); if any piece is not, the whole token stays as written.
+Anything that cannot be read safely stays as written: designators, numbers and place
+identifiers ("RADIUS OF SAT" is San Antonio, not Saturday), contractions with two meanings,
+groups that are also plain words (IF, PER), names, the phonetic alphabet (taxiway BRAVO),
+and words that may be the name of a fix in a procedure or route NOTAM. Since capitals do
+not tell a name from a word, a name that is also an ordinary word reads in lower case
+("drum military operations area" for the DRUM MOA). Where a contraction stands for several
+forms of one word (ACT is active, activated or activity), the line uses the form the FAA
+writes most often, which can be the wrong part of speech ("bird active increased").
 
-Left exactly as written are:
+The NOTAM as issued is always beneath the line, and it is the one that counts. This display
+is an aid in the hangar, not a preflight briefing.
 
-- designators, numbers, and a location identifier where the NOTAM names a place ("RADIUS
-  OF SAT" is San Antonio, not Saturday);
-- a contraction to which the sources give two different meanings (REP is a report or a
-  reporting point) or only a description (QNH, UTC);
-- a group that is both a plain word and a contraction (IF, PER, MAP), since only the
-  sentence tells which;
-- a two-letter group unless an FAA document names it and no publication gives it any other
-  meaning (PN and HJ are spelled out; FL, SA and NR are not);
-- a word of three letters that the FAA's documents do not write (ASH, ELK): three letters
-  are also a location identifier;
-- a word the dictionary also lists as a name (CHINA, GREEN), the words of the phonetic
-  alphabet (taxiway BRAVO), and a five-letter word where it may be the name of a fix: in a
-  procedure or route NOTAM, and next to an airway or another fix;
-- a state code after a comma ("DALLAS, TX"; so OR and IN stay in capitals there), and the
-  letter A except before a distance ("within a 45 nautical miles radius"): it is also a
-  taxiway and an index;
-- in a procedure NOTAM (IAP, SID, STAR and the like), the contractions of the procedure
-  charts.
+Also on the cards:
 
-The capitals of a NOTAM do not tell a name from a word, so a name that is also an ordinary
-word reads in lower case ("drum military operations area" for the DRUM MOA).
+- When the times in the FAA's data differ from the times written in the NOTAM, the card
+  says so in red; the NOTAM text is the one to read.
+- At larger airports the FAA issues most NOTAMs twice: in the domestic format, and in ICAO
+  form in its international series. A view shows such a NOTAM once, leaving out the
+  international one only when its text, start and end are exactly those of a domestic NOTAM
+  on the same view.
+- The NMS is not the authoritative source for NOTAMs issued by other countries, and a view
+  that holds such NOTAMs says so.
 
-Where a contraction stands for several forms of one word (ACT is active, activated or
-activity), the line uses the form the FAA's NOTAM documents write most often, or the one
-they write beside the neighbouring word. That can be the wrong part of speech for the
-sentence ("bird active increased"); the meaning is the FAA's either way. The NOTAM as
-issued is always shown beneath the line, and it is the NOTAM as issued that counts. This
-display is an aid in the hangar, not a preflight briefing.
+### Rewriting NOTAMs with your own model
 
-When the times the FAA's data gives for a NOTAM differ from the times written in the NOTAM
-itself, the card says so in red and the NOTAM text is the one to read.
+A language model you host can turn the plain-language line into a sentence, for example
+"Taxiway C between the approach end of runway 04R and the approach end of runway 04L is
+closed". It needs a server with an OpenAI-compatible API, such as LiteLLM or vLLM; nothing
+is sent anywhere else. Live NOTAM views need it; sample views work without it. In the
+*Model rewrite and source label* card of the NOTAMs page:
 
-**Rewriting NOTAMs with your own model.** A language model you host turns the
-plain-language line into a sentence, for example "Taxiway C between the approach end of
-runway 04R and the approach end of runway 04L is closed". It needs a server with an
-OpenAI-compatible API, such as LiteLLM or vLLM. Nothing is sent anywhere else. Live NOTAM
-views need it; sample views work without. In the *Model rewrite and source label* card of
-the NOTAMs page:
-
-- **Rewrite NOTAMs with the model.** Turns the rewrite on.
-- **Model, as named on the TV.** What the footer of the NOTAM views calls the model, for
-  example `Qwen 3.8 27B`.
-- **Endpoint.** The server's URL, ending in `/v1`.
-- **Model name at the endpoint.** The name the server knows the model by. **Test model**
-  fills in the names the server offers.
-- **Wait for an answer at most.** How long one answer may take.
-- **Endpoint API key.** The server's key, if it wants one. **Store key** keeps it in the
+- **Rewrite NOTAMs with the model** turns it on.
+- **Model, as named on the TV** is what the footer calls the model, for example
+  `Qwen 3.8 27B`.
+- **Endpoint** is the server's URL, ending in `/v1`, and **Model name at the endpoint** the
+  name the server knows the model by.
+- **Wait for an answer at most** limits how long one answer may take.
+- **Endpoint API key** is the server's key, if it wants one. **Store key** keeps it in the
   display's secrets store; it is never shown again.
-- **Test model.** Sends one FAA example NOTAM to the model and shows its answer, whether the
-  answer passed the check, and how long it took. Nothing is saved.
+- **Test model** sends one FAA example NOTAM to the model and shows the answer, whether it
+  passed the check, and how long it took. It also fills in the model names the server
+  offers. Nothing is saved.
 
-A program checks every answer before it is shown. Each number, designator, identifier and
-word of the NOTAM must be in the answer, in the NOTAM's order. A number, a designator, an
-identifier or a code is written exactly as in the NOTAM; a contraction in a wording its
-source gives, never left as a contraction where the plain-language line spells it out; a
-plain word in its own spelling, and a name in capitals or with a capital initial. The only
-words the model may add are these: a, an, the, is, are, and, of, at, with, that, which,
-there, it, its, this, and "to" after the NOTAM's DUE ("due to maintenance"). The only
-punctuation it may add is commas, periods, colons, semicolons, parentheses, quotes and
-dashes, and none of it where it could change how a number reads: no symbol such as ~ or <,
-no sign or decimal point before a number, nothing joining two numbers. Where the NOTAM
-ends a statement with a full stop, the answer must end it there too, so that two statements
-are never run into one. An answer that adds, drops, reorders or rewords anything else goes
-back to the model once, with what was wrong with it; if the second answer fails too, both
-are discarded and the line with the contractions spelled out stays on the card. The check
-cannot tell whether one of those joining words connects two parts of the NOTAM the way the
-NOTAM means, so each card says which line it shows ("Model rewrite, checked against the
-NOTAM" or "FAA contractions spelled out"), and the NOTAM as issued is beneath it either
-way.
+A program checks every answer before it is shown. Every number, designator, identifier and
+word of the NOTAM must be in the answer, in the NOTAM's order and written as in the NOTAM.
+The model may add only a few joining words (a, an, the, is, are, and, of, at, with, that,
+which, there, it, its, this, and "to" after DUE) and punctuation that cannot change how a
+number reads, and must end a statement where the NOTAM does. An answer that fails goes back
+to the model once, with what was wrong; if the second one fails too, the spelled-out line
+stays. The check cannot tell whether a joining word links two parts of the NOTAM the way
+the NOTAM means, so each card says which line it shows ("Model rewrite, checked against the
+NOTAM" or "FAA contractions spelled out"), and the NOTAM as issued is beneath it either way.
 
-Each NOTAM is rewritten once and its checked answer is kept, also across restarts. The view
-never waits for the model: a NOTAM shows the spelled-out line until its rewrite has passed
-the check, and keeps it when the model server is down. The NOTAMs page counts the rewrites
-shown, refused and waiting.
+Each NOTAM is rewritten once and the checked answer is kept, also across restarts. The view
+never waits for the model: a NOTAM shows the spelled-out line until its rewrite has passed,
+and keeps it while the model server is down. The NOTAMs page counts the rewrites shown,
+refused and waiting.
 
 To measure a model before relying on it, `backend/tools/eval_notam_model.py` sends it the
-FAA's example NOTAMs (or a file of your own) and reports how many answers passed the check,
-every refused answer with the reason, and accepted answers beside the spelled-out line:
+FAA's example NOTAMs (or a file of your own) and reports how many answers passed, every
+refused answer with the reason, and the accepted answers beside the spelled-out line. It
+uses the endpoint key stored on the admin page:
 
 ```bash
 docker run --rm -v "$PWD/data:/data" -v "$PWD/backend:/work:ro" -w /work hangar-display:latest \
   python tools/eval_notam_model.py --base-url https://llm.example.net/v1 --model NAME
 ```
 
-It uses the endpoint key stored on the admin page.
-
 With `--network container:hangar-display` and `--display http://localhost:8000` added, it
-uses the NOTAMs your display currently shows for your own locations instead. `--jobs 4`
-keeps four NOTAMs with the model at a time, and `--out FILE` saves every answer.
+uses the NOTAMs your display shows for your own locations instead. `--jobs 4` keeps four
+NOTAMs with the model at a time, and `--out FILE` saves every answer.
 
-**Rotation.** How long each local and regional view stays on screen, how many local views
-one cycle shows, and whether a regional view goes between local views; the page lists the
-rotation as it is saved. The other views set their own time on their pages.
+## Use the display from an automation
 
-**Traffic source.** Where aircraft positions come from:
+Home Assistant, or any other system on your network, can step the display through its
+views, jump to a view, black out the picture, and read the weather at your airports. (The
+admin page's Overview has buttons for the display controls.)
 
-- **A public feed**: adsb.fi, adsb.lol, or airplanes.live, free of charge. Coverage depends
-  on volunteers' receivers near your airport, and updates arrive about once a second. An
-  airplanes.live API key, if you have one, is stored on the same page.
-- **The local receiver**: your own tar1090, readsb, or dump1090. Enter the URL of its
-  `aircraft.json`, for example `http://192.168.1.20:8080/data/aircraft.json`. Use the
-  receiver's LAN address even if it runs on the Pi itself, because the app runs inside a
-  container where `localhost` means the container.
-- **The local receiver, else a public feed**: the receiver, and the feed while it is
-  unreachable.
+**API keys.** An automation identifies itself with an API key. Create one on the admin
+page under **Access**, API keys: name it after what will use it, and choose what it may do
+(control the display, or also change settings). The key is shown once, so copy it then;
+the page keeps only enough of it to tell keys apart, and **Revoke** ends it. Send it in
+the `Authorization` header as `Bearer` followed by the key. The admin password is not
+accepted for these calls.
 
-Press **Test connection** to check the source before saving; it reports how many aircraft
-each source sees near your first airport.
+**The full reference.** The admin page's **Display API** page describes every call: what it
+takes and answers, its errors and limits, the event stream that reports changes, and the
+ids of your display's views, with your display's address filled in. **Copy as Markdown**
+puts it on the clipboard, ready to paste into an AI agent or a project that will make the
+calls; **Download** saves it as `display-api.md`. It never contains a key. The same
+reference, with `<pi-ip>` in place of the address, is
+[backend/app/data/display_api.md](backend/app/data/display_api.md).
 
-**Display.** Your IANA timezone (for example `America/Denver`) for the clock, how often
-METARs refresh, and when a report is marked stale. The map uses OpenStreetMap tiles by
-default. The Pi keeps a copy of every tile your views need in `data/tiles` (fetched once,
-refreshed every two weeks) and downloads them for new airports and regions in the
-background after you save, so views switch without the map redrawing. If you have your own
-tile server or a vector style URL from a map provider, enter it here.
+**Home Assistant** reads the key from `secrets.yaml`. Put the header's whole value there:
+the word `Bearer`, a space, and the key.
 
-**Access.** Your account (the username, a new password, signing out every browser), the
-API keys for automations (see below), and a list of what the display keeps in secret and
-where to change it. A password or key is stored on the Pi in `data/secrets.json`, readable
-only by the display; passwords and API keys as hashes, so they cannot be read back even
-from that file.
+```yaml
+hangar_display_key: "Bearer tpc_your-key"
+```
 
-**Display API.** The reference for programs that control the TV or read its weather over
-the network, filled in with this display's address and views (see
-[Use the display from an automation](#use-the-display-from-an-automation)).
+### Change the view
 
-### Editing the file directly
+The display keeps cycling on its own. These calls move it on, back, or straight to a view,
+which then stays up for its usual time before the cycle continues.
 
-Every setting of the Views and System pages lives in `data/config.yaml` on the Pi (nothing
-secret is in it: addresses, keys and the account are in `data/secrets.json`). The display
-writes it with the defaults at its first start; like everything in `data/`, it is yours and
-not part of the repository. You can edit it by hand and run `docker compose restart` to
-apply. The previous three versions are kept as `config.yaml.bak.1` to `.3` every time it is
-saved, and if the file is ever unreadable the display still starts, using the newest good
-backup, and the admin page shows a banner explaining what is wrong.
+```bash
+curl -X POST -H 'Authorization: Bearer tpc_your-key' http://<pi-ip>:8000/api/display/next
+```
+
+```bash
+curl -X POST -H 'Authorization: Bearer tpc_your-key' http://<pi-ip>:8000/api/display/previous
+```
+
+```bash
+# jump to a view by id; GET /api/views lists them (local:KSEA, region:Puget Sound, satellite, cameras, notams:KS50)
+curl -X POST -H 'Authorization: Bearer tpc_your-key' -H 'content-type: application/json' \
+  -d '{"view": "satellite"}' http://<pi-ip>:8000/api/display/view
+```
+
+`GET /api/display` reports what is on screen: `showing.label`, and its place in the cycle as
+`showing.index` of `showing.count`. Reading it needs no key.
+
+In Home Assistant's `configuration.yaml`: commands for the buttons and for jumping to a
+view, and a sensor that shows the current view.
+
+```yaml
+rest_command:
+  hangar_display_next:
+    url: "http://<pi-ip>:8000/api/display/next"
+    method: post
+    headers:
+      authorization: !secret hangar_display_key
+  hangar_display_previous:
+    url: "http://<pi-ip>:8000/api/display/previous"
+    method: post
+    headers:
+      authorization: !secret hangar_display_key
+  hangar_display_view:
+    url: "http://<pi-ip>:8000/api/display/view"
+    method: post
+    content_type: "application/json"
+    headers:
+      authorization: !secret hangar_display_key
+    payload: '{"view": "{{ view }}"}'
+
+rest:
+  - resource: "http://<pi-ip>:8000/api/display"
+    scan_interval: 5
+    sensor:
+      - name: Hangar display view
+        value_template: "{{ value_json.showing.label or 'unknown' }}"
+```
+
+A dashboard card with previous and next buttons around the current view:
+
+```yaml
+type: horizontal-stack
+cards:
+  - type: button
+    name: Previous
+    icon: mdi:skip-previous
+    tap_action:
+      action: perform-action
+      perform_action: rest_command.hangar_display_previous
+  - type: entity
+    entity: sensor.hangar_display_view
+    name: Showing
+  - type: button
+    name: Next
+    icon: mdi:skip-next
+    tap_action:
+      action: perform-action
+      perform_action: rest_command.hangar_display_next
+```
+
+To jump to a view from an automation or a script, pass its id:
+
+```yaml
+actions:
+  - action: rest_command.hangar_display_view
+    data:
+      view: satellite
+```
+
+A dashboard button that brings up the cameras:
+
+```yaml
+type: button
+name: Cameras
+icon: mdi:cctv
+tap_action:
+  action: perform-action
+  perform_action: rest_command.hangar_display_view
+  data:
+    view: cameras
+```
+
+### Black out the picture
+
+The picture can be blacked out for a while and brought back, for example while a movie
+plays or when the doorbell rings. The display keeps running underneath, so the picture
+returns at once.
+
+```bash
+# black out for 30 seconds
+curl -X POST -H 'Authorization: Bearer tpc_your-key' -H 'content-type: application/json' \
+  -d '{"seconds": 30, "reason": "doorbell"}' http://<pi-ip>:8000/api/display/blackout
+```
+
+```bash
+# black out until told otherwise, then restore
+curl -X POST -H 'Authorization: Bearer tpc_your-key' http://<pi-ip>:8000/api/display/blackout
+curl -X POST -H 'Authorization: Bearer tpc_your-key' http://<pi-ip>:8000/api/display/restore
+```
+
+In Home Assistant's `configuration.yaml`:
+
+```yaml
+rest_command:
+  hangar_display_blackout:
+    url: "http://<pi-ip>:8000/api/display/blackout"
+    method: post
+    content_type: "application/json"
+    headers:
+      authorization: !secret hangar_display_key
+    payload: '{"seconds": {{ seconds | default(30) }}, "reason": "{{ reason | default("home assistant") }}"}'
+  hangar_display_restore:
+    url: "http://<pi-ip>:8000/api/display/restore"
+    method: post
+    headers:
+      authorization: !secret hangar_display_key
+```
+
+Then in an automation:
+
+```yaml
+actions:
+  - action: rest_command.hangar_display_blackout
+    data:
+      seconds: 20
+      reason: doorbell
+```
+
+### Read the weather at your airports
+
+`GET /api/conditions` gives the latest report the display holds for each of your airports:
+the flight category, ceiling, visibility, wind direction, speed and gusts, temperature, dew
+point, relative humidity and altimeter setting, with the report itself. It needs an API
+key; either kind works.
+
+```bash
+curl -H 'Authorization: Bearer tpc_your-key' http://<pi-ip>:8000/api/conditions
+```
+
+`monitored` lists the airports in the order of your settings, and `airports` gives each
+one's values by identifier. A value the report does not give is `null`, and `category` is
+`UNKNOWN` when the report does not settle one. `ceiling_ft` is `null` both when there is no
+ceiling and when its height is not known; `ceiling_known` tells the two apart. The display
+refreshes its reports as often as the Display page says (every 5 minutes by default), so
+polling more often gains nothing.
+
+In Home Assistant's `configuration.yaml`, one sensor per value you want, here for KBFI
+(repeat them for each airport). The category sensor carries the other values as
+attributes.
+
+```yaml
+rest:
+  - resource: "http://<pi-ip>:8000/api/conditions"
+    scan_interval: 300
+    headers:
+      authorization: !secret hangar_display_key
+    sensor:
+      - name: KBFI flight category
+        value_template: "{{ value_json.airports.KBFI.category }}"
+        json_attributes_path: "$.airports.KBFI"
+        json_attributes:
+          - ceiling_ft
+          - ceiling_known
+          - visibility_sm
+          - wind_dir_deg
+          - wind_gust_kt
+          - observed
+          - stale
+          - raw
+      - name: KBFI temperature
+        value_template: "{{ value_json.airports.KBFI.temperature_c }}"
+        availability: "{{ value_json.airports.KBFI.temperature_c is not none }}"
+        unit_of_measurement: "°C"
+        device_class: temperature
+      - name: KBFI humidity
+        value_template: "{{ value_json.airports.KBFI.humidity_pct }}"
+        availability: "{{ value_json.airports.KBFI.humidity_pct is not none }}"
+        unit_of_measurement: "%"
+        device_class: humidity
+      - name: KBFI wind speed
+        value_template: "{{ value_json.airports.KBFI.wind_speed_kt }}"
+        availability: "{{ value_json.airports.KBFI.wind_speed_kt is not none }}"
+        unit_of_measurement: "kn"
+        device_class: wind_speed
+```
+
+An automation that reacts when the field goes IFR or worse:
+
+```yaml
+triggers:
+  - trigger: state
+    entity_id: sensor.kbfi_flight_category
+    to: ["IFR", "LIFR"]
+actions:
+  - action: persistent_notification.create
+    data:
+      message: "KBFI is {{ trigger.to_state.state }}"
+```
+
+## Day to day
+
+- **Change settings:** on the admin page. The TV reloads itself when you save.
+- **Update to a new version:**
+
+  ```bash
+  cd ThePilotChannel && git pull && docker compose up -d --build
+  ```
+
+  The display notices the new version and reloads on its own.
+- **Update the OS:** `sudo apt full-upgrade` and reboot, or run the bootstrap again (it
+  upgrades the system and re-checks every other step). On a Pi 4 the kiosk browser updates
+  with the OS. On a Pi 5 it is held at the patched build; to take a newer patched release,
+  change the release named in `deploy/bootstrap.sh` and run it again.
+- **Add or change a camera:** on the Cameras page. A new address is live within seconds.
+- **Forgot the admin password:** on the Pi, in the clone, run
+  `docker compose exec app python -m app.access set-password` and type a new one. It signs
+  out every browser.
+- **Restart the display browser:** `pkill -x cage`. It comes straight back.
+- **Reboot the Pi:** everything starts again by itself, also after a power cut.
+- **Undo a bad settings change:** copy `data/config.yaml.bak.1` over `data/config.yaml` and
+  run `docker compose restart`.
+- **Map looks out of date:** delete the `data/tiles` folder; it is rebuilt by itself.
+- **Logs:** `docker compose logs -f` for the app (capped so it cannot fill the SD card),
+  `docker compose logs go2rtc` for the camera relay, and
+  `/dev/shm/hangar-kiosk/hangar-kiosk.log` for the kiosk browser.
+- **Change the Wi-Fi network or password:** use `sudo nmtui` (Edit a connection), then run
+  `sudo ~/ThePilotChannel/deploy/harden-wifi.sh`, which moves the edited profile back out of
+  netplan and refreshes the backup copy. To forget a network, delete it in `nmtui` and
+  remove its `hardened-<uuid>.nmconnection` file from
+  `/usr/lib/NetworkManager/system-connections`.
+- **Move to a new Pi:** everything you set up is in two files in the clone's `data/` folder,
+  which git leaves alone: `config.yaml` (the settings) and `secrets.json` (the account, the
+  API keys, the camera links and the other keys; keep it private). Copy both off the old Pi.
+  Flash and bootstrap the new Pi as in the install steps, put both files back in `data/`,
+  and run `docker compose up -d`. The tile and weather caches rebuild on their own. The new
+  Pi may get a different address: update any automation that points at it.
+
+## Upgrading from an older version
+
+Update as usual (`git pull && docker compose up -d --build`), with these extra steps if
+they apply:
+
+- **Your version kept passwords and camera links in `.env`.** At its first start, the new
+  version copies what `.env` holds (the admin password, as the password of the account
+  `admin`; the camera links; the FAA keys; the model key) into `data/secrets.json`, and
+  does not read `.env` again. The Access page lists the lines still there: delete them, or
+  the file, and run `docker compose up -d`. Home Assistant and scripts that sent the admin
+  password need an API key instead (see
+  [Use the display from an automation](#use-the-display-from-an-automation)).
+- **Your repository held `data/config.yaml`.** `git pull` refuses to replace your settings
+  file. Set it aside for the update and put it back afterwards:
+
+  ```bash
+  cd ThePilotChannel && cp data/config.yaml ~/config.yaml.keep && git checkout -- data/config.yaml
+  git pull && cp ~/config.yaml.keep data/config.yaml && docker compose up -d --build
+  ```
+
+## Troubleshooting
+
+`http://<pi-ip>:8000/api/status` reports the state of every feed, and
+`docker compose logs` the errors behind it.
+
+### The Pi and the network
+
+- **The Pi does not come back on Wi-Fi after a power cut.** Plug in a network cable
+  (Ethernet needs no saved settings) or a keyboard, then run
+  `sudo ~/ThePilotChannel/deploy/harden-wifi.sh`. It recreates the Wi-Fi profile from the
+  details you entered in Imager (kept in `/boot/firmware/network-config`) and removes the
+  emptied files in `/etc/netplan`. `deploy/harden-wifi.sh --check` shows whether a Pi is
+  protected. The cause is a
+  [Raspberry Pi OS issue](https://github.com/raspberrypi/trixie-feedback/issues/99).
+- **Every view waits for data after a reboot, and the weather is missing.** The app started
+  before the Wi-Fi had a DNS server, and cannot resolve names; `/api/status` shows
+  "Temporary failure in name resolution". Run `systemctl --user restart docker` and it
+  recovers at once. The bootstrap makes Docker wait for DNS at boot;
+  `deploy/bootstrap.sh --check` confirms that is in place.
+- **`docker` commands fail or say the daemon is not running.** Docker runs in rootless mode
+  as your user: run `docker` commands as that user, without `sudo`, and check
+  `systemctl --user status docker`. `deploy/bootstrap.sh --check` reports what is wrong.
+
+### The TV
+
+- **The TV stays black or shows only the holding screen.** The app is not up yet or failed
+  to start: run `docker compose ps` and `docker compose logs --tail=50` on the Pi. If the
+  kiosk never appears at all, check `/dev/shm/hangar-kiosk/hangar-kiosk.log`, confirm
+  `dtoverlay=vc4-kms-v3d` is in `/boot/firmware/config.txt`, and make sure you rebooted
+  after the bootstrap.
+- **`Unable to create the wlroots backend` in the kiosk log.** The kiosk must start from the
+  TV console (tty1) with no `WAYLAND_DISPLAY` in its environment. Do not export
+  `WAYLAND_DISPLAY` in your login shell.
+- **The footer dot is amber or red.** Amber means the last traffic snapshot is more than ten
+  seconds old; red means the source is failing. Hover over the dot in a browser, or check
+  `/api/status`, for the reason.
+- **Map tiles do not load.** The Pi cannot reach OpenStreetMap. Tiles already in
+  `data/tiles` keep working meanwhile. Check the connection, or point the tile address
+  (Display page) at your own tile server.
+
+### Traffic and weather
+
+- **No aircraft.** Press **Test connection** on the Traffic source page, or open
+  `/api/status`. For a local receiver, the address must be its network address, not
+  `localhost`.
+- **No weather or wind barbs.** Check that the Pi can reach `aviationweather.gov`, and that
+  the identifier is the one the station reports under (`KS50`, not `S50`); some small
+  fields have no weather station. An airport aviationweather.gov does not list is read from
+  `tgftp.nws.noaa.gov`, so a newly installed AWOS shows up once its reports are on either.
+  The display keeps the last weather it fetched, also across restarts, and turns the footer
+  dot amber when it is getting old and red when refreshes fail. A name-resolution error in
+  the log means the router's DNS is not answering.
+- **A dash in place of a value.** The report did not give it. For the ceiling, a dash also
+  means there is no ceiling.
+
+### Cameras
+
+- **A tile says NO SIGNAL.** The relay is not getting that stream. **Test** on the Cameras
+  page says whether the camera answers and why not; the Overview page says whether the relay
+  is up and names tiles without a stream; `docker compose logs go2rtc` shows the relay's
+  side. The camera's RTSP output must be turned on.
+- **Video is choppy, or the tiles stay black on a Pi 4.** The camera view needs the Pi 5's
+  hardware decoder. On a Pi 5, `deploy/bootstrap.sh --check` confirms that the patched
+  browser is installed and held.
+
+### NOTAMs
+
+- **There is no NOTAM view although the views are on.** Live NOTAM views are held back until
+  the model rewrite is on and the model has a name for the TV; the NOTAMs page says so at
+  its top.
+- **A NOTAM view says the data is unavailable, or NOT REFRESHING.** The reason is on the
+  view when nothing was ever fetched, on the Overview and NOTAMs pages, and in
+  `docker compose logs`. While refreshes fail, the view keeps the last NOTAMs it holds,
+  with the time they were retrieved.
+  - "No FAA credentials are stored for the ... environment": no keys were stored, or they
+    were stored for another environment than the one selected.
+  - "rejected the credentials": the FAA did not accept the keys. The display waits half an
+    hour, or until you store keys again, before asking once more.
+  - "is limiting requests": the FAA said it was asked too often; the display waits longer
+    before its next pull.
+  - "reported a failure": the FAA answered that the request failed, and gave its reason.
+  - "does not know location": the identifier is not one the FAA files NOTAMs under.
+- **NOTAM cards never say "Model rewrite".** The NOTAMs page counts the rewrites shown,
+  refused and waiting, and gives the reason when the model server cannot be used: no
+  endpoint key stored, a key the server rejects, a model name it does not know, or no answer
+  within the time allowed. **Test model** shows the same for one NOTAM. Many refused answers
+  mean the model does not follow its instructions; the cards then keep the spelled-out
+  line, as intended.
+
+### The admin page and automations
+
+- **A red banner about `config.yaml`.** The file could not be read, and the display is
+  running with a backup or the defaults. Fix the file by hand, or save from the admin page
+  to write a fresh one (the broken file is kept as `config.yaml.bak.1`).
+- **The admin page says the secrets store cannot be read.** `data/secrets.json` and its
+  backup are damaged. The display keeps running, but nobody can sign in. Restore the file
+  from a copy, or delete `data/secrets.json` and `data/secrets.json.bak` and create the
+  account again (camera links and keys then have to be entered again too).
+- **Signing in says to wait.** After several wrong passwords the page refuses further tries
+  for a while, longer each time. Wait, or set a new password on the Pi (see
+  [Day to day](#day-to-day)).
+- **An automation gets 401 or 403.** 401: the key is missing, mistyped or revoked, or the
+  call still sends the admin password. 403: the key may only control the display and the
+  call changes settings; create a key that may do both.
+
+## The settings file
+
+Every setting of the Views and System pages lives in `data/config.yaml` on the Pi; nothing
+secret is in it (addresses, keys and the account are in `data/secrets.json`). The display
+writes it with the defaults at its first start. Like everything in `data/`, it is yours and
+not part of the repository.
+
+You can edit it by hand and run `docker compose restart` to apply it. Each save keeps the
+previous three versions as `config.yaml.bak.1` to `.3`. If the file cannot be read, the
+display still starts with the newest good backup, and the admin page shows a banner that
+says what is wrong.
+
+Every setting, with its default or an example:
 
 ```yaml
 airports:
@@ -562,412 +951,33 @@ notams:
     timeout_s: 60            # seconds allowed per answer
 ```
 
-## Use the display from an automation
-
-Home Assistant or any other system on the network can step the display through its views,
-jump to a view, black out the picture, and read the weather at your airports. The admin
-page's Overview has buttons for the display controls.
-
-An automation identifies itself with an API key. Create one on the admin page under
-**Access**, API keys: name it after what will use it and choose what it may do (control the
-display, or also change settings). The key is shown once, so copy it then; the page keeps
-only enough of it to tell keys apart, and **Revoke** ends it. Send it in the
-`Authorization` header as `Bearer` followed by the key. The admin password is not accepted
-for these calls.
-
-The admin page's **Display API** page is the full reference for these calls: what each one
-takes and answers, its errors and limits, the event stream that reports changes, and the
-ids of your display's views, with your display's address filled in. **Copy as Markdown**
-puts it on the clipboard, ready to paste into an AI agent or a project that will make the
-calls; **Download** saves it as `display-api.md`. It never contains a key. The same
-reference with `<pi-ip>` in place of the address is
-[backend/app/data/display_api.md](backend/app/data/display_api.md).
-
-### Change the view
-
-The display keeps cycling on its own; these calls move it on, back, or straight to a view,
-which then stays up for its usual time before the cycle continues.
-
-```bash
-curl -X POST -H 'Authorization: Bearer tpc_your-key' http://<pi-ip>:8000/api/display/next
-```
-
-```bash
-curl -X POST -H 'Authorization: Bearer tpc_your-key' http://<pi-ip>:8000/api/display/previous
-```
-
-```bash
-# jump to a view by id; GET /api/views lists them (local:KSEA, region:Puget Sound, satellite, cameras, notams:KS50)
-curl -X POST -H 'Authorization: Bearer tpc_your-key' -H 'content-type: application/json' \
-  -d '{"view": "satellite"}' http://<pi-ip>:8000/api/display/view
-```
-
-`GET /api/display` reports what is on screen: `showing.label`, and its place in the cycle as
-`showing.index` of `showing.count`. Reading it needs no key.
-
-Home Assistant: put the header's value in `secrets.yaml`, the word `Bearer`, a space, and
-the key:
-
-```yaml
-hangar_display_key: "Bearer tpc_your-key"
-```
-
-Then in `configuration.yaml`, commands for the buttons and for jumping to a view, and a
-sensor that shows the current view:
-
-```yaml
-rest_command:
-  hangar_display_next:
-    url: "http://<pi-ip>:8000/api/display/next"
-    method: post
-    headers:
-      authorization: !secret hangar_display_key
-  hangar_display_previous:
-    url: "http://<pi-ip>:8000/api/display/previous"
-    method: post
-    headers:
-      authorization: !secret hangar_display_key
-  hangar_display_view:
-    url: "http://<pi-ip>:8000/api/display/view"
-    method: post
-    content_type: "application/json"
-    headers:
-      authorization: !secret hangar_display_key
-    payload: '{"view": "{{ view }}"}'
-
-rest:
-  - resource: "http://<pi-ip>:8000/api/display"
-    scan_interval: 5
-    sensor:
-      - name: Hangar display view
-        value_template: "{{ value_json.showing.label or 'unknown' }}"
-```
-
-On a dashboard, previous and next buttons around the current view:
-
-```yaml
-type: horizontal-stack
-cards:
-  - type: button
-    name: Previous
-    icon: mdi:skip-previous
-    tap_action:
-      action: perform-action
-      perform_action: rest_command.hangar_display_previous
-  - type: entity
-    entity: sensor.hangar_display_view
-    name: Showing
-  - type: button
-    name: Next
-    icon: mdi:skip-next
-    tap_action:
-      action: perform-action
-      perform_action: rest_command.hangar_display_next
-```
-
-To jump to a view from an automation or a script, pass its id:
-
-```yaml
-actions:
-  - action: rest_command.hangar_display_view
-    data:
-      view: satellite
-```
-
-A dashboard button that brings up the cameras:
-
-```yaml
-type: button
-name: Cameras
-icon: mdi:cctv
-tap_action:
-  action: perform-action
-  perform_action: rest_command.hangar_display_view
-  data:
-    view: cameras
-```
-
-### Black out the picture
-
-The TV picture can be blacked out for a while and brought back, for example while a movie
-plays or when a doorbell rings. The display keeps running underneath, so the picture
-returns instantly.
-
-```bash
-# black out for 30 seconds
-curl -X POST -H 'Authorization: Bearer tpc_your-key' -H 'content-type: application/json' \
-  -d '{"seconds": 30, "reason": "doorbell"}' http://<pi-ip>:8000/api/display/blackout
-```
-
-```bash
-# black out until told otherwise, then restore
-curl -X POST -H 'Authorization: Bearer tpc_your-key' http://<pi-ip>:8000/api/display/blackout
-curl -X POST -H 'Authorization: Bearer tpc_your-key' http://<pi-ip>:8000/api/display/restore
-```
-
-Home Assistant, in `configuration.yaml`:
-
-```yaml
-rest_command:
-  hangar_display_blackout:
-    url: "http://<pi-ip>:8000/api/display/blackout"
-    method: post
-    content_type: "application/json"
-    headers:
-      authorization: !secret hangar_display_key
-    payload: '{"seconds": {{ seconds | default(30) }}, "reason": "{{ reason | default("home assistant") }}"}'
-  hangar_display_restore:
-    url: "http://<pi-ip>:8000/api/display/restore"
-    method: post
-    headers:
-      authorization: !secret hangar_display_key
-```
-
-Then in an automation:
-
-```yaml
-actions:
-  - action: rest_command.hangar_display_blackout
-    data:
-      seconds: 20
-      reason: doorbell
-```
-
-### Read the weather at your airports
-
-`GET /api/conditions` gives the latest report the display holds for each airport it
-watches: the flight category, ceiling, visibility, wind direction, speed and gusts,
-temperature, dew point, relative humidity and altimeter setting, with the report itself.
-It needs an API key; either kind works.
-
-```bash
-curl -H 'Authorization: Bearer tpc_your-key' http://<pi-ip>:8000/api/conditions
-```
-
-`monitored` lists the airports in the order of your settings, and `airports` gives each
-one's values by identifier. A value the report does not give is `null`, and `category` is
-`UNKNOWN` when the report does not settle one. `ceiling_ft` is `null` both when there is no
-ceiling and when its height is not known; `ceiling_known` tells the two apart. The display
-refreshes its reports as often as the Display page says (every 5 minutes by default), so
-polling more often gains nothing.
-
-Home Assistant, in `configuration.yaml`, with the key from `secrets.yaml` as above: a
-sensor per value you want, here for KBFI (repeat the sensors for each airport). The
-category sensor carries the other values as attributes.
-
-```yaml
-rest:
-  - resource: "http://<pi-ip>:8000/api/conditions"
-    scan_interval: 300
-    headers:
-      authorization: !secret hangar_display_key
-    sensor:
-      - name: KBFI flight category
-        value_template: "{{ value_json.airports.KBFI.category }}"
-        json_attributes_path: "$.airports.KBFI"
-        json_attributes:
-          - ceiling_ft
-          - ceiling_known
-          - visibility_sm
-          - wind_dir_deg
-          - wind_gust_kt
-          - observed
-          - stale
-          - raw
-      - name: KBFI temperature
-        value_template: "{{ value_json.airports.KBFI.temperature_c }}"
-        availability: "{{ value_json.airports.KBFI.temperature_c is not none }}"
-        unit_of_measurement: "°C"
-        device_class: temperature
-      - name: KBFI humidity
-        value_template: "{{ value_json.airports.KBFI.humidity_pct }}"
-        availability: "{{ value_json.airports.KBFI.humidity_pct is not none }}"
-        unit_of_measurement: "%"
-        device_class: humidity
-      - name: KBFI wind speed
-        value_template: "{{ value_json.airports.KBFI.wind_speed_kt }}"
-        availability: "{{ value_json.airports.KBFI.wind_speed_kt is not none }}"
-        unit_of_measurement: "kn"
-        device_class: wind_speed
-```
-
-An automation that reacts when the field goes IFR or worse:
-
-```yaml
-triggers:
-  - trigger: state
-    entity_id: sensor.kbfi_flight_category
-    to: ["IFR", "LIFR"]
-actions:
-  - action: persistent_notification.create
-    data:
-      message: "KBFI is {{ trigger.to_state.state }}"
-```
-
-## Day to day
-
-- **Change settings:** use the admin page. The TV reloads itself when you save.
-- **Update to a new version:**
-
-  ```bash
-  cd ThePilotChannel && git pull && docker compose up -d --build
-  ```
-
-  The display notices the new version and reloads on its own.
-- **Update the OS:** `sudo apt full-upgrade` and reboot, or run the bootstrap again (it
-  upgrades the system and re-checks every other step). On a Pi 4 the kiosk browser updates
-  with the OS; on a Pi 5 it is held at the patched build, and a newer patched release is
-  taken up by changing the release named in `deploy/bootstrap.sh` and running it again.
-- **Add or change a camera:** on the admin page under Cameras. A new address is live within
-  seconds; nothing is restarted.
-- **Forgot the admin password:** on the Pi, in the clone, run
-  `docker compose exec app python -m app.access set-password` and type a new one. It signs
-  out every browser.
-- **Coming from a version that kept passwords and camera links in `.env`:** update as
-  above. At its first start the new version copies what `.env` holds (the admin password,
-  as the password of the account `admin`; the camera links; the FAA keys; the model key)
-  into `data/secrets.json` and does not read `.env` again. The Access page lists the lines
-  that are still there: delete them, or the file, and run `docker compose up -d`. Home
-  Assistant and scripts that sent the admin password need an API key instead (see
-  "Use the display from an automation").
-- **Coming from a version whose repository held `data/config.yaml`:** `git pull` refuses to
-  replace your settings file. Set it aside for the update and put it back afterwards:
-
-  ```bash
-  cd ThePilotChannel && cp data/config.yaml ~/config.yaml.keep && git checkout -- data/config.yaml
-  git pull && cp ~/config.yaml.keep data/config.yaml && docker compose up -d --build
-  ```
-- **Restart the display browser:** `pkill -x cage`. It comes straight back.
-- **Reboot the Pi:** everything starts again automatically, including after a power cut.
-- **Move to a new Pi:** what you set up is in two files in the clone's `data/` folder, which
-  git leaves alone: `config.yaml` (the settings) and `secrets.json` (the account, the API
-  keys, the camera links and the other keys; keep it private). Copy both off the old Pi
-  before retiring it. Flash and bootstrap the new Pi as in the install steps, put both files
-  back in `data/`, and run `docker compose up -d`. The tile and weather caches rebuild on
-  their own. The new Pi may get a different address: update any automation that points at
-  it.
-- **Change the Wi-Fi network or password:** use `sudo nmtui` (Edit a connection), then run
-  `sudo ~/ThePilotChannel/deploy/harden-wifi.sh`: it moves the edited profile back out of
-  netplan and refreshes the backup copy. To forget a network, delete it in `nmtui` and
-  remove its `hardened-<uuid>.nmconnection` file from
-  `/usr/lib/NetworkManager/system-connections`.
-- **Logs:** the app's log is `docker compose logs -f` (capped so it cannot fill the SD
-  card), the camera relay's `docker compose logs go2rtc`; the kiosk browser's log is
-  `/dev/shm/hangar-kiosk/hangar-kiosk.log`.
-- **Undo a bad config change:** copy `data/config.yaml.bak.1` over `data/config.yaml` and
-  run `docker compose restart`.
-- **Map looks out of date or oddly cached:** delete the `data/tiles` folder; it is rebuilt
-  automatically.
-
-## Troubleshooting
-
-- **The Pi does not come back on Wi-Fi after a power cut.** Plug in a network cable
-  (Ethernet needs no saved settings) or a keyboard, then run
-  `sudo ~/ThePilotChannel/deploy/harden-wifi.sh`. It recreates the Wi-Fi profile from the
-  details you entered in Imager (kept in `/boot/firmware/network-config`) and removes the
-  emptied files in `/etc/netplan`. `deploy/harden-wifi.sh --check` shows whether a Pi is
-  protected; the cause is a
-  [Raspberry Pi OS issue](https://github.com/raspberrypi/trixie-feedback/issues/99).
-- **The TV stays black or shows only the holding screen.** The app is not up yet or failed
-  to start: run `docker compose ps` and `docker compose logs --tail=50` on the Pi. If the
-  kiosk never appears at all, check `/dev/shm/hangar-kiosk/hangar-kiosk.log`, confirm
-  `dtoverlay=vc4-kms-v3d` is in `/boot/firmware/config.txt`, and make sure you rebooted
-  after the installer.
-- **`Unable to create the wlroots backend` in the kiosk log.** The kiosk must start from
-  the physical console (tty1) with no `WAYLAND_DISPLAY` in its environment. Do not export
-  `WAYLAND_DISPLAY` in your login shell.
-- **`docker` commands fail or say the daemon is not running.** Docker runs in rootless
-  mode as your user: run `docker` commands as that user without `sudo`, and check
-  `systemctl --user status docker`. `deploy/bootstrap.sh --check` reports what is wrong.
-- **Every view waits for data after a reboot, and the weather is missing.** The app
-  container started before the Wi-Fi link had a DNS server and cannot resolve names;
-  `/api/status` shows "Temporary failure in name resolution". Run
-  `systemctl --user restart docker` and it recovers at once. The bootstrap makes the daemon
-  wait for DNS at boot; `deploy/bootstrap.sh --check` confirms that is in place.
-- **No aircraft.** Open `http://<pi-ip>:8000/api/status` or press Test connection on the
-  admin page. For a local receiver, the URL must be its LAN address, not `localhost`.
-- **No weather or wind barbs.** Check that the Pi can reach `aviationweather.gov` and that
-  the identifier is the one the station reports under (`KS50`, not `S50`); some small
-  fields have no weather station. An airport aviationweather.gov does not list is read from
-  `tgftp.nws.noaa.gov`, so a newly installed AWOS shows up once its reports are on either.
-  A dash in place of a value means the report did not carry it. The display keeps the last
-  weather it fetched, also across restarts, and turns the footer dot amber when it is
-  getting old and red when refreshes are failing. `docker compose logs` shows the error; a
-  name-resolution error means the router's DNS is not answering.
-- **Map tiles do not load.** The Pi cannot reach OpenStreetMap. Check connectivity; tiles
-  already in `data/tiles` keep working meanwhile. Or point `tile_url` at your own tile
-  server.
-- **A red banner on the admin page about `config.yaml`.** The file could not be read; the
-  display is running with a backup or defaults. Fix the file by hand, or save from the admin
-  page to write a fresh one (the broken file is kept as `config.yaml.bak.1`).
-- **The footer dot is amber or red.** Amber means the last traffic snapshot is more than
-  ten seconds old; red means the source is failing. Hover over it in a browser, or check
-  `/api/status`, for the reason.
-- **A camera tile says NO SIGNAL.** The relay is not getting that stream. On the Cameras
-  page, **Test** on the stream says whether the camera answers and why not; the Overview
-  page says whether the relay is up and names tiles that have no stream; and
-  `docker compose logs go2rtc` shows the relay's side. The camera's RTSP output must be
-  turned on.
-- **The admin page says the secrets store cannot be read.** `data/secrets.json` is damaged
-  and so is its backup. The display keeps running, but nobody can sign in. Restore the file
-  from a copy, or delete `data/secrets.json` and `data/secrets.json.bak` and create the
-  account again (the camera links and keys then have to be entered again too).
-- **Signing in says to wait.** After several wrong passwords the page refuses further tries
-  for a while, longer each time. Wait it out, or set a new password on the Pi (see "Forgot
-  the admin password").
-- **An automation gets 401 or 403.** 401: the key is missing, mistyped or revoked, or the
-  call still sends the admin password. 403: the key may only control the display and the
-  call changes settings; create a key that may do both.
-- **There is no NOTAM view although the views are on.** Live NOTAM views are held back
-  until the model rewrite is on and the model has a name for the TV; the NOTAMs page says so
-  at its top.
-- **A NOTAM view says the data is unavailable or NOT REFRESHING.** The reason is on the
-  view when nothing was ever fetched, on the admin's Overview and NOTAMs pages, and in
-  `docker compose logs`. "No FAA credentials are stored for the ... environment" means no
-  keys were stored, or they were stored for another environment than the one selected;
-  "rejected the credentials" means the FAA did not accept them (the display then waits half
-  an hour, or until you store keys again, before asking once more); "is limiting requests"
-  means the FAA answered that it was asked too often, and the display waits longer before
-  its next pull; "reported a failure" means the FAA answered and said the request failed,
-  with its reason; "does not know location" means the identifier is not one the FAA files
-  NOTAMs under. While refreshes fail the view keeps showing the last NOTAMs it holds, with
-  the time they were retrieved.
-- **NOTAM cards never say "Model rewrite".** The NOTAMs page gives the count of rewrites
-  shown, refused and waiting, and the reason when the model server cannot be used: no
-  endpoint key stored, a key the server rejects, a model name it does not know, or no
-  answer within the timeout. **Test model** shows the same for one NOTAM. A high count of
-  refused answers means the model does not follow the rules it is given; the cards then
-  keep the spelled-out line, which is the intended result.
-- **Camera video is choppy, or the tiles stay black on a Pi 4.** The camera view needs the
-  Pi 5's hardware decoder. On a Pi 5, `deploy/bootstrap.sh --check` confirms that the
-  patched browser is installed and held.
-
 ## Credits and licenses
 
-- Aircraft icons and their assignment tables are from [tar1090](https://github.com/wiedehopf/tar1090)
-  (GPL-2.0, based on FlightAware's dump1090; the C-130 icon is by Peter Lowden, CC BY 4.0).
-  They are vendored under `frontend/src/lib/vendor/tar1090/` with tar1090's license.
-- The aircraft type table (ICAO type designator to type description and wake category) is
-  from [tar1090-db](https://github.com/wiedehopf/tar1090-db).
+- Aircraft icons and their assignment tables are from
+  [tar1090](https://github.com/wiedehopf/tar1090) (GPL-2.0, based on FlightAware's
+  dump1090; the C-130 icon is by Peter Lowden, CC BY 4.0), vendored under
+  `frontend/src/lib/vendor/tar1090/` with tar1090's license. The aircraft type table (ICAO
+  type designator to type description and wake category) is from
+  [tar1090-db](https://github.com/wiedehopf/tar1090-db).
 - Map data © OpenStreetMap contributors. Weather from the NWS Aviation Weather Center and
   the NWS telecommunication gateway, radar from the Iowa Environmental Mesonet, satellite
   imagery from NOAA STAR.
-- NOTAMs are retrieved from the FAA NOTAM Management Service and shown as processed by
-  this display. The contraction meanings used to spell them out are from the FAA's
-  Aeronautical Information Manual (chapter 5, section 1), FAA Order 7930.2 (NOTAMs), FAA
-  Order JO 7340.2 (Contractions) and the FAA's Aeronautical Information Publication (GEN
-  2.2); the NOTAM keywords and the sample NOTAM texts are from
-  Order 7930.2. Those are U.S. Government works. The abbreviations of ICAO Doc 8400 are
-  taken as the Aeronautical Information Publications of Ireland, the Republic of Korea and
-  Portugal list them (GEN 2.2), where two of them agree; the meaning of RSC in Canadian
-  NOTAMs is from Transport Canada Advisory Circular 300-019. The English words are those of
-  the American and British word lists of [SCOWL](http://wordlist.aspell.net/) as Debian
-  packages them (wamerican, wbritish); the phonetic alphabet is from the AIM (chapter 4,
-  section 2).
 - Camera streams are relayed by [go2rtc](https://github.com/AlexxIT/go2rtc) (MIT), run as
   its own container. Hardware H.265 decoding in the kiosk browser comes from the
   [chromium-rpi-hevc](https://github.com/sslivins/chromium-rpi-hevc) build of Raspberry Pi
   OS's Chromium.
+- NOTAMs are retrieved from the FAA NOTAM Management Service and shown as processed by this
+  display. The sources for spelling them out:
+  - contraction meanings: the FAA's Aeronautical Information Manual (chapter 5, section 1),
+    FAA Order 7930.2 (NOTAMs, also the source of the NOTAM keywords and the sample NOTAM
+    texts), FAA Order JO 7340.2 (Contractions) and the FAA's Aeronautical Information
+    Publication (GEN 2.2), all U.S. Government works;
+  - ICAO Doc 8400 abbreviations, as the Aeronautical Information Publications of Ireland,
+    the Republic of Korea and Portugal list them (GEN 2.2), where two of them agree;
+  - the meaning of RSC in Canadian NOTAMs: Transport Canada Advisory Circular 300-019;
+  - English words: the American and British word lists of
+    [SCOWL](http://wordlist.aspell.net/) as Debian packages them (wamerican, wbritish);
+  - the phonetic alphabet: the AIM (chapter 4, section 2).
 
 ## License
 
