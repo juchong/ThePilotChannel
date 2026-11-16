@@ -30,6 +30,9 @@ def client(monkeypatch):
     async def fake_metar(icaos, stale):
         return {i.upper(): {"icao": i.upper(), "obs_time": time.time(), "wind": {}} for i in icaos}
 
+    async def no_stations(*box):
+        return []
+
     async def fake_traffic(lat, lon, nm):
         return [
             {"hex": "a1", "lat": lat, "lon": lon, "seen_pos": 1},
@@ -47,6 +50,7 @@ def client(monkeypatch):
             raise AssertionError("a test reached the NWS gateway")
 
     monkeypatch.setattr(main_mod.manager.metar, "fetch", fake_metar)
+    monkeypatch.setattr(main_mod.manager.metar, "fetch_bbox", no_stations)
     monkeypatch.setattr(main_mod.manager.gateway, "client", NoGateway())
     monkeypatch.setattr(main_mod.manager, "_fetch_traffic", fake_traffic)
     # the lifespan warms the basemap tile cache for the configured views: never from OSM in tests

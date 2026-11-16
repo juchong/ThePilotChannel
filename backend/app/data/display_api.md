@@ -174,13 +174,16 @@ Key needed, no body. Ends a blackout. The answer (200) is the display state with
 
 ### GET /api/conditions
 
-Key needed. The weather at every airport the display watches, from the latest METAR it
-holds for each: flight category, ceiling, visibility, wind, temperature, dew point,
-relative humidity and altimeter setting.
+Key needed. The weather at every airport the display watches and at every station on its
+regional maps, from the latest METAR it holds for each: flight category, ceiling,
+visibility, wind, temperature, dew point, relative humidity and altimeter setting.
 
 ```json
 {
   "monitored": ["KBFI", "KS50"],
+  "regions": {
+    "Puget Sound": {"stations": ["KBFI", "KPLU"], "age_s": 95, "error": null}
+  },
   "airports": {
     "KBFI": {
       "name": "Boeing Field",
@@ -221,6 +224,26 @@ relative humidity and altimeter setting.
       "humidity_pct": null,
       "altimeter_inhg": null,
       "raw": null
+    },
+    "KPLU": {
+      "name": "Tacoma/Pierce Cnty, WA, US",
+      "reported": true,
+      "category": "VFR",
+      "observed": 1794808500,
+      "age_s": 192,
+      "stale": false,
+      "ceiling_ft": 5000,
+      "ceiling_known": true,
+      "visibility_sm": 10.0,
+      "wind_dir_deg": 160,
+      "wind_variable": false,
+      "wind_speed_kt": 4,
+      "wind_gust_kt": null,
+      "temperature_c": 7,
+      "dewpoint_c": 5,
+      "humidity_pct": 87,
+      "altimeter_inhg": 30.03,
+      "raw": "KPLU 160555Z AUTO 16004KT 10SM BKN050 07/05 A3003 RMK AO2"
     }
   }
 }
@@ -229,7 +252,11 @@ relative humidity and altimeter setting.
 | Field | Meaning |
 |---|---|
 | `monitored` | the identifiers of the airports the display watches, in the order of its settings |
-| `airports` | each of those airports' weather, by identifier, with the fields below |
+| `regions` | each regional view's map, by the region's name |
+| `regions.<name>.stations` | the identifiers of every station reporting on that map, as the TV shows it |
+| `regions.<name>.age_s` | how many seconds ago the stations on that map were fetched; `null` until they first are |
+| `regions.<name>.error` | why the last fetch of them failed, else `null` |
+| `airports` | the weather at each monitored airport and each station on a map, by identifier, with the fields below: the monitored airports first, then the other stations in alphabetical order |
 | `name` | the airport's name in the display's settings, else the station's own |
 | `reported` | `false` when the display holds no report for the airport: `category` is then `UNKNOWN`, `ceiling_known` and `wind_variable` are `false`, and every other value is `null` |
 | `category` | `VFR`, `MVFR`, `IFR` or `LIFR`; `UNKNOWN` when the report does not settle one |
@@ -248,8 +275,14 @@ relative humidity and altimeter setting.
 
 Every field is always there; a value the report does not give is `null`. The answer comes
 from the reports the display already holds, which it refreshes every 5 minutes unless the
-owner changed that, so asking more often than once a minute gains nothing. An airport the
-owner turns off or removes leaves the answer.
+owner changed that, so asking more often than once a minute gains nothing. An airport or a
+region the owner turns off or removes leaves the answer.
+
+A region's map is the rectangle the TV shows for it, so it depends on the TV's screen.
+Until the TV has shown a region as it is now set, the rectangle around the region's circle
+is used instead. When the display holds nothing yet for a map, it fetches the stations in
+the background and answers at once: `stations` is then empty and `age_s` is `null` until a
+later call.
 
 ## Following changes
 

@@ -94,16 +94,24 @@ def test_the_route_that_serves_it_is_for_a_signed_in_browser():
 def test_the_weather_example_and_table_have_exactly_the_fields_of_the_answer_and_its_values(configured):
     real = configured.get("/api/conditions", auth=CONTROL).json()
     example = json_example("GET", "/api/conditions")
-    assert list(example) == list(real) == ["monitored", "airports"] and example["monitored"] == list(example["airports"])
+    assert list(example) == list(real) == ["monitored", "regions", "airports"]
+    # the monitored airports first, then every other station of a map in alphabetical order
+    monitored, listed = example["monitored"], list(example["airports"])
+    on_maps = {s for r in example["regions"].values() for s in r["stations"]}
+    assert listed[:len(monitored)] == monitored and listed[len(monitored):] == sorted(on_maps - set(monitored))
+    regions = list(real["regions"].values()) + list(example["regions"].values())
+    assert real["regions"] and all(list(r) == ["stations", "age_s", "error"] for r in regions)
     fields = [list(a) for a in list(real["airports"].values()) + list(example["airports"].values())]
     assert real["airports"] and all(f == fields[0] for f in fields)
-    assert table_fields(section("GET", "/api/conditions")) == {"monitored", "airports"} | set(fields[0])
-    # the example is what the display gives for its report, and for an airport without one
-    bfi = example["airports"]["KBFI"]
-    rec, obs = nws_gateway.parse_station_file(f"2026/11/16 05:53\n{bfi['raw']}\n", "KBFI")
-    assert obs == bfi["observed"]
-    record = nws_gateway.to_metar(rec, obs, "", 0.0, 0.0, 4500)
-    assert conditions.readout(record, bfi["name"], obs + bfi["age_s"], 4500) == bfi
+    assert table_fields(section("GET", "/api/conditions")) == (
+        {"monitored", "regions", "airports"} | {f"regions.<name>.{f}" for f in regions[0]} | set(fields[0]))
+    # the example is what the display gives for its reports, and for an airport without one
+    for icao, stamp, label in (("KBFI", "2026/11/16 05:53", "Boeing Field"), ("KPLU", "2026/11/16 05:55", "")):
+        entry = example["airports"][icao]
+        rec, obs = nws_gateway.parse_station_file(f"{stamp}\n{entry['raw']}\n", icao)
+        assert obs == entry["observed"]
+        record = nws_gateway.to_metar(rec, obs, entry["name"], 0.0, 0.0, 4500)
+        assert conditions.readout(record, label, obs + entry["age_s"], 4500) == entry
     assert conditions.readout(None, "Auburn", 0, 4500) == example["airports"]["KS50"]
     r = configured.get("/api/conditions")
     assert r.status_code == 401 and r.json()["detail"] == "sign in, or send an API key"

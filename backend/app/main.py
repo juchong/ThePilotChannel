@@ -202,8 +202,8 @@ async def get_weather(ids: str = Query("", max_length=400)):
 
 @app.get("/api/conditions", dependencies=[Depends(control)])
 async def get_conditions():
-    """The weather at every monitored airport, for automations."""
-    return manager.get_conditions()
+    """The weather at every monitored airport and on every regional map, for automations."""
+    return await manager.get_conditions()
 
 
 @app.get("/api/weather/area")
@@ -221,11 +221,14 @@ async def get_weather_bbox(
     min_lon: float = Query(..., ge=-180, le=180),
     max_lat: float = Query(..., ge=-90, le=90),
     max_lon: float = Query(..., ge=-180, le=180),
+    view: Optional[str] = Query(None, max_length=100),
 ):
     if max_lat <= min_lat or max_lon <= min_lon:
         raise HTTPException(status_code=422, detail="max_lat/max_lon must exceed min_lat/min_lon")
     if (max_lat - min_lat) > 20 or (max_lon - min_lon) > 30:
         raise HTTPException(status_code=422, detail="bounding box too large (max 20 x 30 degrees)")
+    # the regional view names itself: its map is what the readout lists for that region
+    manager.note_region_box(view, (min_lat, min_lon, max_lat, max_lon))
     return await manager.get_bbox_weather(min_lat, min_lon, max_lat, max_lon)
 
 

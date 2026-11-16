@@ -48,8 +48,15 @@ export const api = {
   getWeather: (ids) => j(`/api/weather?ids=${encodeURIComponent((ids || []).join(","))}`),
   getAreaWeather: (lat, lon, radiusNm) =>
     j(`/api/weather/area?lat=${lat}&lon=${lon}&radius_nm=${radiusNm}`, {}, 15000),
-  getBboxWeather: ({ minLat, minLon, maxLat, maxLon }) =>
-    j(`/api/weather/bbox?min_lat=${minLat}&min_lon=${minLon}&max_lat=${maxLat}&max_lon=${maxLon}`, {}, 15000),
+  // `view` names the regional view the rectangle is the map of, so the backend can
+  // tell automations which stations that map shows.
+  getBboxWeather: ({ minLat, minLon, maxLat, maxLon }, view) =>
+    j(
+      `/api/weather/bbox?min_lat=${minLat}&min_lon=${minLon}&max_lat=${maxLat}&max_lon=${maxLon}` +
+        (view ? `&view=${encodeURIComponent(view)}` : ""),
+      {},
+      15000
+    ),
   getSatellite: (v) =>
     j(
       `/api/satellite?sat=${encodeURIComponent(v.sat)}&sector=${encodeURIComponent(v.sector)}&band=${encodeURIComponent(v.band)}&size=${encodeURIComponent(v.size)}&frames=${encodeURIComponent(v.frames)}`,

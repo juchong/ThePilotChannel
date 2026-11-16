@@ -106,7 +106,8 @@ backend/app/
                    aviationweather.gov does not serve
   metar_decode.py  raw METAR text -> aviationweather.gov's decoded fields, plus the range
                    the ceiling and the visibility can lie in
-  conditions.py    GET /api/conditions: each monitored airport's weather for automations
+  conditions.py    GET /api/conditions: the weather at each monitored airport and each
+                   station on a regional map, for automations
   satellite.py     NOAA STAR CDN directory listing -> recent GOES frame URLs
   tiles.py         basemap tile cache/proxy and per-view warm-up (tile math mirrors
                    the display's fitBounds framing)
@@ -340,13 +341,19 @@ data/   (ignored) written by the app: config.yaml and its backups, secrets.json,
   group whose amount or height is slashed (`VV///` reads as a clear sky, `VV002///` loses
   its 200 ft, `BKN///` leaves the next layer as the ceiling). Only a record without
   readable text takes its ceiling from `clouds`.
-- `GET /api/conditions` (`conditions.py`) reads the weather cache only, never an upstream,
-  and gives every enabled airport every field, `null` where the report gives no value. Its
-  ceiling is the record's, read the same way, and `ceiling_known` says whether the range
-  was settled. Relative humidity is the Magnus formula with Alduchov and Eskridge's
-  coefficients, which reproduces what api.weather.gov publishes
-  (`tests/data/nws_observations.json`); the altimeter is hPa times the NWS's 0.02953, as
-  the display shows it.
+- `GET /api/conditions` (`conditions.py`) reads the weather caches only, never waiting on
+  an upstream, and gives every enabled airport every field, `null` where the report gives
+  no value. For each enabled region it lists the stations on the TV's map: the regional
+  view sends its view id with its bbox request, and `note_region_box()` keeps that
+  rectangle with the center and radius it was drawn for (only if it holds the center;
+  persisted in `weather-cache.json`). `region_box()` uses it while the region is
+  unchanged, else the rectangle around the region's circle; a set never fetched is fetched
+  in the background (`_area_get(wait=False)`) and answered empty with `age_s` null. Those
+  stations follow the monitored airports in `airports`. Each ceiling is read from the
+  report text as above, and `ceiling_known` says whether the range was settled. Relative
+  humidity is the Magnus formula with Alduchov and Eskridge's coefficients, which
+  reproduces what api.weather.gov publishes (`tests/data/nws_observations.json`); the
+  altimeter is hPa times the NWS's 0.02953, as the display shows it.
 - Satellite frame URLs come from parsing the NOAA STAR CDN directory listing
   (`satellite.py`), cached for 240 s per parameter set. Query parameters are validated
   before they reach a URL.
@@ -995,13 +1002,15 @@ full in `backend/app/data/display_api.md`.
   `healthy`, `error`, and `pending` while a newly active view has no fresh data; 404 for
   an unknown view.
 - `GET /api/weather?ids=<csv>`, `GET /api/weather/bbox?min_lat=&min_lon=&max_lat=&max_lon=`
-  (at most 20 by 30 degrees), `GET /api/weather/area?lat=&lon=&radius_nm=`; the last two
+  (at most 20 by 30 degrees; `view=region:<name>` from the regional view records its map
+  for the readout), `GET /api/weather/area?lat=&lon=&radius_nm=`; the last two
   return `{stations, age_s, stale, error}`. A METAR read from the NWS gateway has
   `source: "nws"`; one from aviationweather.gov has no `source`.
-- `GET /api/conditions` `{monitored, airports: {<id>: {name, reported, category,
-  observed, age_s, stale, ceiling_ft, ceiling_known, visibility_sm, wind_dir_deg,
-  wind_variable, wind_speed_kt, wind_gust_kt, temperature_c, dewpoint_c, humidity_pct,
-  altimeter_inhg, raw}}}` for the enabled airports in config order (control).
+- `GET /api/conditions` `{monitored, regions: {<name>: {stations, age_s, error}},
+  airports: {<id>: {name, reported, category, observed, age_s, stale, ceiling_ft,
+  ceiling_known, visibility_sm, wind_dir_deg, wind_variable, wind_speed_kt, wind_gust_kt,
+  temperature_c, dewpoint_c, humidity_pct, altimeter_inhg, raw}}}`: the enabled airports
+  in config order, then the other stations of the enabled regions' maps (control).
 - `GET /api/satellite?sat=&sector=&band=&size=&frames=` recent frame URLs.
 - `GET /api/notams?location=<ident>` for a monitored location: `{location, name, source,
   notams, count, now, lookahead_h, fetched, age_s, stale, pending, error}`; each NOTAM has

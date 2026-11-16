@@ -448,8 +448,8 @@ NOTAMs with the model at a time, and `--out FILE` saves every answer.
 ## Use the display from an automation
 
 Home Assistant, or any other system on your network, can step the display through its
-views, jump to a view, black out the picture, and read the weather at your airports. (The
-admin page's Overview has buttons for the display controls.)
+views, jump to a view, black out the picture, and read the weather at your airports and on
+your regional maps. (The admin page's Overview has buttons for the display controls.)
 
 **API keys.** An automation identifies itself with an API key. Create one on the admin
 page under **Access**, API keys: name it after what will use it, and choose what it may do
@@ -616,23 +616,28 @@ actions:
       reason: doorbell
 ```
 
-### Read the weather at your airports
+### Read the weather
 
-`GET /api/conditions` gives the latest report the display holds for each of your airports:
-the flight category, ceiling, visibility, wind direction, speed and gusts, temperature, dew
-point, relative humidity and altimeter setting, with the report itself. It needs an API
-key; either kind works.
+`GET /api/conditions` gives the latest report the display holds for each of your airports
+and for every station on your regional maps: the flight category, ceiling, visibility, wind
+direction, speed and gusts, temperature, dew point, relative humidity and altimeter
+setting, with the report itself. It needs an API key; either kind works.
 
 ```bash
 curl -H 'Authorization: Bearer tpc_your-key' http://<pi-ip>:8000/api/conditions
 ```
 
-`monitored` lists the airports in the order of your settings, and `airports` gives each
-one's values by identifier. A value the report does not give is `null`, and `category` is
-`UNKNOWN` when the report does not settle one. `ceiling_ft` is `null` both when there is no
-ceiling and when its height is not known; `ceiling_known` tells the two apart. The display
-refreshes its reports as often as the Display page says (every 5 minutes by default), so
-polling more often gains nothing.
+- `monitored` lists your airports in the order of your settings.
+- `regions` lists, for each region, the stations on its map as the TV shows it.
+- `airports` gives the values of every one of them by identifier: your airports first,
+  then the other stations in alphabetical order.
+
+A value the report does not give is `null`, and `category` is `UNKNOWN` when the report
+does not settle one. `ceiling_ft` is `null` both when there is no ceiling and when its
+height is not known; `ceiling_known` tells the two apart. The display refreshes its reports
+as often as the Display page says (every 5 minutes by default), so polling more often gains
+nothing. A region's map is the rectangle the TV shows, so until the TV has shown a region
+(after you add it or change its center or radius), the area around its circle is used.
 
 In Home Assistant's `configuration.yaml`, one sensor per value you want, here for KBFI
 (repeat them for each airport). The category sensor carries the other values as

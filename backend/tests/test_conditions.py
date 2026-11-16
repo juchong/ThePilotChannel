@@ -2,9 +2,12 @@
 values the National Weather Service publishes, the altimeter against the inches a
 report states, the ceiling's three states from both METAR sources, every field of an
 airport's record, and the list of monitored airports."""
+import asyncio
 import json
+import math
 import os
 import re
+import threading
 import time
 
 import pytest
@@ -214,6 +217,12 @@ def test_an_airport_without_a_report_has_every_field_and_no_values():
 
 # ---- the route -----------------------------------------------------------------------------
 
+def fresh_caches(monkeypatch):
+    """No METAR, station set or region rectangle left by another test."""
+    for name in ("_weather_cache", "_area_cache", "_region_boxes"):
+        monkeypatch.setattr(main_mod.manager, name, {})
+
+
 def test_the_readout_lists_the_enabled_airports_in_order_from_the_cache(client, monkeypatch):
     manager = main_mod.manager
     now = time.time()
@@ -229,7 +238,7 @@ def test_the_readout_lists_the_enabled_airports_in_order_from_the_cache(client, 
     async def no_gateway(airports, stale):
         return {}, None
 
-    monkeypatch.setattr(manager, "_weather_cache", {})
+    fresh_caches(monkeypatch)
     monkeypatch.setattr(manager.metar, "fetch", fetch)
     monkeypatch.setattr(manager.gateway, "fetch", no_gateway)
     cfg = base_cfg()
@@ -242,7 +251,7 @@ def test_the_readout_lists_the_enabled_airports_in_order_from_the_cache(client, 
     read = lambda: client.get("/api/conditions", auth=CONTROL).json()          # noqa: E731
     assert wait_until(lambda: read()["airports"]["KBFI"]["reported"], 5)
     body = read()
-    assert list(body) == ["monitored", "airports"]
+    assert list(body) == ["monitored", "regions", "airports"]
     assert body["monitored"] == list(body["airports"]) == ["KS50", "KBFI"]     # in the settings' order; KSEA is off
     bfi = body["airports"]["KBFI"]
     assert 600 <= bfi["age_s"] <= 660
@@ -253,3 +262,131 @@ def test_the_readout_lists_the_enabled_airports_in_order_from_the_cache(client, 
         "temperature_c": 8.3, "dewpoint_c": 6.1, "humidity_pct": 86, "altimeter_inhg": 30.12, "raw": report["raw"],
     }
     assert body["airports"]["KS50"]["reported"] is False and body["airports"]["KS50"]["name"] == "Auburn"
+
+
+# ---- the stations on a regional map --------------------------------------------------------
+
+TV_BOX = {"min_lat": 46.99, "min_lon": -123.34, "max_lat": 47.89, "max_lon": -121.2}   # a 16:9 map of Puget Sound
+REGION = "region:Puget Sound"
+
+
+def station(icao, lat, lon, raw, name):
+    return normalize_metar({"icaoId": icao, "name": name, "lat": lat, "lon": lon, "rawOb": raw, "altim": decode(raw)["altim"],
+                            "obsTime": time.time() - 300, "fltCat": "VFR", "wdir": 160, "wspd": 4}, 4500)
+
+
+IN_BOX = {
+    "KBFI": station("KBFI", 47.53, -122.30, "KBFI 160653Z 16004KT 10SM OVC065 07/06 A3002", "Seattle/Boeing Fld"),
+    "KPLU": station("KPLU", 47.10, -122.29, "KPLU 160655Z 16004KT 10SM BKN050 07/05 A3003", "Puyallup/Thun Fld"),
+    "KSMP": station("KSMP", 47.28, -121.34, "KSMP 160655Z 16004KT 10SM FEW030 01/M01 A3005", "Stampede Pass"),
+}
+
+
+def regional_setup(client, monkeypatch, fetch_bbox):
+    """KS50 (from the NWS gateway) and KBFI monitored, KSEA off, and the Puget Sound region."""
+    manager = main_mod.manager
+    fresh_caches(monkeypatch)
+    ks50, _ = gateway(KS50_RAIN, "2026/11/13 22:55", "Auburn")
+
+    async def fetch(icaos, stale):
+        return {k: IN_BOX[k] for k in icaos if k in IN_BOX}
+
+    async def gateway_fetch(airports, stale):
+        return {"KS50": ks50}, None
+
+    monkeypatch.setattr(manager.metar, "fetch", fetch)
+    monkeypatch.setattr(manager.gateway, "fetch", gateway_fetch)
+    monkeypatch.setattr(manager.metar, "fetch_bbox", fetch_bbox)
+    cfg = base_cfg()
+    cfg["airports"] = [
+        {"icao": "KS50", "name": "Auburn", "lat": 47.3276, "lon": -122.2267},
+        {"icao": "KBFI", "name": "Boeing Field", "lat": 47.53, "lon": -122.30},
+        {"icao": "KSEA", "name": "Seattle", "lat": 47.45, "lon": -122.31, "enabled": False},
+    ]
+    assert put(client, cfg).status_code == 200
+    assert wait_until(lambda: "KS50" in manager._weather_cache and "KBFI" in manager._weather_cache, 5)
+    return manager
+
+
+def test_the_readout_lists_the_stations_on_the_map_the_tv_shows_for_a_region(client, monkeypatch):
+    asked = []
+
+    async def fetch_bbox(min_lat, min_lon, max_lat, max_lon, stale):
+        asked.append((min_lat, min_lon, max_lat, max_lon))
+        return list(IN_BOX.values())
+
+    regional_setup(client, monkeypatch, fetch_bbox)
+    tv = client.get("/api/weather/bbox", params={**TV_BOX, "view": REGION}).json()
+    assert sorted(s["icao"] for s in tv["stations"]) == ["KBFI", "KPLU", "KS50", "KSMP"]
+    body = client.get("/api/conditions", auth=CONTROL).json()
+    assert list(body) == ["monitored", "regions", "airports"] and body["monitored"] == ["KS50", "KBFI"]
+    region = body["regions"]["Puget Sound"]
+    assert region["stations"] == ["KBFI", "KPLU", "KS50", "KSMP"] and region["error"] is None and region["age_s"] < 60
+    assert list(body["airports"]) == ["KS50", "KBFI", "KPLU", "KSMP"]       # the airports first, then the map's others
+    assert asked == [tuple(TV_BOX.values())]                                 # the TV's rectangle only, fetched once
+    plu = body["airports"]["KPLU"]
+    assert list(plu) == FIELDS and plu["name"] == "Puyallup/Thun Fld" and plu["reported"] is True
+    assert (plu["category"], plu["ceiling_ft"], plu["ceiling_known"], plu["altimeter_inhg"]) == ("VFR", 5000, True, 30.03)
+    assert body["airports"]["KS50"]["name"] == "Auburn" and body["airports"]["KS50"]["raw"] == KS50_RAIN
+
+
+def test_before_the_tv_shows_a_region_the_area_around_its_circle_is_fetched_without_waiting(client, monkeypatch):
+    asked, release = [], threading.Event()
+
+    async def fetch_bbox(min_lat, min_lon, max_lat, max_lon, stale):
+        asked.append((min_lat, min_lon, max_lat, max_lon))
+        await asyncio.to_thread(release.wait, 10)
+        return [IN_BOX["KPLU"]]
+
+    regional_setup(client, monkeypatch, fetch_bbox)
+    started = time.monotonic()
+    body = client.get("/api/conditions", auth=CONTROL).json()
+    assert time.monotonic() - started < 2                                    # the upstream is still answering
+    assert body["regions"]["Puget Sound"] == {"stations": [], "age_s": None, "error": "no data yet"}
+    assert list(body["airports"]) == ["KS50", "KBFI"]
+    # 30 statute miles is 26.07 nm: half a degree of latitude is 30 nm, longitude shrinks with cos(latitude)
+    (min_lat, min_lon, max_lat, max_lon), = asked
+    dlat, dlon = 26.07 / 60, 26.07 / (60 * math.cos(math.radians(47.44)))
+    assert all(abs(a - b) < 0.001 for a, b in zip((min_lat, min_lon, max_lat, max_lon),
+                                                   (47.44 - dlat, -122.27 - dlon, 47.44 + dlat, -122.27 + dlon)))
+    release.set()
+    read = lambda: client.get("/api/conditions", auth=CONTROL).json()          # noqa: E731
+    assert wait_until(lambda: read()["regions"]["Puget Sound"]["stations"], 5)
+    assert read()["regions"]["Puget Sound"]["stations"] == ["KPLU", "KS50"] and len(asked) == 1
+
+
+@pytest.mark.parametrize("view,box", [
+    ("region:Nowhere", TV_BOX),                                              # no such region
+    ("local:KS50", TV_BOX),                                                  # not a regional view
+    (REGION, {"min_lat": 48.0, "min_lon": -123.34, "max_lat": 48.9, "max_lon": -121.2}),   # not around its center
+    (None, TV_BOX),                                                          # an area asked without a view
+])
+def test_a_rectangle_that_is_not_a_regions_map_is_not_remembered(client, monkeypatch, view, box):
+    manager = regional_setup(client, monkeypatch, IN_BOX_FETCH)
+    params = dict(box, **({"view": view} if view else {}))
+    assert client.get("/api/weather/bbox", params=params).status_code == 200
+    assert manager._region_boxes == {}
+
+
+async def IN_BOX_FETCH(*box):
+    return list(IN_BOX.values())
+
+
+def test_a_region_s_rectangle_lasts_across_restarts_and_only_while_the_region_is_unchanged(client, monkeypatch):
+    manager = regional_setup(client, monkeypatch, IN_BOX_FETCH)
+    region = next(rg for rg in manager.cfg.regions if rg.name == "Puget Sound")
+    client.get("/api/weather/bbox", params={**TV_BOX, "view": REGION})
+    assert manager.region_box(region) == tuple(TV_BOX.values())
+    from app import manager as mg
+    assert wait_until(lambda: (json.load(open(mg.WEATHER_STORE)).get("regions") or {}).get("Puget Sound"), 5)
+    manager._region_boxes = {}
+    manager._load_weather_store()                                            # as at a restart
+    assert manager.region_box(region) == tuple(TV_BOX.values())
+    cfg = base_cfg()
+    cfg["regions"][0]["radius_mi"] = 40
+    assert put(client, cfg).status_code == 200                               # drawn for another radius: not this map
+    moved = next(rg for rg in manager.cfg.regions if rg.name == "Puget Sound")
+    assert manager.region_box(moved) != tuple(TV_BOX.values())
+    cfg["regions"][0]["enabled"] = False
+    assert put(client, cfg).status_code == 200
+    assert client.get("/api/conditions", auth=CONTROL).json()["regions"] == {}

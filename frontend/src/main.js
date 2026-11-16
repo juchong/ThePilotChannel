@@ -632,7 +632,7 @@ async function showRegionalWeather(view) {
   try {
     // Use the actual visible map rectangle so every airport on screen gets a barb.
     // The backend answers from its cache at once and refreshes in the background.
-    const r = await api.getBboxWeather(state.map.visibleBbox());
+    const r = await api.getBboxWeather(state.map.visibleBbox(), view.id);
     state.lastOk = Date.now();
     if (state.view !== view) return; // view changed while awaiting
     const stations = nextStations(state.lastStations, r);

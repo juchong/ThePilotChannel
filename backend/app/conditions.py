@@ -1,11 +1,11 @@
-"""The weather at the monitored airports for automations (GET /api/conditions): one
-flat record per airport from the cached METAR, with the ceiling read from the
-report's text and the relative humidity worked out from the temperature and the dew
-point."""
+"""The weather for automations (GET /api/conditions): one flat record for each
+monitored airport and each station on a regional map, from the cached METARs, with
+the ceiling read from the report's text and the relative humidity worked out from the
+temperature and the dew point."""
 from __future__ import annotations
 
 import math
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from .weather import text_ceiling
 
@@ -70,11 +70,19 @@ def readout(metar: Optional[Dict], name: str, now: float, stale_after_s: int) ->
     }
 
 
-def conditions(airports, cache: Dict[str, Dict], now: float, stale_after_s: int) -> Dict:
-    """The enabled airports in the settings' order, and each one's record."""
+def conditions(airports, cache: Dict[str, Dict], regions: List[Tuple[str, Dict]], now: float,
+               stale_after_s: int) -> Dict:
+    """The enabled airports in the settings' order; each region's map as (name, its
+    station set as the regional view gets it); and a record for every one of those
+    airports and stations, the airports first."""
     monitored = [ap for ap in airports if ap.enabled]
-    return {
-        "monitored": [ap.icao.upper() for ap in monitored],
-        "airports": {ap.icao.upper(): readout(cache.get(ap.icao.upper()), ap.name, now, stale_after_s)
-                     for ap in monitored},
-    }
+    records = {ap.icao.upper(): readout(cache.get(ap.icao.upper()), ap.name, now, stale_after_s)
+               for ap in monitored}
+    sets, others = {}, {}
+    for name, area in regions:
+        stations = {s["icao"].upper(): s for s in area.get("stations") or [] if s.get("icao")}
+        sets[name] = {"stations": sorted(stations), "age_s": area.get("age_s"), "error": area.get("error")}
+        others.update({icao: s for icao, s in stations.items() if icao not in records})
+    for icao in sorted(others):
+        records[icao] = readout(others[icao], "", now, stale_after_s)
+    return {"monitored": [ap.icao.upper() for ap in monitored], "regions": sets, "airports": records}

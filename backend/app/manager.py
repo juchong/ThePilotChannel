@@ -12,14 +12,16 @@ import asyncio
 import hashlib
 import json
 import logging
+import math
 import os
 import time
 import uuid
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import httpx
 
 from . import cameras, conditions
+from .geo import miles_to_nm
 from .access import CONFIG_API_KEY, import_legacy
 from .config import (
     CONFIG_PATH,
@@ -140,6 +142,8 @@ class DataManager:
         self._gateway_error: Optional[str] = None
         self._area_cache: Dict[str, Dict] = {}        # key -> {ts (wall), data, error}
         self._area_refreshing: Set[str] = set()
+        # region name -> {box, center_lat, center_lon, radius_mi}: the map the TV shows for it
+        self._region_boxes: Dict[str, Dict] = {}
         self._sat_cache: Dict[str, Dict] = {}
         self._store_dirty = False                       # a save of the weather store is pending
         self._store_task: Optional[asyncio.Task] = None
@@ -554,6 +558,8 @@ class DataManager:
         for key, entry in (store.get("areas") or {}).items():
             if isinstance(entry, dict) and "data" in entry and "ts" in entry:
                 self._area_cache[key] = {"ts": entry["ts"], "data": entry["data"], "error": None}
+        self._region_boxes = {name: entry for name, entry in (store.get("regions") or {}).items()
+                              if isinstance(entry, dict) and len(entry.get("box") or []) == 4}
         if self._weather_cache or self._area_cache:
             log.info("weather cache restored from %s (%d METARs, %d areas)", WEATHER_STORE, len(self._weather_cache), len(self._area_cache))
 
@@ -578,6 +584,7 @@ class DataManager:
                 "metars": dict(self._weather_cache),
                 "metars_ts": self._weather_ts,
                 "areas": {k: {"ts": v["ts"], "data": v["data"]} for k, v in self._area_cache.items()},
+                "regions": dict(self._region_boxes),
             }
             try:
                 await asyncio.to_thread(write, store)
@@ -597,9 +604,54 @@ class DataManager:
             m = dict(m, age_s=age, stale=age > self.cfg.weather.stale_after_s)
         return m
 
-    def get_conditions(self) -> Dict:
-        """The weather at every enabled airport, read from the cache (GET /api/conditions)."""
-        return conditions.conditions(self.cfg.airports, self._weather_cache, time.time(),
+    def _region_of_view(self, view_id: Optional[str]):
+        """The enabled region a regional view id names, else None."""
+        if not view_id or not view_id.startswith("region:"):
+            return None
+        name = view_id[len("region:"):]
+        return next((rg for rg in self.cfg.regions if rg.enabled and rg.name == name), None)
+
+    def note_region_box(self, view_id: Optional[str], box: Tuple[float, float, float, float]) -> None:
+        """Remember the rectangle the TV shows for a regional view, with the center and
+        radius it was drawn for: the readout lists the stations inside it. A rectangle
+        that does not hold the region's center is not that region's map."""
+        rg = self._region_of_view(view_id)
+        if rg is None:
+            return
+        min_lat, min_lon, max_lat, max_lon = box
+        if not (min_lat <= rg.center_lat <= max_lat and min_lon <= rg.center_lon <= max_lon):
+            return
+        entry = {"box": [round(v, 6) for v in box], "center_lat": rg.center_lat,
+                 "center_lon": rg.center_lon, "radius_mi": rg.radius_mi}
+        if self._region_boxes.get(rg.name) != entry:
+            self._region_boxes[rg.name] = entry
+            self._save_weather_store()
+
+    def region_box(self, rg) -> Tuple[float, float, float, float]:
+        """A region's map: the rectangle the TV last showed for it, else, until the TV
+        has shown it as it is now set, the rectangle around its circle."""
+        entry = self._region_boxes.get(rg.name)
+        if entry and (entry["center_lat"], entry["center_lon"], entry["radius_mi"]) == (rg.center_lat, rg.center_lon, rg.radius_mi):
+            return tuple(entry["box"])
+        radius_nm = miles_to_nm(rg.radius_mi)
+        dlat = radius_nm / 60.0
+        dlon = radius_nm / (60.0 * max(0.1, math.cos(math.radians(rg.center_lat))))
+        return (max(-90.0, rg.center_lat - dlat), max(-180.0, rg.center_lon - dlon),
+                min(90.0, rg.center_lat + dlat), min(180.0, rg.center_lon + dlon))
+
+    async def get_conditions(self) -> Dict:
+        """The weather at every enabled airport and at every station on each enabled
+        region's map, from the caches (GET /api/conditions). A region's set that was
+        never fetched is fetched in the background: the answer never waits."""
+        regions = []
+        for rg in self.cfg.regions:
+            if not rg.enabled:
+                continue
+            key, fetch, inside = self._bbox(*self.region_box(rg))
+            area = self._with_gateway_stations(key, await self._area_get(key, fetch, "bbox", wait=False), inside)
+            fetched = self._area_cache.get(key, {}).get("ts", 0) > 0
+            regions.append((rg.name, area if fetched else dict(area, age_s=None)))
+        return conditions.conditions(self.cfg.airports, self._weather_cache, regions, time.time(),
                                      self.cfg.weather.stale_after_s)
 
     def get_weather(self, icaos: Optional[List[str]] = None) -> Dict[str, Dict]:
@@ -670,11 +722,11 @@ class DataManager:
         finally:
             self._area_refreshing.discard(key)
 
-    async def _area_get(self, key: str, fetch, what: str) -> Dict:
+    async def _area_get(self, key: str, fetch, what: str, wait: bool = True) -> Dict:
         """Stale-while-revalidate: a cached station set is returned at once and
         refreshed in the background when it has expired; only a set that was
-        never fetched waits (bounded) for upstream. The regional view therefore
-        never blocks on aviationweather.gov or on DNS."""
+        never fetched waits (bounded, and not at all without `wait`) for upstream.
+        The regional view therefore never blocks on aviationweather.gov or on DNS."""
         cached = self._area_cache.get(key)
         ttl = max(60, self.cfg.weather.refresh_s)
         if cached is not None and cached["ts"] > 0:
@@ -683,10 +735,11 @@ class DataManager:
             return self._area_result(key)
         if key not in self._area_refreshing:
             task = self._spawn(self._area_fetch(key, fetch, what), name=f"weather:{key}")
-            try:
-                await asyncio.wait_for(asyncio.shield(task), timeout=WEATHER_COLD_WAIT_S)
-            except (asyncio.TimeoutError, asyncio.CancelledError):
-                pass
+            if wait:
+                try:
+                    await asyncio.wait_for(asyncio.shield(task), timeout=WEATHER_COLD_WAIT_S)
+                except (asyncio.TimeoutError, asyncio.CancelledError):
+                    pass
         if key in self._area_cache:
             return self._area_result(key)
         return {"stations": [], "age_s": None, "stale": False, "error": "no data yet"}
@@ -711,17 +764,20 @@ class DataManager:
             key, await self._area_get(key, fetch, "area"), lambda la, lo: haversine_nm(la, lo, lat, lon) <= radius_nm
         )
 
-    async def get_bbox_weather(self, min_lat, min_lon, max_lat, max_lon) -> Dict:
-        """All METAR stations within an explicit bounding box (the map's visible
-        rectangle), cached by box and refreshed in the background."""
+    def _bbox(self, min_lat, min_lon, max_lat, max_lon):
+        """A bounding box's cache key, its upstream fetch, and the test for a point inside it."""
         key = f"bbox:{round(min_lat, 2)}:{round(min_lon, 2)}:{round(max_lat, 2)}:{round(max_lon, 2)}"
 
         async def fetch():
             return await self.metar.fetch_bbox(min_lat, min_lon, max_lat, max_lon, self.cfg.weather.stale_after_s)
 
-        return self._with_gateway_stations(
-            key, await self._area_get(key, fetch, "bbox"), lambda la, lo: min_lat <= la <= max_lat and min_lon <= lo <= max_lon
-        )
+        return key, fetch, lambda la, lo: min_lat <= la <= max_lat and min_lon <= lo <= max_lon
+
+    async def get_bbox_weather(self, min_lat, min_lon, max_lat, max_lon) -> Dict:
+        """All METAR stations within an explicit bounding box (the map's visible
+        rectangle), cached by box and refreshed in the background."""
+        key, fetch, inside = self._bbox(min_lat, min_lon, max_lat, max_lon)
+        return self._with_gateway_stations(key, await self._area_get(key, fetch, "bbox"), inside)
 
     # ---- NOTAMs ----------------------------------------------------------
     # Kept per monitored location by a background loop and on disk, so the NOTAM
