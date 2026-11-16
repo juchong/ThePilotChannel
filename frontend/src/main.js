@@ -8,6 +8,7 @@ import { bannerText, cautionText, counts, current, fmtSpan, fmtTime, listHtml, p
 import { radarStep } from "./lib/radarloop.js";
 import { nextStations, sameStations, stationsFooter } from "./lib/stations.js";
 import { UNKNOWN_COLOR, categoryChip, windBarbSVG, windText } from "./lib/windbarb.js";
+import { stationRow } from "./lib/wxrows.js";
 
 const POLL_MS = 1000;                 // traffic poll cadence on local views
 const MOTION_FRAME_MS = 50;           // aircraft marker update interval (20 fps)
@@ -656,20 +657,7 @@ function renderStationList(stations) {
   );
   el("ac-count").textContent = sorted.length;
   state.lastListHtml = null;
-  el("aircraft-list").innerHTML = sorted
-    .map((m) => {
-      const barb = windBarbSVG({
-        speedKt: m.wind.speed_kt,
-        dirDeg: m.wind.dir,
-        variable: m.wind.variable,
-        calm: m.wind.calm,
-        color: m.category_color,
-        size: 40,
-      });
-      const cat = m.category ? categoryChip(m, "cat") : "";
-      return `<div class="st-row">${barb}<span class="icao">${esc(m.icao)}</span>${cat}<span class="wind">${esc(windText(m.wind))}</span></div>`;
-    })
-    .join("");
+  el("aircraft-list").innerHTML = sorted.map(stationRow).join("");
 }
 
 function renderAircraftList(includeGround = true) {

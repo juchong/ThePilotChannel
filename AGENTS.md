@@ -163,6 +163,7 @@ frontend/src/
                     card markup, banner, source and caution texts
   lib/stations.js   which station set the regional view shows, footer state
   lib/windbarb.js   wind barb SVG, wind text, flight category chip
+  lib/wxrows.js     rows of the regional view's station list
   lib/geo.js        client geo helpers
 deploy/bootstrap.sh   idempotent OS provisioning for a fresh Pi (also --check / --dry-run)
 deploy/harden-wifi.sh   Wi-Fi as NetworkManager keyfiles with read-only copies (also --check)
@@ -221,7 +222,8 @@ data/   (ignored) written by the app: config.yaml and its backups, secrets.json,
   by flight category (VFR green, MVFR blue, IFR red, LIFR magenta). A station without a
   category is gray, the gray of an aircraft on the ground (`UNKNOWN_COLOR` in
   `lib/windbarb.js`): its barb when the record has a wind, a filled circle when it has
-  none, and an `UNKNOWN` chip on the local view.
+  none, and an `UNKNOWN` chip wherever a category chip is shown: the local view and the
+  regional view's station list (`lib/wxrows.js`).
 - Aircraft icons follow tar1090: `lib/shapes.js` calls the vendored `getBaseMarker()` in
   `lib/vendor/tar1090/markers.js` (tar1090's shapes and tables, GPL-2.0, license in that
   directory; regenerate from upstream rather than editing), which picks a shape by exact
@@ -806,14 +808,15 @@ data/   (ignored) written by the app: config.yaml and its backups, secrets.json,
   deadline, never after a fixed sleep. The SSE endpoint is an endless stream and hangs
   Starlette's TestClient; exercise it with `curl -N`.
 - Frontend module tests: `frontend/tests/*.test.html` run headlessly with
-  `frontend/tests/run.sh` (needs a chromium binary, no npm packages) and cover the aircraft
-  store, icon assignment, station selection, wind barbs, the admin form, the admin's pages
-  and their unsaved and refused marks, the overview's health cards, sign-in texts and the
-  key and secret lists, the stream list and the camera grid picture, cycle navigation, the
-  camera stream client (fake WebSocket and MediaSource), NOTAM time formatting, card markup
-  and source texts, the Markdown of the display API reference (read from
-  `backend/app/data/`), and per-frame cost bounds. `harness.js` prints the PASS/FAIL lines
-  the runner parses. Run it after any change under `frontend/src/lib`.
+  `frontend/tests/run.sh` (needs a chromium binary, no npm packages) and cover the
+  aircraft store, icon assignment, station selection, wind barbs, the station list's rows
+  (laid out with `styles.css`), the admin form, the admin's pages and their unsaved and
+  refused marks, the overview's health cards, sign-in texts and the key and secret lists,
+  the stream list and the camera grid picture, cycle navigation, the camera stream client
+  (fake WebSocket and MediaSource), NOTAM time formatting, card markup and source texts,
+  the Markdown of the display API reference (read from `backend/app/data/`), and
+  per-frame cost bounds. `harness.js` prints the PASS/FAIL lines the runner parses. Run
+  it after any change under `frontend/src/lib`.
 - Try a build beside production: `docker build -t hangar-display:test .` then run it on a
   copy of `data/` (two apps must not write one `secrets.json` or `config.yaml`) and with
   the relay pointed at nothing, so it does not set streams in production's go2rtc:

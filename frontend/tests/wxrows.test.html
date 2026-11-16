@@ -1,0 +1,44 @@
+<!doctype html><html><head><link rel="stylesheet" href="../src/styles.css"></head><body><pre id="out"></pre>
+<div id="aircraft-list" style="width:460px"></div>
+<script type="module">
+import { check, approx, done } from "./harness.js";
+import { UNKNOWN_COLOR } from "../src/lib/windbarb.js";
+import { stationRow } from "../src/lib/wxrows.js";
+// Every row of the station list has its four parts in the same columns, whatever the category.
+const wind = (dir, speed_kt, extra) => ({ dir, speed_kt, gust_kt: null, variable: false, calm: speed_kt === 0, ...extra });
+const record = (icao, category, color, w) => ({ icao, category, category_color: color, wind: w });
+const records = [
+  record("KSMP", "LIFR", "#d946ef", wind(null, 0)),
+  record("KPAE", "MVFR", "#3b82f6", wind(200, 9)),
+  record("KBFI", "VFR", "#22c55e", wind(150, 3)),
+  record("KS50", null, null, wind(230, 12)),      // a wind, no category
+  record("KAWO", null, null, wind(null, 0)),      // calm, no category
+  record("KTIW", null, null, wind(null, null)),   // neither
+];
+const unknown = new Set(["KS50", "KAWO", "KTIW"]);
+const gray = "rgb(156, 163, 175)";
+const parts = (row) => [...row.children].map((c) => (c.tagName.toLowerCase() === "svg" ? "svg" : c.className)).join(",");
+const box = (row, sel) => row.querySelector(sel)?.getBoundingClientRect() ?? { left: NaN, right: NaN };
+const same = (xs) => xs.every((x) => approx(x, xs[0], 1));
+
+check("the unknown gray is the chip's background", UNKNOWN_COLOR === "#9ca3af");
+
+const list = document.getElementById("aircraft-list");
+list.innerHTML = records.map(stationRow).join("");
+const rows = [...list.children];
+check("every station row is wind icon, identifier, chip, wind", rows.every((r) => parts(r) === "svg,icao,cat,wind"),
+  rows.map(parts).join(" | "));
+const chips = rows.map((r) => r.querySelector(".cat"));
+check("a station of unknown category shows the UNKNOWN chip on gray",
+  rows.every((r, i) => !unknown.has(records[i].icao) || (chips[i]?.textContent === "UNKNOWN" && getComputedStyle(chips[i]).backgroundColor === gray)));
+check("a station of known category shows its own chip",
+  rows.every((r, i) => unknown.has(records[i].icao) || chips[i]?.textContent === records[i].category));
+const rights = rows.map((r) => r.getBoundingClientRect().right - parseFloat(getComputedStyle(r).paddingRight));
+check("the wind of every station ends at the row's right edge", rows.every((r, i) => approx(box(r, ".wind").right, rights[i], 1)),
+  rows.map((r, i) => `${records[i].icao} ${Math.round(box(r, ".wind").right)}/${Math.round(rights[i])}`).join(" "));
+check("the chip sits in its own column after the identifier and before the wind",
+  same(rows.map((r) => box(r, ".cat").left - box(r, ".icao").right)) &&
+  rows.every((r) => box(r, ".wind").left >= box(r, ".cat").right));
+check("the identifier is escaped", stationRow(record("<b>", null, null, wind(0, 0))).includes("&lt;b&gt;"));
+done();
+</script></body></html>
