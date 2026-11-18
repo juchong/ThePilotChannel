@@ -107,6 +107,9 @@ input.invalid, select.invalid { border-color: var(--bad); box-shadow: 0 0 0 1px 
 .row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .row .name { flex: 1 1 160px; font-weight: 600; min-width: 0; }
 .row .addr { flex: 1 1 200px; min-width: 0; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the FAA keys, one row per environment: the hosts line up and are never cut */
+.row.env .name { flex: 0 0 170px; }
+.row.env .addr { white-space: normal; overflow-wrap: anywhere; }
 
 /* overview */
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }

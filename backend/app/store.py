@@ -18,7 +18,7 @@ import threading
 import time
 from typing import Any, Dict, List, Optional
 
-from .config import CONFIG_PATH
+from .config import CONFIG_PATH, NMS_HOSTS
 
 log = logging.getLogger("hangar.store")
 
@@ -27,7 +27,7 @@ TOUCH_SAVE_S = 300.0      # last-use times reach the disk at most this often
 MAX_STREAMS = 12
 
 SIMPLE_CREDENTIALS = ("llm_api_key", "aggregator_api_key")
-NMS = "nms"               # the FAA client ID and secret, with the environment they were issued for
+NMS = "nms"               # the FAA client IDs and secrets, one pair per NMS-API environment
 
 
 class StoreLocked(RuntimeError):
@@ -36,6 +36,17 @@ class StoreLocked(RuntimeError):
 
 def _empty() -> Dict[str, Any]:
     return {"version": 1, "account": None, "sessions": [], "api_keys": [], "credentials": {}, "streams": [], "imported": {}}
+
+
+def _nms_pairs(entry: Any) -> Dict[str, Dict]:
+    """The FAA pairs by environment. A single pair with the environment it was
+    issued for, as earlier versions stored it, is that environment's pair."""
+    if not isinstance(entry, dict):
+        return {}
+    if "client_id" in entry or "client_secret" in entry:
+        env = entry.get("environment")
+        return {env: {k: entry.get(k) for k in ("client_id", "client_secret", "changed")}} if env in NMS_HOSTS else {}
+    return {env: dict(pair) for env, pair in entry.items() if env in NMS_HOSTS and isinstance(pair, dict)}
 
 
 class SecretStore:
@@ -78,6 +89,13 @@ class SecretStore:
                 log.error("secrets store unreadable: %s: %s", candidate, exc)
                 continue
             self.data = {**_empty(), **raw}
+            creds = self.data["credentials"]
+            if isinstance(creds, dict) and NMS in creds:
+                pairs = _nms_pairs(creds[NMS])
+                if pairs:
+                    creds[NMS] = pairs
+                else:
+                    del creds[NMS]
             self.exists = True
             if candidate != self.path:
                 log.warning("secrets store read from its backup %s", candidate)
@@ -152,25 +170,48 @@ class SecretStore:
             self.data["credentials"][name] = {"value": value, "changed": time.time()}
             self.save()
 
+    def _nms(self) -> Dict[str, Dict]:
+        entry = self.data["credentials"].get(NMS)
+        return entry if isinstance(entry, dict) else {}
+
     def nms_pair(self, environment: str) -> tuple[str, str]:
-        """The FAA client ID and secret, only for the environment they were stored for."""
+        """The FAA client ID and secret stored for this environment."""
         with self.lock:
-            entry = self.data["credentials"].get(NMS)
-            if not isinstance(entry, dict) or entry.get("environment") != environment:
+            pair = self._nms().get(environment)
+            if not isinstance(pair, dict):
                 return "", ""
-            return str(entry.get("client_id") or ""), str(entry.get("client_secret") or "")
+            return str(pair.get("client_id") or ""), str(pair.get("client_secret") or "")
 
     def set_nms(self, client_id: str, client_secret: str, environment: str) -> None:
+        """Store the pair issued for one environment; the others stay as they are."""
+        if environment not in NMS_HOSTS:
+            raise KeyError(environment)
         with self.lock:
             self.require()
             self.data["credentials"][NMS] = {
-                "client_id": client_id, "client_secret": client_secret,
-                "environment": environment, "changed": time.time(),
+                **self._nms(),
+                environment: {"client_id": client_id, "client_secret": client_secret, "changed": time.time()},
             }
             self.save()
 
+    def clear_nms(self, environment: str) -> bool:
+        if environment not in NMS_HOSTS:
+            raise KeyError(environment)
+        with self.lock:
+            self.require()
+            pairs = self._nms()
+            if environment not in pairs:
+                return False
+            rest = {env: pair for env, pair in pairs.items() if env != environment}
+            if rest:
+                self.data["credentials"][NMS] = rest
+            else:
+                del self.data["credentials"][NMS]
+            self.save()
+            return True
+
     def clear_credential(self, name: str) -> bool:
-        if name != NMS and name not in SIMPLE_CREDENTIALS:
+        if name not in SIMPLE_CREDENTIALS:
             raise KeyError(name)
         with self.lock:
             self.require()
@@ -188,12 +229,12 @@ class SecretStore:
             for name in SIMPLE_CREDENTIALS:
                 entry = creds.get(name) if isinstance(creds.get(name), dict) else {}
                 out[name] = {"set": bool(entry.get("value")), "changed": entry.get("changed")}
-            entry = creds.get(NMS) if isinstance(creds.get(NMS), dict) else {}
-            out[NMS] = {
-                "set": bool(entry.get("client_id") and entry.get("client_secret")),
-                "environment": entry.get("environment"),
-                "changed": entry.get("changed"),
-            }
+            pairs = self._nms()
+            out[NMS] = {}
+            for env in NMS_HOSTS:
+                pair = pairs.get(env) if isinstance(pairs.get(env), dict) else {}
+                out[NMS][env] = {"set": bool(pair.get("client_id") and pair.get("client_secret")),
+                                 "changed": pair.get("changed")}
             return out
 
     # ---- camera streams ------------------------------------------------------

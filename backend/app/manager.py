@@ -230,9 +230,10 @@ class DataManager:
         await self.client.aclose()
         await asyncio.to_thread(STORE.flush)
 
-    def secret_changed(self, name: str) -> None:
-        """A stored credential was set or cleared (called from a worker thread)."""
-        if name == NMS:
+    def secret_changed(self, name: str, environment: Optional[str] = None) -> None:
+        """A stored credential was set or cleared (called from a worker thread). FAA
+        keys matter here only when they are those of the environment in use."""
+        if name == NMS and environment in (None, self.nms.environment):
             self.nms.reset_token()
             self._nms_hold = 0.0
             loop = getattr(self, "_loop", None)
@@ -1172,11 +1173,12 @@ class DataManager:
         return {"ok": True, "queued": True, "ident": ident, "source": "faa", "asked_as": query_forms(ident),
                 "wait_s": round(self.nms.gate.wait_s())}
 
-    async def check_nms_credentials(self) -> Dict:
-        """Whether the stored FAA credentials get a token for the configured environment."""
+    async def check_nms_credentials(self, environment: Optional[str] = None) -> Dict:
+        """Whether the FAA credentials stored for an environment (the configured one
+        when none is named) get a token there."""
         self.nms.use(self.cfg.notams.environment)
-        result = await self.nms.check_credentials()
-        if result["ok"]:
+        result = await self.nms.check_credentials(environment)
+        if result["ok"] and result["environment"] == self.nms.environment:
             self._nms_hold = 0.0
             self._notam_wake.set()
         return result
@@ -1184,9 +1186,10 @@ class DataManager:
     def notam_usage(self, limit: Optional[int] = None) -> Dict:
         """The record of the requests sent to the NMS-API."""
         rows = list(self.nms.usage.rows)
+        env = self.cfg.notams.environment
         return {
-            "summary": self.nms.usage.summary(self._now()),
-            "all_time": self.nms.usage.summary(self._now(), window_s=None),
+            "summary": self.nms.usage.summary(self._now(), env=env),
+            "all_time": self.nms.usage.summary(self._now(), window_s=None, env=env),
             "rows": rows[-limit:] if limit else rows,
         }
 
@@ -1518,7 +1521,7 @@ class DataManager:
                 "error": self._notam_error,
                 "next_pull_in_s": round(self.nms.gate.wait_s()),
                 "rate_limited": self.nms.gate.limited,
-                "usage": self.nms.usage.summary(time.time()),
+                "usage": self.nms.usage.summary(time.time(), env=self.cfg.notams.environment),
                 "translate": {
                     "enabled": self.cfg.notams.translate.enabled,
                     "model": self.cfg.notams.translate.model,

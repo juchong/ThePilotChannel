@@ -63,10 +63,10 @@ def set_llm_key(monkeypatch, value: str) -> None:
 
 
 def set_nms_keys(monkeypatch, client_id="the-id", secret="the-secret", environment="production") -> None:
-    """Store FAA credentials for one test."""
-    monkeypatch.setitem(STORE.data["credentials"], "nms", {
-        "client_id": client_id, "client_secret": secret, "environment": environment, "changed": 0,
-    })
+    """Store FAA credentials for one environment, for one test; any others stay."""
+    pairs = dict(STORE.data["credentials"].get("nms") or {})
+    pairs[environment] = {"client_id": client_id, "client_secret": secret, "changed": 0}
+    monkeypatch.setitem(STORE.data["credentials"], "nms", pairs)
 
 
 class FakeClock:
@@ -135,8 +135,8 @@ class StubNms:
             out += await self._answer(ident) or []
         return out
 
-    async def check_credentials(self):
-        return {"ok": True, "environment": self.environment, "error": None}
+    async def check_credentials(self, environment=None):
+        return {"ok": True, "environment": environment or self.environment, "error": None}
 
 
 def stub_faa(monkeypatch, by_ident):

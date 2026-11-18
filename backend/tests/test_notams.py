@@ -4,6 +4,7 @@ resilience. Environment and the `client` fixture come from support.py and
 conftest.py; no FAA credentials are set, and tests that need the FAA client give
 it a stub transport."""
 import asyncio
+import base64
 import collections
 import json
 import logging
@@ -240,6 +241,78 @@ def test_keys_issued_for_one_environment_are_never_sent_to_another(monkeypatch, 
             with pytest.raises(notams.NotConfigured, match=environment):
                 asyncio.run(source.baseline("KDFW", "KDFW"))
             assert seen == [] and not source.configured
+
+
+def basic_pair(request):
+    """The client ID and secret a token request carries (HTTP Basic)."""
+    user, _, secret = base64.b64decode(request.headers["authorization"].split()[1]).decode().partition(":")
+    return user, secret
+
+
+def store_every_pair(monkeypatch):
+    for env in FAA_HOSTS:
+        set_nms_keys(monkeypatch, client_id=f"{env}-id", secret=f"{env}-secret", environment=env)
+
+
+def test_with_a_pair_stored_for_every_environment_each_goes_only_to_its_own_host(monkeypatch):
+    store_every_pair(monkeypatch)
+    for environment in FAA_HOSTS:
+        seen = []
+        source, _clock = faa_client(faa_stand_in(seen), environment=environment)
+        asyncio.run(source.baseline("KDFW", "KDFW"))
+        tokens = [r for _t, kind, r in seen if kind == "token"]
+        assert len(tokens) == 1 and basic_pair(tokens[0]) == (f"{environment}-id", f"{environment}-secret")
+        assert {r.url.host for _t, _k, r in seen} == {FAA_HOSTS[environment]}
+
+
+@pytest.mark.parametrize("checked", sorted(FAA_HOSTS))
+def test_checking_an_environments_keys_asks_only_its_host_and_keeps_the_token_in_use(monkeypatch, checked):
+    store_every_pair(monkeypatch)
+    seen = []
+    source, clock = faa_client(faa_stand_in(seen), environment="staging")
+    asyncio.run(source.baseline("KDFW", "KDFW"))                     # the feed holds a staging token
+    held = source._token
+    seen.clear()
+    assert asyncio.run(source.check_credentials(checked)) == {"ok": True, "environment": checked, "error": None}
+    ((_t, kind, request),) = seen
+    assert kind == "token" and request.url.host == FAA_HOSTS[checked]
+    assert basic_pair(request) == (f"{checked}-id", f"{checked}-secret")
+    assert source.usage.rows[-1]["kind"] == "token" and source.usage.rows[-1]["env"] == checked
+    assert source.usage.summary(clock(), window_s=None)["pulls"] == 1                 # the check made no pull
+    assert source.environment == "staging" and (source._token == held) is (checked != "staging")
+    in_use = source._token
+    seen.clear()
+    asyncio.run(source.baseline("KDFW", "KDFW"))                     # the feed goes on with the token in use
+    assert [(kind, r.url.host) for _t, kind, r in seen] == [("data", FAA_HOSTS["staging"])]
+    assert seen[0][2].headers["authorization"] == f"Bearer {in_use}"
+
+
+def test_checking_an_environment_without_keys_sends_nothing_and_names_it(monkeypatch):
+    set_nms_keys(monkeypatch, environment="staging")
+    seen = []
+    source, _clock = faa_client(faa_stand_in(seen), environment="staging")
+    assert asyncio.run(source.check_credentials("production")) == {
+        "ok": False, "environment": "production", "error": "no FAA credentials are stored for the production environment"}
+    assert seen == []
+
+
+def test_the_usage_totals_are_those_of_one_environment_or_of_all():
+    log = notams.UsageLog(os.path.join(tempfile.mkdtemp(prefix="tpc-usage-"), "nms-usage.jsonl"))
+    for row in ({"t": 1000.0, "kind": "token", "env": "staging", "status": 200},
+                {"t": 1001.0, "kind": "delta", "env": "staging", "status": 200, "gap": 300.0},
+                {"t": 1181.0, "kind": "baseline", "env": "staging", "status": 429, "gap": 180.0},
+                {"t": 1190.0, "kind": "token", "env": "production", "status": 200},
+                {"t": 1400.0, "kind": "baseline", "env": "production", "status": 200, "gap": 219.0},
+                {"t": 1580.0, "kind": "delta", "env": "production", "status": 200, "gap": 180.0}):
+        log.add(row)
+    staging, production, both = (log.summary(2000.0, env=env) for env in ("staging", "production", None))
+    assert (staging["environment"], production["environment"], both["environment"]) == ("staging", "production", None)
+    assert (staging["pulls"], production["pulls"], both["pulls"]) == (2, 2, 4)
+    assert (staging["tokens"], production["tokens"], both["tokens"]) == (1, 1, 2)
+    assert (staging["status_429"], production["status_429"], both["status_429"]) == (1, 0, 1)
+    assert (staging["shortest_gap_s"], production["shortest_gap_s"]) == (180.0, 180.0)
+    assert (staging["first"], production["first"]) == (1000.0, 1190.0)
+    assert log.summary(2000.0, env="fit")["pulls"] == 0
 
 
 def test_missing_keys_are_reported_without_a_request():

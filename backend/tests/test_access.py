@@ -42,7 +42,7 @@ ROUTES = {
     ("POST", "/api/notams/check"): (SETTINGS, {"json": {}}),
     ("POST", "/api/notams/model-test"): (SETTINGS, {"json": {}}),
     ("GET", "/api/notams/usage"): (SETTINGS, {}),
-    ("POST", "/api/secrets/nms/check"): (SESSION, {}),
+    ("POST", "/api/secrets/nms/{environment}/check"): (SESSION, {"url": "/api/secrets/nms/moon/check"}),
     ("GET", "/api/status"): (OPEN, None),
     ("WS", "/api/cameras/ws"): (OPEN, None),
     ("GET", "/api/cameras/streams"): (SESSION, {}),
@@ -72,7 +72,8 @@ ROUTES = {
     ("POST", "/api/keys"): (SESSION, {"json": {"scope": "no-such-scope"}}),
     ("DELETE", "/api/keys/{key_id}"): (SESSION, {"url": "/api/keys/no-such-key"}),
     ("GET", "/api/secrets"): (SESSION, {}),
-    ("PUT", "/api/secrets/nms"): (SESSION, {"json": {}}),
+    ("PUT", "/api/secrets/nms/{environment}"): (SESSION, {"url": "/api/secrets/nms/moon", "json": {}}),
+    ("DELETE", "/api/secrets/nms/{environment}"): (SESSION, {"url": "/api/secrets/nms/moon"}),
     ("PUT", "/api/secrets/{name}"): (SESSION, {"url": "/api/secrets/no-such-secret", "json": {"value": "x"}}),
     ("DELETE", "/api/secrets/{name}"): (SESSION, {"url": "/api/secrets/no-such-secret"}),
     # FastAPI's own description of the API
@@ -472,7 +473,7 @@ def test_a_value_imported_once_is_never_imported_again(tmp_path, name):
     if name == "HANGAR_ADMIN_PASSWORD":
         Access(store).set_password("admin", "changed in the app")
     elif name.startswith("HANGAR_NMS"):
-        store.clear_credential("nms")
+        store.clear_nms("production")
     elif name == "HANGAR_LLM_API_KEY":
         store.clear_credential("llm_api_key")
     elif name == access.CONFIG_API_KEY:
@@ -517,9 +518,22 @@ def test_the_faa_keys_need_both_halves_and_take_their_environment_from_the_retir
             environ["HANGAR_NMS_BASE"] = base
         assert access.import_legacy(store, {"HANGAR_NMS_CLIENT_ID": "id"}, {}) == []      # half a pair is nothing
         access.import_legacy(store, environ, {})
-        assert store.credential_state()["nms"]["environment"] == environment
+        assert {env for env, state in store.credential_state()["nms"].items() if state["set"]} == {environment}
         assert store.nms_pair(environment) == ("id", "secret")
         assert all(store.nms_pair(other) == ("", "") for other in ("production", "staging", "fit") if other != environment)
+
+
+def test_the_retired_faa_keys_join_the_pairs_of_other_environments_and_replace_none(tmp_path):
+    store = fresh(tmp_path)
+    store.set_nms("staging-id", "staging-secret", "staging")
+    environ = {"HANGAR_NMS_CLIENT_ID": "id", "HANGAR_NMS_CLIENT_SECRET": "secret"}
+    assert access.import_legacy(store, environ, {}) == ["HANGAR_NMS_CLIENT_ID", "HANGAR_NMS_CLIENT_SECRET"]
+    assert store.nms_pair("production") == ("id", "secret") and store.nms_pair("staging") == ("staging-id", "staging-secret")
+    store = SecretStore(str(tmp_path / "other.json"))
+    store.set_nms("set-in-the-app", "set-in-the-app", "staging")
+    staging = {**environ, "HANGAR_NMS_BASE": "https://api-staging.cgifederal-aim.com"}
+    assert access.import_legacy(store, staging, {}) == []
+    assert store.nms_pair("staging") == ("set-in-the-app", "set-in-the-app") and store.nms_pair("production") == ("", "")
 
 
 def test_the_older_password_variable_is_imported_and_leftovers_are_named(tmp_path):

@@ -17,6 +17,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import access_api, apidoc, cameras
 from .access import ACCESS, SESSION_COOKIE, require
+from .access_api import NmsEnvironment
 from .config import (
     ICAO_RE,
     STREAM_URL_MAX,
@@ -297,15 +298,15 @@ async def notams_usage(limit: Optional[int] = Query(None, ge=1, le=10000), downl
 _credential_check = {"at": 0.0}
 
 
-@app.post("/api/secrets/nms/check", dependencies=[Depends(session_only)])
-async def secrets_check_nms():
-    """Ask the FAA for a token with the stored credentials. Costs no data pull."""
+@app.post("/api/secrets/nms/{environment}/check", dependencies=[Depends(session_only)])
+async def secrets_check_nms(environment: NmsEnvironment):
+    """Ask an environment for a token with the pair stored for it. Costs no data pull."""
     wait = CREDENTIAL_CHECK_S - (time.monotonic() - _credential_check["at"])
     if _credential_check["at"] and wait > 0:
         raise HTTPException(status_code=429, detail=f"wait {round(wait)} s before checking again",
                             headers={"Retry-After": str(round(wait) or 1)})
     _credential_check["at"] = time.monotonic()
-    return await manager.check_nms_credentials()
+    return await manager.check_nms_credentials(environment)
 
 
 @app.get("/api/status")

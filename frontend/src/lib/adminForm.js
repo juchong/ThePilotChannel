@@ -80,10 +80,10 @@ export const FIELDS = {
     { k: "label", label: "Heading on the TV", type: "text", attrs: { maxlength: 80 } },
     { k: "lookahead_h", label: "Include NOTAMs starting within", unit: "h", type: "number", attrs: num(0, 720, 1, { required: true }), help: "NOTAMs in effect are always shown." },
     { k: "dwell_s", label: "Each page stays up", unit: "s", type: "number", attrs: num(5, 3600, 1, { required: true }) },
-    { k: "refresh_s", label: "Look for changes every", unit: "s", type: "number", attrs: num(180, 3600, 1, { required: true }), help: "The FAA allows one pull every 180 seconds." },
+    { k: "refresh_s", label: "Look for changes every", unit: "s", type: "number", attrs: num(180, 3600, 1, { required: true }), help: "Production allows one data pull every 180 seconds; the display keeps to that in every environment." },
   ],
   notam_environment: [
-    { k: "environment", label: "Environment", type: "select", options: [["production", "Production"], ["staging", "Staging, for validation"], ["fit", "FIT"]], help: "Anything but production is a test environment: the TV marks its NOTAMs as not for operational use." },
+    { k: "environment", label: "Environment the display uses", type: "select", options: [["production", "Production"], ["staging", "Staging (test)"], ["fit", "FIT (test)"]], help: "Production allows one data pull every three minutes; staging and FIT allow one request a second. The display keeps to the production pace in all three. The TV marks NOTAMs from a test environment as not for operational use." },
   ],
   notam_translate: [
     { k: "enabled", label: "Rewrite NOTAMs with the model", type: "bool", span: "full", help: "A rewrite is shown only when every number, designator, identifier and word in it checks against the NOTAM. Live NOTAM views need this on: the TV names the model as part of the source." },

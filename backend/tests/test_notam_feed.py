@@ -406,7 +406,10 @@ def test_refused_keys_stop_the_pulls_until_the_keys_are_replaced(monkeypatch):
     assert all(path == "/v1/auth/token" for _t, path in seen)       # never a data pull without a token
     assert 1 <= len(seen) <= 5                                       # and the token is not asked for turn after turn
     assert "rejected the credentials" in m._notam_error
-    m.secret_changed("nms")                                          # the owner stores new keys
+    held = m._nms_hold
+    m.secret_changed("nms", "production")                            # keys for an environment not in use
+    assert m._nms_hold == held > 0
+    m.secret_changed("nms", "staging")                               # the owner stores new keys for this one
     assert m._nms_hold == 0.0
 
 
@@ -816,10 +819,17 @@ def test_the_usage_record_is_served_to_a_settings_key_and_as_a_file(client, monk
     for n in range(3):
         stub.usage.add({"t": 1000.0 + 180 * n, "kind": "delta", "env": "staging", "status": 200, "bytes": 2,
                         "gap": None if n == 0 else 180.0})
+    stub.usage.add({"t": 1540.0, "kind": "delta", "env": "production", "status": 200, "bytes": 2, "gap": 180.0})
+    m = main_mod.manager
     assert client.get("/api/notams/usage").status_code == 401
+    for env, pulls in (("production", 1), ("staging", 3)):          # the totals are those of the environment in use
+        monkeypatch.setattr(m, "cfg", m.cfg.model_copy(update={"notams": m.cfg.notams.model_copy(update={"environment": env})}))
+        body = client.get("/api/notams/usage", auth=AUTH).json()
+        assert body["all_time"]["environment"] == env and body["all_time"]["pulls"] == pulls and len(body["rows"]) == 4
+        assert client.get("/api/status").json()["notams"]["usage"]["environment"] == env
     r = client.get("/api/notams/usage", auth=AUTH)
     body = r.json()
-    assert r.status_code == 200 and len(body["rows"]) == 3 and body["all_time"]["pulls"] == 3
+    assert r.status_code == 200 and len(body["rows"]) == 4 and body["all_time"]["pulls"] == 3
     assert body["all_time"]["shortest_gap_s"] == 180.0 and body["all_time"]["limit_gap_s"] == FAA_PULL_INTERVAL_S
     assert body["summary"]["pulls"] == 0                              # none of them in the last 24 hours
     assert len(client.get("/api/notams/usage", params={"limit": 2}, auth=AUTH).json()["rows"]) == 2

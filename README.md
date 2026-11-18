@@ -321,23 +321,30 @@ self-serve:
    [nms.aim.faa.gov](https://nms.aim.faa.gov/)), ask for access to the NMS-API, and say what
    you will use it for.
 2. The FAA first issues keys for its **test environment** (staging): a client ID, which it
-   calls KEY, and a client secret, SECRET. On the NOTAMs page, choose the environment
-   **Staging**, enter both and press **Store keys**. **Check keys** asks the FAA for a token
-   with them and costs no data pull. While a test environment is selected, every NOTAM view
-   carries a banner: its NOTAMs may be test data and are not for operational use.
+   calls KEY, and a client secret, SECRET. On the NOTAMs page, under *FAA NOTAM service*,
+   choose **Staging** under **Keys for**, enter both and press **Store keys**. **Check
+   keys** in the Staging row asks the FAA for a token with them and costs no data pull. Then
+   choose **Staging** as the **Environment the display uses** and save. While a test
+   environment is in use, every NOTAM view carries a banner: its NOTAMs may be test data and
+   are not for operational use.
 3. Let the display run against staging. The page's *Requests to the FAA* card counts the
-   requests of the last 24 hours, the shortest interval between two data pulls, and any the
-   FAA refused; **Download the record** saves every request with the id the FAA gave it.
-   When you are satisfied, ask the NOTAM Service Center (7-AWA-NAIMES@faa.gov,
-   866-466-1336) for production keys, and send the record along if they want to see how
-   your display uses the service.
-4. With production keys, choose the environment **Production**, store the keys, and save.
-   Keys belong to the environment they were stored under and are only ever sent to it.
+   requests of the last 24 hours to the environment in use, the shortest interval between
+   two data pulls, and any the FAA refused; **Download the record** saves every request with
+   the id the FAA gave it. When you are satisfied, ask the NOTAM Service Center
+   (7-AWA-NAIMES@faa.gov, 866-466-1336) for production keys, and send the record along if
+   they want to see how your display uses the service.
+4. With production keys, store them the same way under **Production**, check them, then
+   choose **Production** as the environment the display uses, and save. Each environment
+   keeps its own keys and they are only ever sent to it, so the staging keys stay stored
+   should you want to go back.
 
-The FAA allows one data pull every three minutes, and the display never asks more often, in
-either environment. It fetches each location's NOTAMs once, then asks every three minutes
-for everything that changed, and fetches each location whole again every six hours. A new
-location and **Refresh now** wait for the next turn; the page says how long that is.
+The environments have different limits. Production allows one data pull every three
+minutes, and more only with the FAA's approval; staging and FIT allow one request a second.
+The display keeps to the production limit in every environment, so it behaves on staging
+exactly as it will in production. It fetches each location's NOTAMs once, then asks every
+three minutes for everything that changed, and fetches each location whole again every six
+hours. A new location and **Refresh now** wait for the next turn; the page says how long
+that is. It never downloads the whole NOTAM set, which production allows once a day.
 
 ### The NOTAMs page
 
@@ -824,14 +831,18 @@ they apply:
   view when nothing was ever fetched, on the Overview and NOTAMs pages, and in
   `docker compose logs`. While refreshes fail, the view keeps the last NOTAMs it holds,
   with the time they were retrieved.
-  - "No FAA credentials are stored for the ... environment": no keys were stored, or they
-    were stored for another environment than the one selected.
+  - "No FAA credentials are stored for the ... environment": no keys are stored for the
+    environment the display uses. Store them under that environment, or choose the
+    environment whose keys you stored.
   - "rejected the credentials": the FAA did not accept the keys. The display waits half an
     hour, or until you store keys again, before asking once more.
   - "is limiting requests": the FAA said it was asked too often; the display waits longer
     before its next pull.
   - "reported a failure": the FAA answered that the request failed, and gave its reason.
   - "does not know location": the identifier is not one the FAA files NOTAMs under.
+- **The FAA's service itself misbehaves.** Report it to the NOTAM Service Center
+  (7-AWA-NAIMES@faa.gov, 866-466-1336). Never send your keys; write XXX in their place in
+  an example.
 - **NOTAM cards never say "Model rewrite".** The NOTAMs page counts the rewrites shown,
   refused and waiting, and gives the reason when the model server cannot be used: no
   endpoint key stored, a key the server rejects, a model name it does not know, or no answer
@@ -939,11 +950,11 @@ cameras:
 notams:
   enabled: false
   source: faa                # faa (needs the FAA keys and the rewrite below) | sample
-  environment: production    # production | staging | fit: the NMS-API environment of the keys
+  environment: production    # production | staging | fit: where the display gets NOTAMs
   label: NOTAMs
   dwell_s: 30                # seconds per page
   lookahead_h: 24            # also show NOTAMs taking effect within this many hours
-  refresh_s: 180             # look for changes this often; the FAA allows one pull per 180 s
+  refresh_s: 180             # look for changes this often: 180 s at least, the production limit
   locations:                 # the affected facility: airport, NAVAID or ARTCC identifier
     - ident: KS50            # S50 and KS50 are the same location
       name: Auburn Muni      # shown in the view's heading

@@ -68,8 +68,7 @@ class TokenRefused(RuntimeError):
 
 
 def credentials(environment: str) -> tuple[str, str]:
-    """The client ID and secret stored for this environment (empty when the stored
-    pair was issued for another one)."""
+    """The client ID and secret stored for this environment (empty when none are)."""
     return STORE.nms_pair(environment)
 
 
@@ -457,13 +456,16 @@ class UsageLog:
         except OSError:
             self.failing = True
 
-    def summary(self, now: float, window_s: Optional[float] = 86400.0) -> Dict[str, Any]:
-        """Totals over the last `window_s` seconds, or over the whole record (None)."""
-        rows = [r for r in self.rows if window_s is None or r["t"] >= now - window_s]
+    def summary(self, now: float, window_s: Optional[float] = 86400.0, env: Optional[str] = None) -> Dict[str, Any]:
+        """Totals over the last `window_s` seconds, or over the whole record (None),
+        of the requests to one environment, or to all (None)."""
+        rows = [r for r in self.rows
+                if (window_s is None or r["t"] >= now - window_s) and (env is None or r.get("env") == env)]
         pulls = [r for r in rows if r.get("kind") in PULL_KINDS]
         gaps = [r["gap"] for r in pulls if isinstance(r.get("gap"), (int, float))]
         return {
             "window_s": window_s,
+            "environment": env,
             "first": rows[0]["t"] if rows else None,
             "last": rows[-1]["t"] if rows else None,
             "pulls": len(pulls),
@@ -519,10 +521,11 @@ class NmsSource:
             self._sending = asyncio.Lock()
         return self._sending
 
-    def _log(self, kind: str, status: int, started: float, resp: Optional[httpx.Response] = None, **more) -> None:
+    def _log(self, kind: str, status: int, started: float, resp: Optional[httpx.Response] = None,
+             env: Optional[str] = None, **more) -> None:
         """Record a request; `rid` is the id the API gave it (x-request-id)."""
         row = {
-            "t": round(started, 1), "kind": kind, "env": self.environment, "status": status,
+            "t": round(started, 1), "kind": kind, "env": env or self.environment, "status": status,
             "bytes": len(resp.content) if resp is not None else 0,
             "ms": int((self.gate.wall() - started) * 1000), **more,
         }
@@ -531,24 +534,25 @@ class NmsSource:
             row["rid"] = rid[:64]
         self.usage.add(row)
 
-    async def _new_token(self) -> str:
-        """Ask for a bearer token (not a data pull). The caller holds the lock."""
-        client_id, secret = credentials(self.environment)
+    async def _ask_token(self, environment: str) -> tuple[str, float]:
+        """Ask an environment for a bearer token with the pair stored for it (not a
+        data pull). -> the token and its lifetime. The caller holds the lock."""
+        client_id, secret = credentials(environment)
         if not (client_id and secret):
-            raise NotConfigured(f"no FAA credentials are stored for the {self.environment} environment")
+            raise NotConfigured(f"no FAA credentials are stored for the {environment} environment")
         await self.gate.space()
         started = self.gate.wall()
         try:
             resp = await self.client.post(
-                f"{self.base}/v1/auth/token",
+                f"{NMS_HOSTS[environment]}/v1/auth/token",
                 data={"grant_type": "client_credentials"},
                 auth=(client_id, secret),
                 timeout=REQUEST_TIMEOUT_S,
             )
         except httpx.HTTPError as exc:
-            self._log("token", 0, started, error=exc.__class__.__name__)
+            self._log("token", 0, started, env=environment, error=exc.__class__.__name__)
             raise RuntimeError(f"FAA NMS token request failed: {exc.__class__.__name__}") from None
-        self._log("token", resp.status_code, started, resp)
+        self._log("token", resp.status_code, started, resp, env=environment)
         if resp.status_code in (400, 401, 403):
             raise CredentialsRejected(f"FAA NMS rejected the credentials (HTTP {resp.status_code})")
         if resp.status_code >= 400:
@@ -564,6 +568,12 @@ class NmsSource:
             lifetime = float(body.get("expires_in") or 0)
         except (TypeError, ValueError):
             lifetime = 0.0
+        return token, lifetime
+
+    async def _new_token(self) -> str:
+        """A bearer token for the environment in use, kept until it nearly expires.
+        The caller holds the lock."""
+        token, lifetime = await self._ask_token(self.environment)
         self._token = token
         self._token_until = self.gate.clock() + max(0.0, lifetime - TOKEN_MARGIN_S)
         return token
@@ -573,14 +583,20 @@ class NmsSource:
             return self._token
         return await self._new_token()
 
-    async def check_credentials(self) -> Dict[str, Any]:
-        """Whether the stored credentials get a token. Costs no data pull."""
+    async def check_credentials(self, environment: Optional[str] = None) -> Dict[str, Any]:
+        """Whether the pair stored for an environment (the one in use when none is
+        named) gets a token there. Costs no data pull; only a token for the
+        environment in use is kept."""
+        environment = environment or self.environment
         async with self._lock():
             try:
-                await self._new_token()
+                if environment == self.environment:
+                    await self._new_token()
+                else:
+                    await self._ask_token(environment)
             except (NotConfigured, RuntimeError) as exc:
-                return {"ok": False, "environment": self.environment, "error": str(exc)}
-        return {"ok": True, "environment": self.environment, "error": None}
+                return {"ok": False, "environment": environment, "error": str(exc)}
+        return {"ok": True, "environment": environment, "error": None}
 
     async def _pull(self, kind: str, params: Dict[str, str], since: Optional[float] = None, **what) -> httpx.Response:
         """One data pull, at its turn. A 401 renews the token for the next pull

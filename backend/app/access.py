@@ -428,10 +428,11 @@ def import_legacy(store: SecretStore, environ, raw_config: Dict[str, Any]) -> Li
             done.append("HANGAR_ADMIN_PASSWORD")
 
         client_id, secret = environ.get("HANGAR_NMS_CLIENT_ID", ""), environ.get("HANGAR_NMS_CLIENT_SECRET", "")
-        if client_id and secret and take("HANGAR_NMS_CLIENT_ID") and NMS not in data["credentials"]:
+        pairs = data["credentials"].get(NMS) or {}
+        environment = legacy_environment(environ)
+        if client_id and secret and take("HANGAR_NMS_CLIENT_ID") and environment not in pairs:
             data["credentials"][NMS] = {
-                "client_id": client_id, "client_secret": secret,
-                "environment": legacy_environment(environ), "changed": time.time(),
+                **pairs, environment: {"client_id": client_id, "client_secret": secret, "changed": time.time()},
             }
             done += ["HANGAR_NMS_CLIENT_ID", "HANGAR_NMS_CLIENT_SECRET"]
 

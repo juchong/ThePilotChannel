@@ -2,7 +2,7 @@
 // together; streams, keys, secrets and the account apply at once through
 // their own calls and never reload the display.
 import { api } from "./lib/api.js";
-import { keysHtml, leftoversText, newKeyHtml, secretsHtml, storedPill, waitText } from "./lib/access.js";
+import { envName, keysHtml, leftoversText, newKeyHtml, nmsKeysHtml, nmsStatePill, secretsHtml, storedPill, waitText } from "./lib/access.js";
 import {
   applyAction,
   applyErrors,
@@ -87,6 +87,7 @@ async function load() {
   version = cfg.version || null;
   delete cfg.version;
   saved = structuredClone(cfg);
+  if (secretsListing) renderNmsKeys(); // the environment in use may have changed
   await loadStreams(false);
   invalidPages = [];
   renderForm();
@@ -240,8 +241,6 @@ function wire() {
   el("stream-new-add").addEventListener("click", addStream);
   el("stream-new-test").addEventListener("click", testNewStream);
   el("nms-store").addEventListener("click", storeNmsKeys);
-  el("nms-check").addEventListener("click", checkNmsKeys);
-  el("nms-remove").addEventListener("click", () => clearSecret("nms"));
   el("key-create").addEventListener("click", createKey);
   el("acct-save").addEventListener("click", saveAccount);
   el("api-doc-copy").addEventListener("click", copyApiDoc);
@@ -297,6 +296,8 @@ function onClick(ev) {
   if ((b = pick("[data-stream-remove]"))) return removeStream(b.dataset.streamRemove);
   if ((b = pick("[data-secret-store]"))) return storeSecret(b.dataset.secretStore, b.dataset.secretInput);
   if ((b = pick("[data-secret-clear]"))) return clearSecret(b.dataset.secretClear);
+  if ((b = pick("[data-nms-check]"))) return checkNmsKeys(b.dataset.nmsCheck);
+  if ((b = pick("[data-nms-remove]"))) return removeNmsKeys(b.dataset.nmsRemove);
   if ((b = pick("[data-revoke-key]"))) return revokeKey(b.dataset.revokeKey);
   if ((b = pick("[data-copy]"))) return copyText(b);
   if ((b = pick("[data-view]"))) return screenAction(() => api.showView(b.dataset.view));
@@ -346,9 +347,11 @@ function renderNotamState() {
         ? `Next FAA pull in ${waitText(n.next_pull_in_s)}`
         : "The next pull can be made now";
   const u = n.usage || {};
+  el("notam-usage-title").textContent = u.environment
+    ? `Requests to the FAA (${envName(u.environment)}), last 24 hours` : "Requests to the FAA, last 24 hours";
   el("notam-usage").innerHTML =
     stat("Data pulls", u.pulls || 0, `${u.deltas || 0} of changes, ${u.baselines || 0} whole sets`) +
-    stat("Shortest interval", u.shortest_gap_s == null ? "–" : `${u.shortest_gap_s} s`, `The limit is ${u.limit_gap_s || 180} s`) +
+    stat("Shortest interval", u.shortest_gap_s == null ? "–" : `${u.shortest_gap_s} s`, `Production's limit is ${u.limit_gap_s || 180} s`) +
     stat("Refused by the FAA", (u.status_429 || 0) + (u.status_401 || 0), `${u.status_429 || 0} for pace (429), ${u.status_401 || 0} tokens (401)`) +
     stat("Sets compared", u.compared || 0, u.mismatches ? `${u.mismatches} missed by pulls of changes` : "Nothing missed");
   const detail = locationDetail();
@@ -557,13 +560,21 @@ async function removeStream(id) {
 }
 
 // ---- stored secrets, API keys, the account --------------------------------------------
-const SECRET_STATUS = { llm_api_key: "model-test-result", aggregator_api_key: "test-result", nms: "nms-status" };
+const SECRET_STATUS = { llm_api_key: "model-test-result", aggregator_api_key: "test-result" };
+let secretsListing = null; // the stored credentials' state as last read
+
+// The FAA keys of each environment, against the environment the saved settings use.
+function renderNmsKeys() {
+  const nms = (secretsListing && secretsListing.secrets && secretsListing.secrets.nms) || {};
+  const inUse = (saved && saved.notams && saved.notams.environment) || "production";
+  el("nms-state").innerHTML = secretsListing ? nmsStatePill(nms, inUse) : "";
+  el("nms-keys").innerHTML = nmsKeysHtml(nms, inUse, nowS());
+}
 
 function renderSecrets(listing) {
+  secretsListing = listing;
   const s = listing.secrets || {};
-  const nms = s.nms || {};
-  const where = nms.set && nms.environment ? `${nms.environment[0].toUpperCase()}${nms.environment.slice(1)}: ` : "";
-  el("nms-state").innerHTML = storedPill(nms, nowS(), where);
+  renderNmsKeys();
   el("llm-key-state").innerHTML = storedPill(s.llm_api_key, nowS());
   el("agg-key-state").innerHTML = storedPill(s.aggregator_api_key, nowS());
   el("secrets").innerHTML = secretsHtml(s, streams.length, nowS());
@@ -612,26 +623,37 @@ async function clearSecret(name) {
 }
 
 async function storeNmsKeys() {
-  collect(root, cfg);
+  const env = el("nms-for").value;
   const client_id = el("nms-id").value.trim();
   const client_secret = el("nms-secret").value.trim();
-  const environment = cfg.notams.environment;
   if (!client_id || !client_secret) return setStatus("nms-status", "Enter both the client ID and the secret", "err");
   try {
-    renderSecrets(await api.putNmsKeys({ client_id, client_secret, environment }));
+    renderSecrets(await api.putNmsKeys(env, { client_id, client_secret }));
     el("nms-id").value = el("nms-secret").value = "";
-    const unsaved = saved.notams.environment !== environment ? " Save the settings to use that environment." : "";
-    setStatus("nms-status", `Keys stored for ${environment}.${unsaved}`, "ok");
+    const unused = saved.notams.environment !== env
+      ? ` The display uses ${envName(saved.notams.environment)}; choose ${envName(env)} above and save to use them.` : "";
+    setStatus("nms-status", `Keys stored for ${envName(env)}.${unused}`, "ok");
   } catch (e) {
     setStatus("nms-status", said(e), "err");
   }
 }
 
-async function checkNmsKeys() {
-  setStatus("nms-status", "Asking the FAA for a token…");
+async function checkNmsKeys(env) {
+  setStatus("nms-status", `Asking ${envName(env)} for a token…`);
   try {
-    const r = await api.checkNmsKeys();
-    setStatus("nms-status", r.ok ? `The FAA issued a token (${r.environment}).` : r.error, r.ok ? "ok" : "err");
+    const r = await api.checkNmsKeys(env);
+    setStatus("nms-status", r.ok ? `${envName(r.environment)} issued a token: the keys work.` : r.error, r.ok ? "ok" : "err");
+  } catch (e) {
+    setStatus("nms-status", said(e), "err");
+  }
+}
+
+async function removeNmsKeys(env) {
+  const inUse = saved.notams.environment === env ? " The display uses this environment and stops getting NOTAMs." : "";
+  if (!confirm(`Remove the keys stored for ${envName(env)}?${inUse}`)) return;
+  try {
+    renderSecrets(await api.deleteNmsKeys(env));
+    setStatus("nms-status", `Keys for ${envName(env)} removed.`, "ok");
   } catch (e) {
     setStatus("nms-status", said(e), "err");
   }

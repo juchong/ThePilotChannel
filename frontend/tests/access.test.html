@@ -1,6 +1,6 @@
 <!doctype html><html><body><div id="box"></div><pre id="out"></pre><script type="module">
 import { check, done } from "./harness.js";
-import { SCOPE_TEXT, keysHtml, leftoversText, newKeyHtml, nextPage, secretsHtml, signInError, storedPill, waitText, whenText } from "../src/lib/access.js";
+import { NMS_ENVIRONMENTS, SCOPE_TEXT, keysHtml, leftoversText, newKeyHtml, nextPage, nmsKeysHtml, nmsStatePill, secretsHtml, signInError, storedPill, waitText, whenText } from "../src/lib/access.js";
 // Signing in and the Access page: the address to return to is never taken on
 // trust, a refusal is explained in words, a key is shown once and a stored
 // secret never.
@@ -42,12 +42,29 @@ box.innerHTML = storedPill({ set: true, changed: NOW - 7200 }, NOW);
 check("a stored credential says when it was stored, never what it is", box.textContent === "Stored, 2 h ago" && box.querySelector(".pill.good"));
 box.innerHTML = storedPill({ set: false, changed: null }, NOW) + storedPill(undefined, NOW);
 check("a credential that is not stored says so", box.textContent === "Not storedNot stored" && !box.querySelector(".good"));
-const secrets = { nms: { set: true, environment: "staging", changed: NOW - 60 }, llm_api_key: { set: true, changed: NOW - 86400 * 4 }, aggregator_api_key: { set: false, changed: null } };
+const nms = { production: { set: true, changed: NOW - 60 }, staging: { set: true, changed: NOW - 86400 * 4 }, fit: { set: false, changed: null } };
+const secrets = { nms, llm_api_key: { set: true, changed: NOW - 86400 * 4 }, aggregator_api_key: { set: false, changed: null } };
 box.innerHTML = secretsHtml(secrets, 5, NOW);
 const rows = [...box.querySelectorAll(".row")].map((r) => `${r.querySelector(".name").textContent}: ${r.querySelector(".pill").textContent}`);
-check("the stored secrets are listed by kind with their state", rows.join(" | ") === "Camera stream addresses: 5 stored | FAA NOTAM key and secret: Staging: Stored, 1 min ago | Model endpoint API key: Stored, 14 Nov | airplanes.live API key: Not stored".replace("14 Nov", rows[2].split("Stored, ")[1]) && /^\d{1,2} Nov$/.test(rows[2].split("Stored, ")[1]));
+check("the stored secrets are listed by kind with their state", rows.join(" | ") === "Camera stream addresses: 5 stored | FAA NOTAM keys: Stored for Production, Staging | Model endpoint API key: Stored, 14 Nov | airplanes.live API key: Not stored".replace("14 Nov", rows[2].split("Stored, ")[1]) && /^\d{1,2} Nov$/.test(rows[2].split("Stored, ")[1]));
+box.innerHTML = secretsHtml({ nms: { staging: { set: true, changed: NOW } } }, 0, NOW);
+check("FAA keys for one environment name that one", box.querySelectorAll(".row")[1].querySelector(".pill").textContent === "Stored for Staging");
 check("each leads to the page where it is changed", [...box.querySelectorAll("a")].map((a) => a.getAttribute("href")).join() === "#/cameras,#/notams,#/notams,#/traffic");
 box.innerHTML = secretsHtml(undefined, 0, NOW);
 check("nothing stored renders as nothing stored", box.querySelectorAll(".pill.good").length === 0 && box.textContent.includes("0 stored"));
+
+// The NOTAMs page: one row per NMS-API environment, each with its own keys.
+box.innerHTML = nmsKeysHtml(nms, "staging", NOW);
+const envRows = [...box.querySelectorAll("[data-nms-env]")];
+check("every environment has a row, in the FAA's order", envRows.map((r) => r.dataset.nmsEnv).join() === "production,staging,fit" && NMS_ENVIRONMENTS.length === 3);
+check("each row names its environment and the host its keys go to", envRows.map((r) => `${r.querySelector(".name").textContent.replace("In use", "").trim()} ${r.querySelector(".addr").textContent}`).join(" | ") === "Production api-nms.aim.faa.gov | Staging api-staging.cgifederal-aim.com | FIT api-fit.cgifederal-aim.com");
+check("each says whether its keys are stored, and when", envRows.map((r) => r.querySelectorAll(".pill")[r.dataset.nmsEnv === "staging" ? 1 : 0].textContent).join(" | ") === `Stored, 1 min ago | Stored, ${whenText(NOW - 86400 * 4, NOW)} | Not stored`);
+check("only the environment in use is marked so", box.textContent.split("In use").length === 2 && envRows[1].querySelector(".name").textContent.includes("In use"));
+check("stored keys can be checked and removed, each in its own environment", [...box.querySelectorAll("[data-nms-check]")].map((b) => b.dataset.nmsCheck).join() === "production,staging" && [...box.querySelectorAll("[data-nms-remove]")].map((b) => b.dataset.nmsRemove).join() === "production,staging");
+check("an environment without keys offers nothing to check or remove", !envRows[2].querySelector("button"));
+box.innerHTML = nmsKeysHtml(undefined, "production", NOW);
+check("no keys at all: three rows, none stored", box.querySelectorAll("[data-nms-env]").length === 3 && box.querySelectorAll(".pill.good").length === 0 && !box.querySelector("button"));
+box.innerHTML = nmsStatePill(nms, "production") + "|" + nmsStatePill(nms, "fit") + "|" + nmsStatePill(undefined, "staging");
+check("the card says whether the environment in use has keys", box.textContent === "Production: keys stored|No keys for FIT|No keys for Staging" && box.querySelectorAll(".pill.good").length === 1 && box.querySelectorAll(".pill.bad").length === 2);
 done();
 </script></body></html>

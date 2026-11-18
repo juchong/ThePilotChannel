@@ -93,10 +93,11 @@ export const api = {
   revokeKey: (id) => j(`/api/keys/${encodeURIComponent(id)}`, { method: "DELETE" }),
   // stored credentials: state only, never a value
   getSecrets: () => j("/api/secrets"),
-  putNmsKeys: (body) => j("/api/secrets/nms", json("PUT", body)),
+  putNmsKeys: (env, body) => j(`/api/secrets/nms/${encodeURIComponent(env)}`, json("PUT", body)),
+  deleteNmsKeys: (env) => j(`/api/secrets/nms/${encodeURIComponent(env)}`, { method: "DELETE" }),
   putSecret: (name, value) => j(`/api/secrets/${encodeURIComponent(name)}`, json("PUT", { value })),
   deleteSecret: (name) => j(`/api/secrets/${encodeURIComponent(name)}`, { method: "DELETE" }),
-  checkNmsKeys: () => j("/api/secrets/nms/check", { method: "POST" }, 45000),
+  checkNmsKeys: (env) => j(`/api/secrets/nms/${encodeURIComponent(env)}/check`, { method: "POST" }, 45000),
   // camera stream addresses
   getStreams: () => j("/api/cameras/streams"),
   addStream: (body) => j("/api/cameras/streams", json("POST", body)),

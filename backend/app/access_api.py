@@ -27,7 +27,7 @@ router = APIRouter()
 session_only = require("session")
 
 # Called with a credential's name after it was stored or cleared.
-changed: List[Callable[[str], None]] = []
+changed: List[Callable[..., None]] = []
 
 
 class Credentials(BaseModel):
@@ -46,10 +46,12 @@ class NewKey(BaseModel):
     scope: Literal["control", "settings"] = "control"
 
 
+NmsEnvironment = Literal["production", "staging", "fit"]
+
+
 class NmsPair(BaseModel):
     client_id: str = Field(min_length=1, max_length=200)
     client_secret: str = Field(min_length=1, max_length=200)
-    environment: Literal["production", "staging", "fit"]
 
 
 class SecretValue(BaseModel):
@@ -75,9 +77,9 @@ def _client(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def _notify(name: str) -> None:
+def _notify(name: str, *more) -> None:
     for hook in changed:
-        hook(name)
+        hook(name, *more)
 
 
 # ---- signing in -----------------------------------------------------------------
@@ -183,11 +185,22 @@ def secrets_state():
     }
 
 
-@router.put("/api/secrets/nms", dependencies=[Depends(session_only)])
-def secrets_put_nms(body: NmsPair):
-    """Store the FAA client ID and secret for the environment they were issued for."""
-    STORE.set_nms(body.client_id.strip(), body.client_secret.strip(), body.environment)
-    _notify(NMS)
+@router.put("/api/secrets/nms/{environment}", dependencies=[Depends(session_only)])
+def secrets_put_nms(environment: NmsEnvironment, body: NmsPair):
+    """Store the FAA client ID and secret issued for one environment; the pairs
+    of the other environments stay."""
+    client_id, secret = body.client_id.strip(), body.client_secret.strip()
+    if not (client_id and secret):
+        raise HTTPException(status_code=422, detail="both the client ID and the secret are needed")
+    STORE.set_nms(client_id, secret, environment)
+    _notify(NMS, environment)
+    return {"ok": True, "secrets": STORE.credential_state()}
+
+
+@router.delete("/api/secrets/nms/{environment}", dependencies=[Depends(session_only)])
+def secrets_delete_nms(environment: NmsEnvironment):
+    STORE.clear_nms(environment)
+    _notify(NMS, environment)
     return {"ok": True, "secrets": STORE.credential_state()}
 
 
@@ -205,7 +218,7 @@ def secrets_put(name: str, body: SecretValue):
 
 @router.delete("/api/secrets/{name}", dependencies=[Depends(session_only)])
 def secrets_delete(name: str):
-    if name != NMS and name not in SIMPLE_CREDENTIALS:
+    if name not in SIMPLE_CREDENTIALS:
         raise HTTPException(status_code=404, detail="no such credential")
     STORE.clear_credential(name)
     _notify(name)

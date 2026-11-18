@@ -95,16 +95,49 @@ export function storedPill(entry, nowS, extra = "") {
   return `<span class="pill good">${esc(extra)}Stored${esc(when)}</span>`;
 }
 
+// The NMS-API environments, each with its own keys, by the host the FAA names for it.
+export const NMS_ENVIRONMENTS = [
+  ["production", "Production", "api-nms.aim.faa.gov"],
+  ["staging", "Staging", "api-staging.cgifederal-aim.com"],
+  ["fit", "FIT", "api-fit.cgifederal-aim.com"],
+];
+export const envName = (env) => (NMS_ENVIRONMENTS.find(([e]) => e === env) || [env, String(env || "")])[1];
+
+// One row per environment: its host, whether keys are stored, and their actions.
+export function nmsKeysHtml(nms, inUse, nowS) {
+  return NMS_ENVIRONMENTS.map(([env, name, host]) => {
+    const entry = (nms || {})[env];
+    const used = env === inUse ? ` <span class="pill">In use</span>` : "";
+    const actions = entry && entry.set
+      ? `<button type="button" class="btn" data-nms-check="${env}">Check keys</button>` +
+        `<button type="button" class="btn danger" data-nms-remove="${env}">Remove keys</button>`
+      : "";
+    return `<div class="row env" data-nms-env="${env}"><span class="name">${esc(name)}${used}</span>` +
+      `<span class="addr mono">${esc(host)}</span>${storedPill(entry, nowS)}${actions}</div>`;
+  }).join("");
+}
+
+// Whether the environment in use has keys, as a pill.
+export function nmsStatePill(nms, inUse) {
+  const entry = (nms || {})[inUse];
+  return entry && entry.set
+    ? `<span class="pill good">${esc(envName(inUse))}: keys stored</span>`
+    : `<span class="pill bad">No keys for ${esc(envName(inUse))}</span>`;
+}
+
 // One line per kind of stored secret, with where to change it.
 export function secretsHtml(secrets, streamCount, nowS) {
   const s = secrets || {};
   const nms = s.nms || {};
-  const env = nms.set && nms.environment ? `${nms.environment[0].toUpperCase()}${nms.environment.slice(1)}: ` : "";
+  const withKeys = NMS_ENVIRONMENTS.filter(([env]) => nms[env] && nms[env].set).map(([, name]) => name);
+  const nmsPill = withKeys.length
+    ? `<span class="pill good">Stored for ${esc(withKeys.join(", "))}</span>`
+    : `<span class="pill">Not stored</span>`;
   const row = (label, pill, page, text) =>
     `<div class="row"><span class="name">${esc(label)}</span>${pill}<a class="btn" href="#/${page}">${esc(text)}</a></div>`;
   return (
     row("Camera stream addresses", `<span class="pill${streamCount ? " good" : ""}">${Number(streamCount) || 0} stored</span>`, "cameras", "Open Cameras") +
-    row("FAA NOTAM key and secret", storedPill(nms, nowS, env), "notams", "Open NOTAMs") +
+    row("FAA NOTAM keys", nmsPill, "notams", "Open NOTAMs") +
     row("Model endpoint API key", storedPill(s.llm_api_key, nowS), "notams", "Open NOTAMs") +
     row("airplanes.live API key", storedPill(s.aggregator_api_key, nowS), "traffic", "Open Traffic source")
   );

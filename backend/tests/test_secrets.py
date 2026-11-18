@@ -26,36 +26,84 @@ def test_the_secrets_api_stores_and_clears_and_never_returns_a_value(client):
     sign_in(client)
     empty = {"set": False, "changed": None}
     assert client.get("/api/secrets").json()["secrets"] == {
-        "llm_api_key": empty, "aggregator_api_key": empty, "nms": {"set": False, "environment": None, "changed": None}}
+        "llm_api_key": empty, "aggregator_api_key": empty, "nms": {"production": empty, "staging": empty, "fit": empty}}
     r = client.put("/api/secrets/llm_api_key", json={"value": "  sk-pasted-with-spaces \n"})
     assert r.status_code == 200 and "sk-pasted" not in r.text
     assert STORE.credential("llm_api_key") == "sk-pasted-with-spaces" and llm.api_key() == "sk-pasted-with-spaces"
-    r = client.put("/api/secrets/nms", json={"client_id": " the-id ", "client_secret": "the-secret", "environment": "staging"})
+    r = client.put("/api/secrets/nms/staging", json={"client_id": " the-id ", "client_secret": "the-secret"})
     assert r.status_code == 200 and "the-secret" not in r.text and "the-id" not in r.text
     state = client.get("/api/secrets").json()["secrets"]
     assert state["llm_api_key"]["set"] is True and state["llm_api_key"]["changed"] > 0
-    assert state["nms"]["set"] is True and state["nms"]["environment"] == "staging"
+    assert state["nms"]["staging"]["set"] is True and state["nms"]["staging"]["changed"] > 0
+    assert state["nms"]["production"] == empty and state["nms"]["fit"] == empty
     assert notams.credentials("staging") == ("the-id", "the-secret") and notams.credentials("production") == ("", "")
-    for bad in ({"client_id": "", "client_secret": "x", "environment": "staging"},
-                {"client_id": "x", "client_secret": "x", "environment": "moon"}, {}):
-        assert client.put("/api/secrets/nms", json=bad).status_code == 422
+    for bad in ({"client_id": "", "client_secret": "x"}, {"client_id": "x", "client_secret": "   "}, {"client_id": "x"}, {}):
+        assert client.put("/api/secrets/nms/staging", json=bad).status_code == 422
+    assert client.put("/api/secrets/nms/moon", json={"client_id": "x", "client_secret": "x"}).status_code == 422
+    assert client.put("/api/secrets/nms", json={"value": "x"}).status_code == 404
+    assert notams.credentials("staging") == ("the-id", "the-secret")
     assert client.put("/api/secrets/llm_api_key", json={"value": "   "}).status_code == 422
     assert client.put("/api/secrets/admin_password", json={"value": "x"}).status_code == 404
     assert client.delete("/api/secrets/session").status_code == 404
-    assert client.delete("/api/secrets/nms").status_code == 200 and client.delete("/api/secrets/llm_api_key").status_code == 200
-    assert client.get("/api/secrets").json()["secrets"]["nms"]["set"] is False and llm.api_key() == ""
+    assert client.delete("/api/secrets/nms").status_code == 404 and client.delete("/api/secrets/nms/moon").status_code == 422
+    assert client.delete("/api/secrets/nms/staging").status_code == 200 and client.delete("/api/secrets/llm_api_key").status_code == 200
+    assert client.get("/api/secrets").json()["secrets"]["nms"]["staging"] == empty and llm.api_key() == ""
+    assert client.delete("/api/secrets/nms/staging").status_code == 200                      # nothing stored: nothing to do
 
 
-def test_replacing_the_faa_keys_drops_the_token_got_with_the_old_ones(client):
+def test_each_environment_keeps_its_own_faa_keys_and_each_pair_goes_only_to_its_environment(client):
+    sign_in(client)
+    pairs = {env: (f"{env}-id", f"{env}-secret") for env in ("production", "staging", "fit")}
+    for env, (client_id, secret) in pairs.items():
+        assert client.put(f"/api/secrets/nms/{env}", json={"client_id": client_id, "client_secret": secret}).status_code == 200
+    assert {env: notams.credentials(env) for env in pairs} == pairs
+    state = client.get("/api/secrets").json()["secrets"]["nms"]
+    assert all(state[env]["set"] for env in pairs) and "-secret" not in json.dumps(state) and "-id" not in json.dumps(state)
+    # replacing one pair and removing another leaves the third as it was
+    assert client.put("/api/secrets/nms/production", json={"client_id": "new-id", "client_secret": "new-secret"}).status_code == 200
+    assert client.delete("/api/secrets/nms/fit").status_code == 200
+    assert notams.credentials("production") == ("new-id", "new-secret")
+    assert notams.credentials("staging") == pairs["staging"] and notams.credentials("fit") == ("", "")
+    stored = SecretStore(STORE.path)                               # and so it is on disk
+    assert {env: stored.nms_pair(env) for env in pairs} == {"production": ("new-id", "new-secret"),
+                                                            "staging": pairs["staging"], "fit": ("", "")}
+
+
+def test_a_single_faa_pair_stored_by_an_earlier_version_is_its_environments_pair(tmp_path):
+    path = tmp_path / "secrets.json"
+    for env in ("production", "staging", "fit"):
+        path.write_text(json.dumps({"version": 1, "credentials": {"nms": {
+            "client_id": "old-id", "client_secret": "old-secret", "environment": env, "changed": 5.0}}}))
+        store = SecretStore(str(path))
+        assert store.nms_pair(env) == ("old-id", "old-secret")
+        assert all(store.nms_pair(other) == ("", "") for other in ("production", "staging", "fit") if other != env)
+        assert store.credential_state()["nms"][env] == {"set": True, "changed": 5.0}
+        store.set_nms("new-id", "new-secret", "production" if env != "production" else "staging")
+        again = SecretStore(str(path))
+        assert again.nms_pair(env) == ("old-id", "old-secret") and len(again.data["credentials"]["nms"]) == 2
+        assert "environment" not in json.dumps(again.data["credentials"]["nms"])
+    for broken in ({"client_id": "id", "client_secret": "s", "environment": "moon"}, "a string",
+                   {"moon": {"client_id": "id", "client_secret": "s"}}, {"staging": "not a pair"}):
+        path.write_text(json.dumps({"version": 1, "credentials": {"nms": broken, "llm_api_key": {"value": "k"}}}))
+        store = SecretStore(str(path))
+        assert all(store.nms_pair(env) == ("", "") for env in ("production", "staging", "fit"))
+        assert store.credential("llm_api_key") == "k" and store.error is None
+
+
+def test_only_new_keys_for_the_environment_in_use_drop_its_token(client):
     sign_in(client)
     nms = main_mod.manager.nms
+    assert nms.environment == "production"
     nms._token, nms._token_until = "token-of-the-old-keys", nms.gate.clock() + 1000
-    assert client.put("/api/secrets/nms", json={"client_id": "new", "client_secret": "new", "environment": "production"}).status_code == 200
+    for env in ("staging", "fit"):
+        assert client.put(f"/api/secrets/nms/{env}", json={"client_id": "other", "client_secret": "other"}).status_code == 200
+        assert client.delete(f"/api/secrets/nms/{env}").status_code == 200
+    assert nms._token == "token-of-the-old-keys"
+    assert client.put("/api/secrets/nms/production", json={"client_id": "new", "client_secret": "new"}).status_code == 200
     assert nms._token is None
     nms._token, nms._token_until = "again", nms.gate.clock() + 1000
-    assert client.delete("/api/secrets/nms").status_code == 200
+    assert client.delete("/api/secrets/nms/production").status_code == 200
     assert nms._token is None
-
 
 def test_the_aggregator_key_lives_in_the_store_and_not_in_the_config(client):
     sign_in(client)
@@ -93,9 +141,10 @@ def test_a_config_file_that_still_carries_the_aggregator_key_gives_it_to_the_sto
 def test_checking_the_faa_keys_is_for_a_session_and_is_not_repeated_at_once(client, monkeypatch):
     sign_in(client)
     monkeypatch.setitem(main_mod._credential_check, "at", 0.0)
-    r = client.post("/api/secrets/nms/check")
-    assert r.status_code == 200 and r.json()["ok"] is False and "no FAA credentials" in r.json()["error"]
-    r = client.post("/api/secrets/nms/check")
+    r = client.post("/api/secrets/nms/staging/check")
+    assert r.status_code == 200 and r.json() == {
+        "ok": False, "environment": "staging", "error": "no FAA credentials are stored for the staging environment"}
+    r = client.post("/api/secrets/nms/production/check")
     assert r.status_code == 429 and int(r.headers["retry-after"]) >= 1
 
 
@@ -105,6 +154,8 @@ SECRETS = {
     "password": "Sentinel-Password-9d1f",
     "nms_id": "sentinel-nms-id-4c7a",
     "nms_secret": "sentinel-nms-secret-b2e9",
+    "nms_staging_id": "sentinel-staging-id-61d0",
+    "nms_staging_secret": "sentinel-staging-secret-e83b",
     "llm": "sk-sentinel-llm-key-7f30",
     "aggregator": "sentinel-aggregator-key-51cd",
     "stream_token": "SentinelStreamToken8a2f",
@@ -142,8 +193,10 @@ def test_no_stored_secret_is_in_any_response_header_or_log_line(client, monkeypa
     token = client.post("/api/auth/login", json={"username": "admin", "password": SECRETS["password"]}).cookies[SESSION_COOKIE]
     key = client.post("/api/keys", json={"name": "sentinel", "scope": "settings"}).json()["key"]
     found = [("session token", token), ("api key", key)]
-    assert client.put("/api/secrets/nms", json={"client_id": SECRETS["nms_id"], "client_secret": SECRETS["nms_secret"],
-                                                "environment": "production"}).status_code == 200
+    assert client.put("/api/secrets/nms/production", json={"client_id": SECRETS["nms_id"],
+                                                           "client_secret": SECRETS["nms_secret"]}).status_code == 200
+    assert client.put("/api/secrets/nms/staging", json={"client_id": SECRETS["nms_staging_id"],
+                                                        "client_secret": SECRETS["nms_staging_secret"]}).status_code == 200
     assert client.put("/api/secrets/llm_api_key", json={"value": SECRETS["llm"]}).status_code == 200
     assert client.put("/api/secrets/aggregator_api_key", json={"value": SECRETS["aggregator"]}).status_code == 200
     made = [client.post("/api/cameras/streams", json={"name": f"Sentinel {n}", "url": url}) for n, url in enumerate(STREAMS)]
@@ -161,7 +214,9 @@ def test_no_stored_secret_is_in_any_response_header_or_log_line(client, monkeypa
     monkeypatch.setitem(main_mod._credential_check, "at", 0.0)
     refuse = httpx.MockTransport(lambda request: httpx.Response(401, json={"ErrorCode": "invalid_client"}))
     monkeypatch.setattr(main_mod.manager.nms, "client", httpx.AsyncClient(transport=refuse))
-    assert client.post("/api/secrets/nms/check").json()["ok"] is False
+    assert client.post("/api/secrets/nms/production/check").json()["ok"] is False
+    monkeypatch.setitem(main_mod._credential_check, "at", 0.0)
+    assert client.post("/api/secrets/nms/staging/check").json()["ok"] is False
     assert client.post("/api/auth/login", json={"username": "admin", "password": SECRETS["password"] + "x"}).status_code == 401
     assert client.post("/api/display/next", auth=Bearer(key + "x")).status_code == 401
 
@@ -181,7 +236,7 @@ def test_no_stored_secret_is_in_any_response_header_or_log_line(client, monkeypa
     assert logged and leaks(logged, found) == []
     # the values are where they belong: in the store, and nowhere else on disk
     stored = open(STORE.path).read()
-    assert SECRETS["nms_secret"] in stored and SECRETS["stream_token"] in stored
+    assert SECRETS["nms_secret"] in stored and SECRETS["nms_staging_secret"] in stored and SECRETS["stream_token"] in stored
     assert SECRETS["password"] not in stored and token not in stored and key not in stored      # only their hashes
     data_dir = os.path.dirname(config.CONFIG_PATH)
     for name in os.listdir(data_dir):

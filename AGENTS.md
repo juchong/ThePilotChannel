@@ -149,7 +149,7 @@ frontend/src/
   lib/adminForm.js  admin field schema, rendering, typed collection, error mapping
   lib/adminNav.js   the admin's pages, their config sections, unsaved and refused pages
   lib/adminStatus.js  the overview's health cards from /api/status
-  lib/access.js     sign-in texts, API key list, stored-secret state
+  lib/access.js     sign-in texts, API keys, stored-secret state, FAA keys by environment
   lib/markdown.js   the Markdown the display API reference uses, as escaped HTML
   lib/streams.js    stream list, test result, tile choices, the camera grid as a picture
   lib/dom.js        esc(), el(), sleep()
@@ -557,9 +557,13 @@ data/   (ignored) written by the app: config.yaml and its backups, secrets.json,
   any two requests `REQUEST_SPACING_S` apart. The time of the last pull is read back from
   the usage record at start, so a restart never shortens an interval, and the first pull
   after it records its interval from that one. A 429 doubles the wait up to
-  `BACKOFF_MAX_S` (never less than a `Retry-After`) until a pull is served. Nothing but
-  the NOTAM loop makes a data pull: the admin's Refresh now queues a location for the next
-  turn, and Check keys asks for a token only.
+  `BACKOFF_MAX_S` (never less than a `Retry-After`) until a pull is served. One gate
+  serves every environment, so a change of environment never shortens an interval. Nothing
+  but the NOTAM loop makes a data pull: the admin's Refresh now queues a location for the
+  next turn, and Check keys asks an environment for a token only (a token for an
+  environment not in use is not kept). Each request in the usage record names its
+  environment (`env`); the totals in `/api/status` and `/api/notams/usage` are those of the
+  environment in use (`UsageLog.summary(env=)`), the rows are all of them.
 - A bearer token lives 1,799 s (`expires_in`, a string); it is renewed `TOKEN_MARGIN_S`
   before that. A data pull answered 401 renews the token and is made again at its next
   turn, never at once. Refused keys (`CredentialsRejected`) stop the loop asking for
@@ -622,8 +626,12 @@ data/   (ignored) written by the app: config.yaml and its backups, secrets.json,
 - Sample NOTAMs (`notams.source: sample`) are invented, come from `SampleSource` in the
   API's own shape, are shown under a banner, are never persisted, and are never served
   when the source is `faa`: a cache entry belongs to the source that fetched it.
-- The FAA keys live only in the secrets store. They are not in `config.yaml`, in any API
-  response, in the usage record, or in an error message.
+- The FAA keys live only in the secrets store, one pair per environment
+  (`credentials.nms.<environment>`); a single pair with an `environment` field, as stored
+  before, is read as that environment's (`_nms_pairs()`). A pair is sent only to its own
+  environment's host. Storing or removing the pair of an environment not in use leaves the
+  token in use alone (`secret_changed(name, environment)`). The keys are not in
+  `config.yaml`, in any API response, in the usage record, or in an error message.
 - Texts of real issued NOTAMs are used to check the decoder and the answer check
   (`check_notam_text.py FILE --answers`) and are never added to the repository.
 - The NOTAM view is an overlay (`#notams`) like the satellite and camera views. Cards flow
@@ -979,11 +987,12 @@ full in `backend/app/data/display_api.md`.
   new_password?}`) (session).
 - `GET /api/keys`, `POST /api/keys` (`{name, scope}`: the answer carries `key`, once),
   `DELETE /api/keys/{id}` (session).
-- `GET /api/secrets` `{secrets: {nms: {set, environment, changed}, llm_api_key: {set,
-  changed}, aggregator_api_key: {...}}, imported, leftovers}`, never a value.
-  `PUT /api/secrets/nms` (`{client_id, client_secret, environment}`),
-  `PUT /api/secrets/{name}` (`{value}`), `DELETE /api/secrets/{name}`,
-  `POST /api/secrets/nms/check` (asks the FAA for a token; no data pull) (session).
+- `GET /api/secrets` `{secrets: {nms: {production|staging|fit: {set, changed}},
+  llm_api_key: {set, changed}, aggregator_api_key: {...}}, imported, leftovers}`, never a
+  value. `PUT /api/secrets/nms/{environment}` (`{client_id, client_secret}`),
+  `DELETE /api/secrets/nms/{environment}`, `POST /api/secrets/nms/{environment}/check`
+  (asks that environment for a token; no data pull), `PUT /api/secrets/{name}`
+  (`{value}`), `DELETE /api/secrets/{name}` (session).
 - `GET /api/cameras/streams` `{streams: [{id, name, host, changed, tiles, pending}], relay,
   error, max}`, `POST /api/cameras/streams` (`{name, url}`),
   `PUT /api/cameras/streams/{id}` (`{name?, url?}`), `DELETE /api/cameras/streams/{id}`
@@ -1069,9 +1078,9 @@ the radar loop span is capped at 55 minutes, camera tiles (at most `CAMERA_MAX_T
 a stream matching `^[A-Za-z0-9_.-]{1,64}$` and span 1 to `CAMERA_GRID_COLS` columns, and
 NOTAM locations (at most `NOTAM_MAX_LOCATIONS`, unique) are identifiers matching the ICAO
 pattern with a look-ahead of 0 to 720 hours and a refresh of 180 to 3600 seconds (a lower
-value is raised); `notams.environment` is `production`, `staging` or `fit`;
-`notams.translate` (`enabled`, `base_url` validated like a source URL, `model`,
-`description` up to 60 characters, `timeout_s` 5 to 600) cannot be enabled without a URL
-and a model. No section holds a secret. Add new settings to the model with constraints, to
-the admin field schema in `lib/adminForm.js`, and to the config reference in README.md
-(the example there must load as a `Config` and name every field).
+value is raised); `notams.environment` (the one the display uses) is `production`,
+`staging` or `fit`; `notams.translate` (`enabled`, `base_url` validated like a source URL,
+`model`, `description` up to 60 characters, `timeout_s` 5 to 600) cannot be enabled
+without a URL and a model. No section holds a secret. Add new settings to the model with
+constraints, to the admin field schema in `lib/adminForm.js`, and to the config reference
+in README.md (the example there must load as a `Config` and name every field).

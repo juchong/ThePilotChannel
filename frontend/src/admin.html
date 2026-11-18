@@ -121,10 +121,14 @@
           <div class="card" data-section="notams"><h2>In the rotation</h2><div id="notam-settings"></div></div>
           <div class="card">
             <div class="card-head"><h2>FAA NOTAM service</h2><span id="nms-state"></span></div>
-            <p class="sub">The FAA issues a key and a secret for one environment (email NOTAMS@faa.gov for access). They are
-              stored on the Pi and sent only to the environment they were stored for.</p>
+            <p class="sub">The FAA issues a key and a secret for each environment (email NOTAMS@faa.gov for access). Each
+              pair is stored on the Pi and sent only to its own environment.</p>
             <div id="notam-environment"></div>
+            <div id="nms-keys"></div>
             <div class="fields">
+              <div><label for="nms-for">Keys for</label>
+                <select id="nms-for"><option value="production">Production</option><option value="staging">Staging</option>
+                  <option value="fit">FIT</option></select></div>
               <div><label for="nms-id">Client ID (KEY)</label>
                 <input id="nms-id" maxlength="200" spellcheck="false" autocomplete="off" autocapitalize="none"></div>
               <div><label for="nms-secret">Client secret (SECRET)</label>
@@ -132,15 +136,14 @@
             </div>
             <div class="row-actions">
               <button type="button" class="btn primary" id="nms-store">Store keys</button>
-              <button type="button" class="btn" id="nms-check">Check keys</button>
-              <button type="button" class="btn danger" id="nms-remove">Remove keys</button>
               <span id="nms-status" class="status" role="status"></span>
             </div>
           </div>
           <div class="card">
             <div class="card-head"><h2>Locations</h2><span id="notam-gate" class="pill"></span></div>
-            <p class="sub">An airport, NAVAID or center by its identifier (S50 or KS50, KSEA, ZSE). The FAA allows one pull
-              every three minutes, so a new location and Refresh now wait for the next turn.</p>
+            <p class="sub">An airport, NAVAID or center by its identifier (S50 or KS50, KSEA, ZSE). The display makes one data
+              pull every three minutes, the most production allows, so a new location and Refresh now wait for the next
+              turn.</p>
             <div id="notam-locations"></div>
             <div class="row end">
               <div style="flex: 1 1 240px"><label for="notam-new">Add locations</label>
@@ -149,11 +152,11 @@
             </div>
           </div>
           <div class="card">
-            <div class="card-head"><h2>Requests to the FAA, last 24 hours</h2>
+            <div class="card-head"><h2 id="notam-usage-title">Requests to the FAA, last 24 hours</h2>
               <a class="btn" href="/api/notams/usage?download=true" download>Download the record</a></div>
             <div class="stats" id="notam-usage"></div>
-            <p class="sub">Every request is recorded with its time, kind and status: the record to send with a request for
-              production keys.</p>
+            <p class="sub">The totals are those of the environment in use. The record holds every request to each
+              environment, with its time, kind, status and the id the FAA gave it.</p>
           </div>
           <div class="card">
             <div class="card-head"><h2>Model rewrite and source label</h2><span id="model-state"></span></div>
